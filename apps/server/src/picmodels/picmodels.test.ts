@@ -9,10 +9,11 @@
  *   job row, every file under the data directory, everything the server printed and every answer, as the growing track's privacy test
  *   does. The row stays when W1 builds the route: it is the privacy rule. W1 turns the todos into tests with the labelled fake.
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PICTURE_MODEL_IDS } from '@pulseframe/core';
 import { Auth } from '../auth.ts';
 import { Capabilities } from '../capabilities.ts';
@@ -25,7 +26,10 @@ import { createMcp } from '../mcp.ts';
 import { Presence } from '../presence.ts';
 import { Speech } from '../speech.ts';
 import { Store } from '../store.ts';
-import { PICMODELS_SERVER_BUILT } from './contract.ts';
+import { PICMODELS_SERVER_BUILT, PICTURE_TEST_ADAPTER_LABEL } from './contract.ts';
+import { startServer, type RunningServer } from '../index.ts';
+import { EXIF_FACE, makeExifStill, makePicmodelsFixtures, type PicmodelsFixtures } from '../../../../packages/evals/src/picmodels-fixtures.ts';
+import { makePicWorld, pidsRunning, pythonPath, type PicWorld } from './testWorld.ts';
 
 const PLANTED = 0.1234567;
 let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, speech: Speech, capabilities: Capabilities;
@@ -153,20 +157,160 @@ describe('eyes: nothing is stored (the privacy rule; stays when built)', () => {
   });
 });
 
-// W1 (server runtime + eyes route + the labelled fake adapter) makes these pass; named after the proof's checks
-describe('eyes worker launcher (W1): one process per request, killed on abort, nothing stored, no raw error text in a log', () => {
-  it.todo('E7: around 20 proposals whose fake answers carry PLANTED: searchEverywhere finds it only in the owner\'s answers (tables, events, job rows, every file of the data and tmp folders, server output)');
-  it.todo('E7: the counts of rows in jobs, transactions, outbox and derivatives are unchanged; no file under the data or tmp folder was created or grew (WAL compared after a checkpoint)');
-  it.todo('E10: aborting the request (client gone) SIGKILLs the worker process: its pid is gone within 1 s, nothing is answered afterwards, and the next request starts a fresh process');
-  it.todo('E10: after each answer the worker process has exited (no kept worker; PF_TOOLS_KEEP_SECONDS has no effect on eyes)');
-  it.todo('E11: the fake answering a box, a score, a third point, u = 1.2, NaN or a count beside the faces is 502 eyes_engine_failed, the planted value is in no printed line and no answer');
-  it.todo('E11: a crash, a non-JSON line, an exit before the line and the timeout are each 502 eyes_engine_failed with details of codes and integers only; console.error saw no ZodError, SyntaxError or worker text');
-  it.todo('C9: nine drawn faces answer outcome too_many with faces [] (the worker line tooMany: true carried no point)');
-  it.todo('a second request while one runs is 429 eyes_busy');
-  it.todo('the job table has no eyes row ever: no job type for eyes exists (grep of the server for a job type string)');
+// W1: the server runtime and the eyes route through a real server (startServer port 0) with the LABELLED fake worker, its digest,
+// a synthetic registry and library (testWorld.ts), and the synthetic drawn faces of packages/evals/src/picmodels-fixtures.ts.
+describe.skipIf(!pythonPath() || !hasFfmpeg())('eyes through a real server with the labelled fake (W1)', () => {
+  let s: RunningServer, w: PicWorld, fx: PicmodelsFixtures, cookie = '', spid = '';
+  const ids: Record<string, string> = {};
+  const fxDir = () => path.join(w.root, 'fixtures');
+  const ownerH = () => ({ cookie, origin: s.url, 'content-type': 'application/json', connection: 'close' });
+  const post = async (body: unknown, opts: { signal?: AbortSignal; headers?: Record<string, string> } = {}) => {
+    const r = await fetch(`${s.url}/api/v1/projects/${spid}/eyes/propose`, { method: 'POST', headers: opts.headers ?? ownerH(), body: JSON.stringify(body), ...(opts.signal ? { signal: opts.signal } : {}) });
+    const text = await r.text();
+    answers.push(text);
+    return { status: r.status, cache: r.headers.get('cache-control'), body: JSON.parse(text) as any };
+  };
+  const ask = (name: string, frame: number | null = null) => post({ assetId: ids[name], frame });
+  const near = (p: { u: number; v: number }, x: number, y: number, W: number, H: number) => Math.hypot(p.u * W - x, p.v * H - y);
+  const waitFor = async (cond: () => boolean, ms: number) => { const t = Date.now(); while (!cond() && Date.now() - t < ms) await new Promise((r) => setTimeout(r, 20)); return cond(); };
+  const counts = () => Object.fromEntries(['jobs', 'transactions', 'outbox', 'derivatives'].map((t) => [t, (s.store.db.prepare(`SELECT COUNT(*) AS n FROM "${t}"`).get() as { n: number }).n]));
+  const files = () => { s.store.db.pragma('wal_checkpoint(TRUNCATE)'); const out: Record<string, number> = {}; const walk = (d: string) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (e.isFile()) out[path.relative(s.cfg.dataDir, f)] = fs.statSync(f).size; } }; walk(s.cfg.dataDir); return out; };
+
+  beforeAll(async () => {
+    w = makePicWorld();
+    fx = makePicmodelsFixtures(fxDir());
+    const exif6 = makeExifStill(fxDir(), 'exif6.jpg', 6, 640, 480, [EXIF_FACE]);
+    const exif3 = makeExifStill(fxDir(), 'exif3.jpg', 3, 640, 480, [EXIF_FACE]);
+    s = await startServer({ port: 0, dataDir: path.join(w.root, 'data'), toolsPython: w.python, libraryDir: null, backupDir: null, speechPython: null, voicePython: null }, { picmodelsTest: w.seams });
+    cookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, 'x-pf-owner-key': s.auth.tokens.owner, connection: 'close' } })).headers.get('set-cookie')!.split(';')[0]!;
+    spid = (await (await fetch(`${s.url}/api/v1/projects`, { method: 'POST', headers: ownerH(), body: JSON.stringify({ name: 'eyes', width: 640, height: 360 }) })).json() as any).project.id;
+    for (const [name, file] of [...Object.entries(fx.stills).map(([k, v]) => [k, v.file] as const), ['video', fx.video.file] as const, ['exif6', exif6.file] as const, ['exif3', exif3.file] as const]) {
+      const r = await fetch(`${s.url}/api/v1/projects/${spid}/assets`, { method: 'POST', headers: { cookie, origin: s.url, 'x-filename': path.basename(file), connection: 'close' }, body: new Uint8Array(fs.readFileSync(file)) });
+      const j = await r.json() as any;
+      expect(r.status, `${name}: ${JSON.stringify(j).slice(0, 200)}`).toBe(201);
+      ids[name] = j.assetId;
+    }
+    await s.derivatives.idle();
+  }, 120_000);
+  afterAll(async () => { delete process.env.PF_FAKE_PICTURE_MODE; await s?.close(); fs.rmSync(w.root, { recursive: true, force: true }); });
+  afterEach(() => { delete process.env.PF_FAKE_PICTURE_MODE; });
+
+  it('E2/E5/E12: one face at its drawn place, none for no face or a lone square, too_many with no point for nine; no-store, labelled', async () => {
+    const one = await ask('one');
+    expect([one.status, one.cache, one.body.outcome, one.body.faces.length, one.body.method]).toEqual([200, 'no-store', 'faces', 1, PICTURE_TEST_ADAPTER_LABEL]);
+    const f = fx.stills.one.faces[0]!;
+    expect(near(one.body.faces[0].eyes[0], f.a.x, f.a.y, 640, 480)).toBeLessThan(1.5);
+    expect(near(one.body.faces[0].eyes[1], f.b.x, f.b.y, 640, 480)).toBeLessThan(1.5);
+    expect(Object.keys(one.body).sort()).toEqual(['faces', 'method', 'outcome']);
+    for (const name of ['none', 'decoy']) expect((await ask(name)).body).toEqual({ outcome: 'none', faces: [], method: PICTURE_TEST_ADAPTER_LABEL });
+    expect((await ask('nine')).body).toEqual({ outcome: 'too_many', faces: [], method: PICTURE_TEST_ADAPTER_LABEL });
+  }, 120_000);
+  it('two faces are sorted by position (left to right), never by anything else', async () => {
+    const r = await ask('two');
+    expect(r.body.faces).toHaveLength(2);
+    const mids = r.body.faces.map((x: any) => (x.eyes[0].u + x.eyes[1].u) / 2);
+    expect(mids[0]).toBeLessThan(mids[1]);
+    expect(Math.round(mids[0] * 640)).toBe(181);
+  }, 120_000);
+  it('E3: EXIF-6 and EXIF-3 JPEGs answer at the SHOWN positions', async () => {
+    for (const name of ['exif6', 'exif3']) {
+      const r = await ask(name);
+      expect(r.body.outcome, name).toBe('faces');
+      expect(near(r.body.faces[0].eyes[0], EXIF_FACE.a.x, EXIF_FACE.a.y, 640, 480), name).toBeLessThan(1.5);
+      expect(near(r.body.faces[0].eyes[1], EXIF_FACE.b.x, EXIF_FACE.b.y, 640, 480), name).toBeLessThan(1.5);
+    }
+  }, 120_000);
+  it('E6: move.mp4 frame 12 answers frame 12\'s drawn positions, not frame 0\'s; frame rules refuse with their codes', async () => {
+    const r = await ask('video', 12);
+    const e = fx.video.eyesAt(12);
+    expect(near(r.body.faces[0].eyes[0], e.a.x, e.a.y, 640, 360)).toBeLessThan(1.5);
+    expect(near(r.body.faces[0].eyes[1], e.b.x, e.b.y, 640, 360)).toBeLessThan(1.5);
+    expect([(await ask('video', null)).status, (await ask('video', 24)).body.error.code, (await ask('one', 0)).body.error.code, (await post({ assetId: 'no-such', frame: null })).status]).toEqual([400, 'out_of_bounds', 'invalid_args', 404]);
+  }, 120_000);
+  it('C9: nine drawn faces answer too_many with faces [] (the worker line tooMany: true carried no point)', async () => {
+    const r = await ask('nine');
+    expect(r.body).toEqual({ outcome: 'too_many', faces: [], method: PICTURE_TEST_ADAPTER_LABEL });
+  }, 120_000);
+  it('E8: agent credentials get 403 owner_required before anything; their /picture-models has no yunet row in the ready state', async () => {
+    const full = s.governance.createGrant({ name: 'full', mode: 'edit', people: 'full' }, OWNER).token;
+    for (const token of [s.auth.tokens.agent, full]) {
+      const r = await post({ nonsense: 1 }, { headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', connection: 'close' } });
+      expect([r.status, r.body.error.code]).toEqual([403, 'owner_required']);
+      const m = await (await fetch(`${s.url}/api/v1/picture-models`, { headers: { authorization: `Bearer ${token}`, connection: 'close' } })).json() as any;
+      expect(JSON.stringify(m)).not.toMatch(/yunet|eyes|face/i);
+    }
+    const mine = await (await fetch(`${s.url}/api/v1/picture-models`, { headers: ownerH() })).json() as any;
+    expect(mine.models[0]).toMatchObject({ id: 'yunet', code: 'ready', device: 'cpu' });
+    expect(mine.built).toBe(true);
+  }, 120_000);
+  it('E11: a box, a score, a landmark, a count, a third point, u = 1.2, NaN, a crash, a non-JSON line and an early exit are each 502 eyes_engine_failed with codes and integers only; nothing printed', async () => {
+    const before = printed.length;
+    for (const mode of ['box', 'score', 'landmark', 'count', 'third', 'outside', 'nan', 'garbage', 'crash', 'exit-early']) {
+      process.env.PF_FAKE_PICTURE_MODE = mode;
+      const r = await ask('one');
+      expect([r.status, r.body.error?.code], mode).toEqual([502, 'eyes_engine_failed']);
+      for (const v of Object.values(r.body.error.details ?? {})) expect(['string', 'number'].includes(typeof v) && !/\s/.test(String(v)), `${mode} ${String(v)}`).toBe(true);
+      expect(JSON.stringify(r.body), mode).not.toMatch(/Traceback|fake crash|not json|ZodError|SyntaxError|boxes|scores/);
+    }
+    expect(printed.slice(before)).toEqual([]);
+  }, 120_000);
+  it('a second request while one runs is 429 eyes_busy', async () => {
+    process.env.PF_FAKE_PICTURE_MODE = 'slow';
+    const ac = new AbortController();
+    const first = post({ assetId: ids.one, frame: null }, { signal: ac.signal }).catch(() => null);
+    expect(await waitFor(() => pidsRunning(w.worker).length === 1, 10_000)).toBe(true);
+    const second = await ask('one');
+    expect([second.status, second.body.error.code]).toEqual([429, 'eyes_busy']);
+    ac.abort();
+    await first;
+    expect(await waitFor(() => pidsRunning(w.worker).length === 0, 1000)).toBe(true);
+  }, 120_000);
+  it('E10: aborting the request (client gone) SIGKILLs the worker within 1 s; nothing is answered afterwards; the next request starts a fresh process', async () => {
+    process.env.PF_FAKE_PICTURE_MODE = 'slow';
+    const ac = new AbortController();
+    const first = post({ assetId: ids.one, frame: null }, { signal: ac.signal }).then(() => 'answered', () => 'aborted');
+    expect(await waitFor(() => pidsRunning(w.worker).length === 1, 10_000)).toBe(true);
+    const [pid] = pidsRunning(w.worker);
+    ac.abort();
+    expect(await first).toBe('aborted');
+    expect(await waitFor(() => pidsRunning(w.worker).length === 0, 1000)).toBe(true);
+    expect(fs.existsSync(`/proc/${pid}/cmdline`) && fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes(w.worker)).toBe(false);
+    delete process.env.PF_FAKE_PICTURE_MODE;
+    const next = await ask('one');
+    expect(next.body.outcome).toBe('faces');
+  }, 120_000);
+  it('E10: after each answer the worker process has exited (no kept worker; PF_TOOLS_KEEP_SECONDS has no effect on eyes)', async () => {
+    expect(s.cfg.toolsKeepSeconds).toBeGreaterThan(0);
+    for (let k = 0; k < 3; k++) { expect((await ask('one')).status).toBe(200); expect(await waitFor(() => pidsRunning(w.worker).length === 0, 1000)).toBe(true); }
+  }, 120_000);
+  it('E7: around 20 proposals whose fake answers carry PLANTED: the answered values are only in the owner\'s answers; the worker\'s raw value is nowhere; row counts unchanged and no file of the data or tmp folder was created or grew', async () => {
+    await s.derivatives.idle();
+    const rows0 = counts(), files0 = files(), printed0 = printed.length;
+    process.env.PF_FAKE_PICTURE_MODE = 'planted';
+    const said: string[] = [];
+    for (let k = 0; k < 20; k++) {
+      const r = await ask(k % 2 ? 'one' : 'two');
+      expect(r.status).toBe(200);
+      for (const f of r.body.faces) for (const p of f.eyes) said.push(String(p.u));
+    }
+    delete process.env.PF_FAKE_PICTURE_MODE;
+    expect(said.length).toBeGreaterThanOrEqual(60);
+    const ctx = { store: s.store, projectId: spid, dataDir: s.cfg.dataDir, printed: printed.slice(printed0), answers };
+    for (const u of new Set(said)) expect(searchEverywhere(u, ctx), u).toEqual(['an answer']);
+    expect(searchEverywhere(String(PLANTED).slice(2), { ...ctx, answers: [] })).toEqual([]);
+    expect(counts()).toEqual(rows0);
+    const files1 = files();
+    for (const [f, n] of Object.entries(files1)) expect(n, f).toBeLessThanOrEqual(files0[f] ?? -1);
+  }, 120_000);
+  it('the job table has no eyes row ever: no job type for eyes exists in the server', async () => {
+    const types = (s.store.db.prepare('SELECT DISTINCT type FROM jobs').all() as { type: string }[]).map((r) => r.type);
+    for (const t of types) expect(t).not.toMatch(/eye|face|picture.?model/i);
+    const src = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+    const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : /\.ts$/.test(e.name) && !/\.test\.ts$/.test(e.name) ? [path.join(d, e.name)] : []));
+    for (const f of walk(src)) expect(fs.readFileSync(f, 'utf8'), f).not.toMatch(/(createJob|enqueue|insertJob)\([^)]*['"`]eyes?\b|type:\s*['"`]eyes?['"`]/);
+    const runtime = fs.readFileSync(path.join(src, 'picmodels', 'runtime.ts'), 'utf8') + fs.readFileSync(path.join(src, 'picmodels', 'eyes.ts'), 'utf8') + fs.readFileSync(path.join(src, 'toolsWorker.ts'), 'utf8');
+    expect(runtime).not.toMatch(/console\.|createJob|store\.commit|writeFile|appendFile|events\.emit/);
+  }, 120_000);
 });
-describe('picture-model setup (W1): ledger-only lookup', () => {
-  it.todo('R1: licence not allowed → licence_blocked; changed worker byte → engine_unverified; PF_TOOLS_PYTHON unset → engine_not_configured; the fake with --missing onnxruntime → engine_not_working naming onnxruntime; library unset / item absent / other sha in the ledger / size off by one → model_missing with the exact bytes; ready says cpu');
-  it.todo('R2: the right file at the right path but absent from the ledger is model_missing; a ledger item that links out of its folder is model_missing and nothing outside is opened');
-  it.todo('the owner\'s detail sentences hold no path and no file name; an agent\'s rows hold five keys and no yunet row in every state');
-});
+
+function hasFfmpeg(): boolean { try { execFileSync('ffmpeg', ['-version']); return true; } catch { return false; } }
