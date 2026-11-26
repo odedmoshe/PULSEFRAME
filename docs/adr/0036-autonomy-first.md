@@ -25,8 +25,15 @@ The owner wants agents to do everything the editor's own window does, with no ap
 - Floor sites added when the in-editor agent's and the sources track's contracts met this ADR on the main branch: a model
   provider's key and base URL (`agent/routes.ts`, C9b) and a source connector's key or contact line (`sources/routes.ts`, C9c).
   The source-walk test (`apps/server/src/autonomy.test.ts`) lists every floor site by its exact text.
-- Not built yet (its own builder): the warn-instead-of-refuse rows — model hosts (D1), a remote ComfyUI (D5), assistant hosts
-  (D6), egress and licences (D8/H1, H2), the upload cap (I9), narration batches (I11). Until then those sites refuse as before.
+- The warn-instead-of-refuse rows are built and merged (D1 model hosts, D5 a ComfyUI on another computer, D6 the assistant's
+  host, D8/H1 egress and licences, H2 the search model's licence, I9 the upload cap, I11 narration batches): one server-mode
+  predicate, `warnsOpen`, read at admission at 14 sites listed in `OPEN_GATES` (pinned by the source walk). In open mode the
+  action goes ahead and says so three ways (`openWarnings` on the job, `warnings` in the route's answer, `openWarnings` in
+  `get_controls`); guarded mode refuses as before. Facts still refuse in both modes: https on every hop, pinned sizes and
+  digests, a model with no source or no pinned digest, a changed code or graph digest, the disk reserve and the storage ceiling.
+  A result made under a licence warning carries `derived.modelLicences` and its export shows the existing non-commercial warning.
+  `pnpm proof:autonomy` 32/32 in one run on the builder's branch. Not built: the editor does not show `openWarnings` yet; no
+  end-to-end test of a local tool's result carrying the licence mark.
 - Licences: ONE rule is the aim (a licence finding is a warning quoting the licence's own deed; refusals only for data facts).
   The library's fail-closed refusal of share-alike, no-derivatives and unknown licences (ADR-0029 §6) and the archive's exclusion
   of such files are re-decided with those rows.

@@ -341,7 +341,7 @@ describe('the routes: owner\'s own session only, documented, no MCP tool', () =>
       expect({ route, registered: registered.has(route), ownerOnly: op?.['x-owner-session-only'], classes: PEOPLE_REST_SURFACES[route] }).toEqual({ route, registered: true, ownerOnly: true, classes: ['owner-only'] });
     }
   });
-  it('agent, observer and propose credentials get 403 owner_required on both routes, also with a bad body; no MCP tool', async () => {
+  it('agent, observer and propose credentials get 403 owner_required on both routes (guarded mode), also with a bad body; the two MCP tools exist', async () => {
     for (const who of [agent, observer, proposer]) {
       for (const [m, p, b] of [['GET', '/api/v1/speech/engine'], ['POST', `/api/v1/projects/${project}/speech/engine/install`, '{"confirmBytes":1}'], ['POST', `/api/v1/projects/${project}/speech/engine/install`, '{"bogus":']] as const) {
         const r = await rest(who, m, p, b);
@@ -351,7 +351,8 @@ describe('the routes: owner\'s own session only, documented, no MCP tool', () =>
     const r = await mcp(new Request(`${base()}/mcp`, { method: 'POST', headers: { ...agent(), accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }) }));
     const text = await r.text();
     const msg = JSON.parse((r.headers.get('content-type') ?? '').includes('text/event-stream') ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : text);
-    expect(msg.result.tools.map((t: { name: string }) => t.name).filter((n: string) => /engine|install/i.test(n))).toEqual([]);
+    // ADR-0036 added the two MCP tools; each calls the route's own server function, so in guarded mode (this test's mode) it refuses like the route
+    expect(msg.result.tools.map((t: { name: string }) => t.name).filter((n: string) => /engine|install/i.test(n)).sort()).toEqual(['get_speech_engine', 'install_speech_engine']);
   });
   it('the owner sees the plan, starts with the exact size, and is the only one who can cancel (REST)', async () => {
     const v = await rest(owner, 'GET', '/api/v1/speech/engine');
