@@ -12,6 +12,7 @@ import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
 import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
 import { ClipDepthSchema } from './livingContract.ts';
+import { MadeRecordSchema } from './madeContract.ts';
 import { AUDIENCE_MUSIC_DB_MAX, AUDIENCE_MUSIC_DB_MIN, AUDIENCE_PROFILES, AUDIENCE_RULES_VERSION, KEEP_RULES, SOUND_ROLES } from './audienceLimits.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
@@ -362,6 +363,8 @@ export const AssetSchema = z
         fitted: FittedMusicSchema.optional(),
         /** Present for built-in music made with recorded instruments of the owner's library (wave 7 instruments track): RecordedInstrumentsSchema. origin is 'generated'. */
         instruments: RecordedInstrumentsSchema.optional(),
+        /** Present for a clip made by a page («קליפ מקוד», wave 8 motioncode; madeContract.ts MadeRecordSchema). origin is 'generated', kind 'video'. */
+        made: MadeRecordSchema.optional(),
       })
       .strict(),
   })

@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>rising title</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script>
+// «כותרת עולה» / rising title (PULSEFRAME built-in page, version 1). A title rises into place and settles; a thin line grows under it.
+// Every frame is drawn from its number only. Values arrive as typed values in PF.fields and are drawn as text, never as markup.
+(function () {
+  var c = document.getElementById('c'), x = c.getContext('2d');
+  c.width = PF.width; c.height = PF.height;
+  var rtlOf = function (s) { var m = /[A-Za-zÀ-ɏ]|[֐-׿؀-ۿ]/.exec(s); return !!m && /[֐-׿؀-ۿ]/.test(m[0]); };
+  var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+  var easeOut = function (p) { return 1 - Math.pow(1 - p, 3); };
+  PF.render = function (frame) {
+    var f = PF.fields, W = PF.width, H = PF.height, n = PF.frames;
+    var title = String(f.title || ''), sub = String(f.subtitle || ''), colour = String(f.colour || '#ffffff');
+    var rise = easeOut(clamp(frame / Math.max(1, Math.round(n * 0.3))));
+    var line = easeOut(clamp((frame - n * 0.15) / Math.max(1, n * 0.3)));
+    x.clearRect(0, 0, W, H);
+    var size = Math.round(H * 0.11), rtl = rtlOf(title);
+    x.save();
+    x.direction = rtl ? 'rtl' : 'ltr'; x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+    x.globalAlpha = rise; x.fillStyle = colour;
+    x.font = '700 ' + size + 'px Heebo';
+    x.shadowColor = 'rgba(0,0,0,0.45)'; x.shadowBlur = Math.round(size * 0.12); x.shadowOffsetY = Math.round(size * 0.04);
+    var y = H * 0.55 + (1 - rise) * H * 0.12;
+    x.fillText(title, W / 2, y);
+    if (sub) { x.font = '400 ' + Math.round(size * 0.42) + 'px Heebo'; x.direction = rtlOf(sub) ? 'rtl' : 'ltr'; x.fillText(sub, W / 2, y + size * 0.75); }
+    x.restore();
+    var lw = W * 0.28 * line;
+    x.fillStyle = colour; x.globalAlpha = line;
+    x.fillRect(W / 2 - lw / 2, H * 0.55 + size * 0.22, lw, Math.max(2, Math.round(H * 0.006)));
+    x.globalAlpha = 1;
+  };
+})();
+</script></body></html>

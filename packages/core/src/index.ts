@@ -228,3 +228,8 @@ export * from './inkSimplify.ts';
 // lead-built; the table maths (gradeCurveTable / gradeCurveTables / gradeCurveTablesRgba / gradeCurveTablesDigest) is W1's
 export * from './gradeCurves.ts';
 export * from './gradeCurvesOps.ts';
+// «קליפ מקוד» (wave 8 motioncode track): the contract (limits, record, wire types, refusals) and apply_made_clip's registration are
+// lead-built; the op body (madeOps.ts) and checkMadePage / madeFieldsCheck (madeCheck.ts) are W2's
+export * from './madeContract.ts';
+export * from './madeCheck.ts';
+export * from './madeOps.ts';

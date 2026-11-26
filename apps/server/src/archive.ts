@@ -75,10 +75,10 @@ function header(e: Entry): Buffer {
 }
 const pad = (size: number) => (BLOCK - (size % BLOCK)) % BLOCK;
 
-/** Hashes of every blob the document needs: edited media and, for conformed assets, the untouched original. */
+/** Hashes of every blob the document needs: edited media, for conformed assets the untouched original, and for a clip made by a page the page itself («קליפ מקוד», so it can be edited and drawn again after an import). */
 export function archiveBlobs(doc: ProjectDocument): string[] {
   const out = new Set<string>();
-  for (const a of Object.values(doc.assets)) { out.add(a.contentHash); if (a.conform) out.add(a.conform.originalContentHash); }
+  for (const a of Object.values(doc.assets)) { out.add(a.contentHash); if (a.conform) out.add(a.conform.originalContentHash); if (a.provenance.made) out.add(a.provenance.made.pageSha256); }
   return [...out].sort();
 }
 

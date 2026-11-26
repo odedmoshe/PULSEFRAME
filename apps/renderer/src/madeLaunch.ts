@@ -27,6 +27,8 @@ export const MADE_CHROMIUM_ARGS: readonly string[] = Object.freeze([
   '--proxy-bypass-list=<-loopback>',
   '--webrtc-ip-handling-policy=disable_non_proxied_udp',
   '--force-webrtc-ip-handling-policy',
+  // WebGL pages (allowed, madeContract MadeRenderRequest.capabilities.webgl) run on the software renderer here; whether this headless shell
+  // needs --use-angle=swiftshader / --enable-unsafe-swiftshader for WebGL with --disable-gpu is W1's first check (proof check G-webgl).
   '--disable-gpu',
   '--js-flags=--max-old-space-size=256',
   '--disable-background-networking',
