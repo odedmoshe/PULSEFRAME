@@ -1,0 +1,36 @@
+/* The three clip cards (wave 8D P6). Logical properties only (Hebrew rtl and English ltr); colours are the design tokens. */
+.cc-fit { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--pf-sp-3, 6px); margin-block-end: var(--pf-sp-4, 8px); }
+.cc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 32px; padding: 4px 8px; border: 0; border-radius: var(--pf-r-md, 8px); background: var(--pf-surface-2); color: var(--pf-text); box-shadow: inset 0 0 0 1px var(--pf-line-strong); font: inherit; font-size: 12px; cursor: pointer; }
+.cc-btn:hover:not(:disabled) { background: var(--pf-surface-3); }
+.cc-btn[aria-pressed='true'] { background: var(--pf-frame-soft); color: var(--pf-frame); box-shadow: inset 0 0 0 1.5px var(--pf-frame); }
+.cc-btn:disabled, .cc-pill:disabled, .cc-tile:disabled, .cc-chip:disabled { color: var(--pf-text-disabled); cursor: not-allowed; }
+.cc-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-block-end: 8px; }
+.cc-morerow { margin-block-end: 8px; }
+.cc-pills, .cc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-block-end: 8px; }
+.cc-pills[hidden], .cc-tiles[hidden], .cc-adv-body[hidden] { display: none; }
+.cc-pill, .cc-chip { display: inline-flex; align-items: center; gap: 6px; min-block-size: 30px; padding: 4px 12px; border: 0; border-radius: 999px; background: var(--pf-surface-2); color: var(--pf-text); box-shadow: inset 0 0 0 1px var(--pf-line-strong); font: inherit; font-size: 12px; cursor: pointer; }
+.cc-pill:hover:not(:disabled), .cc-chip:hover:not(:disabled), .cc-tile:hover:not(:disabled) { background: var(--pf-surface-3); }
+.cc-pill[aria-pressed='true'], .cc-chip[aria-pressed='true'], .cc-tile[aria-pressed='true'] { background: var(--pf-frame-soft); color: var(--pf-frame); box-shadow: inset 0 0 0 1.5px var(--pf-frame); }
+.cc-pill-more { color: var(--pf-text-2); }
+.cc-says { margin: 0 0 8px; color: var(--pf-text-2); font-size: 12px; line-height: 1.5; }
+.cc-note { margin: 0 0 8px; font-size: 12px; }
+.cc-sub { margin-block: 4px; color: var(--pf-text-2); font-size: 12px; }
+.cc-keyrow { display: flex; align-items: center; gap: 6px; margin-block-end: 8px; }
+.cc-keypill { flex: 1; justify-content: center; }
+.cc-chip-time { color: var(--pf-text-3); }
+.cc-chip[aria-pressed='true'] .cc-chip-time { color: inherit; }
+.cc-tile { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border: 0; border-radius: var(--pf-r-md, 8px); background: var(--pf-surface-2); color: var(--pf-text); box-shadow: inset 0 0 0 1px var(--pf-line-strong); font: inherit; cursor: pointer; }
+.cc-tile-word { font-size: 11px; line-height: 1.2; text-align: center; }
+.cc-tile svg { display: block; }
+.cc-tile-line { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+.cc-zoom { display: grid; gap: 4px; margin-block: 8px; }
+.cc-zoom-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--pf-text-2); }
+.cc-zoom input[type='range'] { inline-size: 100%; }
+.cc-adv { margin-block-start: 8px; border-block-start: 1px solid var(--pf-line); padding-block-start: 6px; }
+.cc-adv-toggle { all: unset; cursor: pointer; font-size: 12px; color: var(--pf-text-2); padding: 2px 4px; border-radius: 4px; }
+.cc-adv-toggle:hover { color: var(--pf-text); }
+.cc-adv-body { margin-block-start: 6px; }
+:root[dir='rtl'] .cc-flip { transform: none; }
+:root:not([dir='rtl']) .cc-flip { transform: scaleX(-1); }
+.cc-btn:focus-visible, .cc-pill:focus-visible, .cc-chip:focus-visible, .cc-tile:focus-visible, .cc-adv-toggle:focus-visible, .cc-zoom input:focus-visible { outline: 2px solid var(--pf-focus, var(--pf-frame)); outline-offset: 2px; }
+@media (forced-colors: active) { .cc-btn, .cc-pill, .cc-chip, .cc-tile { border: 1px solid ButtonText; } .cc-pill[aria-pressed='true'], .cc-chip[aria-pressed='true'], .cc-tile[aria-pressed='true'], .cc-btn[aria-pressed='true'] { outline: 2px solid Highlight; } }

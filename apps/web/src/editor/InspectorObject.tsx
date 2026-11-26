@@ -60,6 +60,7 @@ import { MulticamClipBlock } from './MulticamClipBlock.tsx';
 import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
 import { ImpactControls } from './musicfit/ImpactControls.tsx';
 import { CurvesBlock } from './grade/CurvesBlock.tsx';
+import { BlendCard, MotionCard, PlaceCard } from './clipCards/ClipCards.tsx';
 
 type Media = Extract<Clip, { type: 'media' }>;
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -611,6 +612,9 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
   const S = INSPECTOR_STRINGS[state.lang];
   const variantId = state.viewVariantId;
   const media = clip.type === 'media' ? clip : null;
+  // the three cards (wave 8D P6) are for a picture or a video clip on a picture track; a sound clip keeps its sections
+  const asset = media ? state.doc?.assets[media.assetId] : undefined;
+  const cards = !!media && editor.selected?.track.kind !== 'audio' && (asset?.kind === 'image' || !!asset?.video);
   const ks = keyframeSummary(clip);
   const blend = clip.type === 'caption' ? 'normal' : clip.blend ?? 'normal';
   const fps = editor.rate.num / editor.rate.den;
@@ -620,17 +624,26 @@ function BasicTab({ clip, viewClip, shown, keymap }: PanelProps) {
     <>
       {/* why this clip is in the family film (ADR-0026): draws nothing for a clip that is in no film run */}
       {media && state.selection.length === 1 && <FilmWhy key={`film-why:${media.id}`} clipId={media.id} lang={state.lang} />}
+      {cards ? (
+        <PlaceCard clip={media!} shown={shown} scope={<FormatScope clip={clip} />} rows={<TransformRows clip={clip} viewClip={viewClip} shown={shown} />} />
+      ) : (<>
       <Section id="transform" title={S.secPlace} onReset={moved && editor.playheadOnSelection ? reset : undefined}>
         {/* Values shown are the ones rendered at the playhead. Editing an animated property writes a keyframe there. */}
         <FormatScope clip={clip} />
         <TransformRows clip={clip} viewClip={viewClip} shown={shown} />
       </Section>
       {media && <Section id="fill" title={S.secFill}><FrameFill clip={media} shown={shown} /></Section>}
+      </>)}
       <BeatRow clip={clip} onOpen={() => editor.openInspectorTab('effects')} />
       {media && !variantId && <CutLink clip={media} />}
       {media && <MulticamClipBlock clip={media} />}
+      {cards ? (<>
+        <BlendCard clip={clip} field={<BlendField clip={clip} />} />
+        <MotionCard clip={clip} shown={shown} advanced={<KeyframeButtons clip={clip} keymap={keymap} />} />
+      </>) : (<>
       <Section id="keys" title={S.secKeys} defaultOpen={false} summary={ks.count ? S.keysCount(ks.count) : S.keysNone}><KeyframeButtons clip={clip} keymap={keymap} /></Section>
       <Section id="blend" title={S.secBlend} defaultOpen={false} summary={S.blend[blend] ?? blend}><BlendField clip={clip} /></Section>
+      </>)}
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${shortTimecode(T.frameIndexAt(clip.start, editor.rate), fps)} · ${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>
       {media && !variantId && (
         <Section id="media" title={S.secMedia} defaultOpen={false} summary={(state.doc?.assets[media.assetId]?.name ?? '').replace(/\.[a-z0-9]{2,5}$/i, '')}>
