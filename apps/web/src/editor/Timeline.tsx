@@ -31,6 +31,7 @@ import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
 import { assetHasBeats, timelineTempo } from './pulse.logic.ts';
 import { assetDisplayName } from './assetLabel.ts';
 import { RenderCacheLane } from './RenderCacheLane.tsx';
+import { laneCues } from './captionSource.logic.ts';
 import { FilmBar } from './FilmBar.tsx';
 import { StoryBar } from './story/StoryBar.tsx';
 import { GrowingBar } from './growing/GrowingBar.tsx';
@@ -348,25 +349,9 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
   const isVideo = tr.kind === 'video';
   const cuts = useMemo(() => (isVideo ? cutsOf(tr.clips) : []), [isVideo, tr.clips]);
   const beforeOf = useMemo(() => new Map(cuts.map((c) => [c.after.id, c.before])), [cuts]);
-  // captions that come from the transcript of the linked track are drawn where they play (they are not clips: they follow every cut)
-  const autoCues = useMemo(() => {
-    if (tr.kind !== 'caption' || tr.caption?.mode !== 'transcript' || !tr.caption.linkedTrackId) return [];
-    const src = doc.sequences[doc.mainSequenceId]!.tracks.find((x) => x.id === tr.caption!.linkedTrackId);
-    const out: { key: string; start: number; end: number; text: string; frame: number }[] = [];
-    for (const c of src?.clips ?? []) {
-      if (c.type !== 'media' || c.reverse || c.freeze) continue;
-      const spoken = transcriptFor(doc, c.assetId);
-      if (!spoken) continue;
-      const srcIn = T.add(c.sourceIn, spoken.offset), srcEnd = T.add(sourceEnd(c), spoken.offset);
-      for (const seg of spoken.transcript.segments) {
-        const a = T.max(seg.start, srcIn), b = T.min(T.add(seg.start, seg.duration), srcEnd);
-        if (!T.lt(a, b)) continue;
-        const from = timelineAt(c, T.sub(a, spoken.offset));
-        out.push({ key: `${c.id}:${seg.id}`, start: T.toSeconds(from), end: T.toSeconds(timelineAt(c, T.sub(b, spoken.offset))), text: seg.text, frame: T.frameIndexAt(from, rate) });
-      }
-    }
-    return out;
-  }, [doc, tr, rate]);
+  // captions that come from the transcript are drawn where they play (they are not clips: they follow every cut). The engine's own
+  // cues (laneCues → engine captionCues: the linked track, or every sound and picture track when none is linked, as the picture is drawn)
+  const autoCues = useMemo(() => laneCues(doc, doc.sequences[doc.mainSequenceId]!, tr, rate), [doc, tr, rate]);
   // the level a ducked track is lowered to while there is speech, as the mixers compute it (drawn, not editable: it follows the speech)
   const duck = useMemo((): DuckShape | null => {
     const d = tr.kind === 'audio' ? tr.audio?.duck : null;
