@@ -119,6 +119,7 @@
 /* ---------- rail ---------- */
 .pf-rail { --pf-rail-pad: var(--pf-sp-2); position: relative; display: flex; flex-direction: column; justify-content: space-between; min-block-size: 0; overflow-y: auto; overflow-x: hidden; padding: var(--pf-sp-4) var(--pf-sp-3); background: var(--pf-surface-1); box-shadow: inset -1px 0 0 var(--pf-line); scrollbar-width: none; }
 :root[dir='rtl'] .pf-rail { box-shadow: inset 1px 0 0 var(--pf-line); }
+.pf-rail :focus-visible, .pf-browser :focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; } /* one ring colour: the global :focus-visible (styles.css) is the info blue */
 .pf-rail-list { display: flex; flex-direction: column; gap: var(--pf-sp-5); }
 .pf-rail-group { display: flex; flex-direction: column; gap: var(--pf-sp-1); }
 .pf-rail-group + .pf-rail-group { padding-block-start: var(--pf-sp-4); border-block-start: 1px solid var(--pf-line); }

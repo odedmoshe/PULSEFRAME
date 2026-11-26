@@ -9,6 +9,8 @@
 .pf-sr { position: absolute !important; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .pf-ico { flex: none; display: inline-block; vertical-align: middle; pointer-events: none; }
 :where(.pf-ds) :focus-visible, .pf-ds:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+/* the global ring (styles.css) is the info blue: one colour for every control that has no ring of its own (a class rule is more specific and keeps its own) */
+body :focus-visible { outline-color: var(--pf-focus); }
 :where(.pf-ds) button { font: inherit; color: inherit; }
 @keyframes pf-spin { to { transform: rotate(360deg); } }
 .pf-spin { animation: pf-spin 900ms linear infinite; }

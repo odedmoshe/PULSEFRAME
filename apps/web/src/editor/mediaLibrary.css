@@ -10,7 +10,7 @@ ul.assets.media-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1f
 .media-card .asset-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--pf-fs-sm); color: var(--pf-text); }
 .media-card .asset-notice { font-size: 11px; color: var(--pf-text-muted); line-height: 1.3; overflow-wrap: anywhere; }
 .media-card .asset-notice select { max-width: 100%; }
-.media-card button:focus-visible, .media-card select:focus-visible, .media-card input:focus-visible { outline: 2px solid var(--pf-accent-2); outline-offset: 1px; }
+.media-card button:focus-visible, .media-card select:focus-visible, .media-card input:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
 /* A file whose stored copy is missing on disk (GET …/missing-media): the timeline's missing-file look (timeline.css .clip.missing:
    danger hatching) and its words, «הקובץ לא נמצא» / "The file is missing", over the picture. White on --pf-danger-fill is 5.9:1. */
 .media-card.is-missing .mc-thumb { box-shadow: inset 0 0 0 2px var(--pf-danger); background-image: repeating-linear-gradient(135deg, var(--pf-danger-soft) 0 6px, transparent 6px 12px); }
