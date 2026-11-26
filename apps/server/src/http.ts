@@ -12,6 +12,7 @@ import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
 import { NarrationBody, NarrationScriptBody, Speech, TranscribeBody } from './speech.ts';
+import { SPEECH_ENGINE_JOB_TYPE } from './speechEngine.ts';
 import type { Capabilities } from './capabilities.ts';
 import type { Config } from './config.ts';
 import type { DerivativeKind, Derivatives } from './derive.ts';
@@ -1012,6 +1013,15 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ---- local speech recognition (optional; an honest setup state when the engine or the model is absent) ----
   app.get('/api/v1/speech', async (c) => { need(c, 'observe'); return c.json(await speech.status()); });
   // As with capability models: a deliberate human action for the exact byte count shown, never an agent's.
+  // «התקנת מנוע הדיבור» (speechEngine.ts): the owner's own session only, before anything is read; no MCP tool.
+  app.get('/api/v1/speech/engine', async (c) => { const p = need(c, 'observe'); speech.engineInstall.assertOwner(p); return c.json(await speech.engineInstall.view(p)); });
+  app.post('/api/v1/projects/:id/speech/engine/install', async (c) => {
+    const p = need(c, 'observe');
+    speech.engineInstall.assertOwner(p);
+    const b = await body(c, z.object({ confirmBytes: z.number().int().positive(), replace: z.boolean().optional() }).strict());
+    const job = await speech.engineInstall.start(p, c.req.param('id'), b.confirmBytes, b.replace ?? false);
+    return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
+  });
   app.post('/api/v1/projects/:id/speech/models/:modelId/download', async (c) => {
     const p = need(c, 'edit');
     if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
@@ -1042,8 +1052,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     return c.json({ sentences: r.sentences, jobs: r.jobs.map((j) => ({ jobId: j.id, status: j.status, type: j.type })) }, 202);
   });
   app.post('/api/v1/jobs/:jobId/cancel', async (c) => {
-    const p = need(c, 'edit');
     const j = store.getJob(c.req.param('jobId'));
+    if (j.type === SPEECH_ENGINE_JOB_TYPE) speech.engineInstall.assertOwner(c.var.principal); // the owner's own, before any scope is named
+    const p = need(c, 'edit');
     if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
     assertMayCancel(gov, p, j);
     if (j.type === ASSISTANT_JOB_TYPE) return c.json(assistant.cancel(p, j.id));
@@ -1466,6 +1477,8 @@ export function assertMayTakeJobOutput(p: Principal, job: JobRow, what: string):
  * reason and next step (assistant/routes.ts assistantCancelRefusal), the same for REST and MCP.
  */
 export function assertMayCancel(gov: Governance, p: Principal, job: JobRow) {
+  // the speech engine install runs software on the owner's computer: only the owner's own session stops it (REST and MCP alike)
+  if (job.type === SPEECH_ENGINE_JOB_TYPE && !isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the speech engine install is stopped only from the owner\'s own editor window', { jobId: job.id }, 'Ask the owner to cancel it in the speech panel.');
   if (p.kind !== 'agent') return;
   gov.assertMayAct(p, job.projectId, 'job');
   if (job.type === ASSISTANT_JOB_TYPE) throw assistantCancelRefusal(job.id);
