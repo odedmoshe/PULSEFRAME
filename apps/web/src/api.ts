@@ -6,6 +6,7 @@ import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulsefram
 import type { AssistantConfigBody, AssistantLocalCheck, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
 import type { ArchiveLibraryMode, CreditsView, LibraryFacets, LibraryItemsPage, LibraryItemsQuery, LibraryKind, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
 import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
+import type { FindSharpBody, FindSharpResult, SharpAnswer, StillExport } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
@@ -266,6 +267,13 @@ export const api = {
   restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
   findText: (id: string, query: FindQuery) => call<FindResult>(`/projects/${id}/text/find`, json(query)),
   // stabilisation (wave 7; apps/server/src/stabilise.ts)
+  // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover; apps/server/src/stills.ts, export option still)
+  /** Start measuring one stretch (202 → job; its output.answer is the SharpAnswer), or { cached: true, answer } when every frame is measured. */
+  findSharpFrames: (id: string, body: FindSharpBody) => call<FindSharpResult>(`/projects/${id}/stills`, json(body)),
+  /** What is stored for source frames [from, to) of a file (never starts a job). */
+  readSharpFrames: (id: string, assetId: string, from: number, to: number) => call<SharpAnswer>(`/projects/${id}/stills?assetId=${encodeURIComponent(assetId)}&from=${from}&to=${to}`),
+  /** Save one source frame as a picture: a server export job (owner's own session only); output.still describes it. */
+  exportStill: (id: string, format: 'png' | 'jpeg', still: StillExport) => call<{ jobId: string; status: string }>(`/projects/${id}/exports`, json({ format, still })),
   stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
   cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
   // marked ranges «פנינים» (wave 7; apps/server/src/pearls.ts): usage and screen time of one sequence; labels empty with labelsHidden for a credential without the people scope

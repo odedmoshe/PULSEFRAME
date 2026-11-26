@@ -125,6 +125,9 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`GET ${P}/assets/:assetId/camera-motion`]: ['reader-document'],
   // measured moments (ADR-0026): the job reads media, attaches analyses; nothing about people
   [`POST ${P}/moments`]: ['reader-document', 'write'],
+  // «הפריים הכי חד» (wave 8 cover): numbers measured from media; nothing about people, nothing written to the document
+  [`POST ${P}/stills`]: ['reader-document'],
+  [`GET ${P}/stills`]: ['reader-document'],
   // edits
   [`POST ${P}/transactions`]: ['write'],
   [`POST ${P}/operations`]: ['write'],
@@ -298,6 +301,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   plan_music_fit: ['reader-document'], apply_music_fit: ['reader-document', 'write'],
   // find it in your footage (wave 7 search track): text only, the reader document without pearl names or tags
   find_in_footage: ['reader-document'],
+  // «הפריים הכי חד» (wave 8 cover): numbers only, no picture
+  find_sharp_frames: ['reader-document'], read_sharp_frames: ['reader-document'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

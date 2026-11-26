@@ -33,7 +33,7 @@ import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { applyTemplateFor, listTemplates, planTemplateFor, probeElements, regenerateTemplateFor, templateCatalog } from './templates.ts';
-import { outputDoc } from './export.ts';
+import { assertMayExportStill, outputDoc } from './export.ts';
 import { envelopeDerivative, multicamView, runMulticamSyncJob, setMulticamDerivatives, syncMulticam } from './multicamSync.ts';
 import { applyShorts, cachedShortCandidates, findShortCandidates, planReframeFor, planShortsFor, shortsApiError, withShortsErrors } from './shorts.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
@@ -46,6 +46,8 @@ import { MusicFitApplyRequestSchema, MusicFitPlanRequestSchema } from '@pulsefra
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import type { MusicKit } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
+import { cancelStillsJob, readSharpFrames, startStillsJob, withStillsErrors } from './stills.ts';
+import { FindSharpBodySchema, ReadSharpQuerySchema, STILLS_JOB_TYPE } from '@pulseframe/core';
 import type { Presence } from './presence.ts';
 import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
 import { blobPresent, logMissingMedia, missingAssets, missingMediaError } from './mediaPresence.ts';
@@ -413,6 +415,20 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const b = await body(c, StartMomentsBodySchema);
     const r = startMomentsJob(store, gov, p, c.req.param('id'), b, { derivatives, lane: momentsLaneOf(exporter.lane) });
     return 'cached' in r ? c.json(r, 200) : c.json({ jobId: r.id, status: r.status }, 202);
+  });
+  // ----- «הפריים הכי חד» (wave 8 cover): a durable, model-free measurement of one stretch of one file; numbers only (stills.ts) -----
+  app.post('/api/v1/projects/:id/stills', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, FindSharpBodySchema);
+    const r = withStillsErrors(() => startStillsJob(store, gov, p, c.req.param('id'), b, { derivatives, lane: momentsLaneOf(exporter.lane) }));
+    return 'cached' in r ? c.json(r, 200) : c.json({ jobId: r.jobId, status: r.status }, 202);
+  });
+  app.get('/api/v1/projects/:id/stills', (c) => {
+    const p = need(c, 'observe');
+    gov.assertMayAct(p, c.req.param('id'), 'observe');
+    const q = ReadSharpQuerySchema.safeParse(c.req.query());
+    if (!q.success) throw new ApiError(400, 'invalid_request', z.prettifyError(q.error), { issues: q.error.issues });
+    return c.json(withStillsErrors(() => readSharpFrames(store, c.req.param('id'), q.data, { derivatives })));
   });
   app.get('/api/v1/projects/:id/motion-tracks/:motionTrackId', (c) => {
     need(c, 'observe');
@@ -863,6 +879,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const pr = need(c, 'edit');
     gov.assertMayAct(pr, c.req.param('id'), 'job');
     const options = await c.req.json().catch(() => ({}));
+    assertMayExportStill(pr, options); // a full-size picture is the owner's own (wave 8 cover)
     gov.takeExportQuota(pr, 1, true);
     assertMayTakeRendered(pr, store.wholeProject(c.req.param('id')).doc, 'export this project');
     // exporter.start refuses once the storage ceiling is reached (the same check for this route, the batch route, retries and MCP)
@@ -880,7 +897,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // assertMayReleaseBudget): any other credential is refused before the ledger is looked at, so its answer tells nothing of it.
   app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); const jobId = c.req.param('jobId'); assertMayReleaseBudget(p, jobId); gov.releaseUnknown(p, jobId); return c.json({ jobId, ledger: gov.ledgerFor(jobId) }); });
   app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId'));
-    if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
+    if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); assertMayExportStill(pr, old.input?.manifest?.options); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => c.json(jobViewFor(need(c, 'observe'), store.getJob(c.req.param('jobId')))));
   app.get('/api/v1/jobs/:jobId/output', (c) => {
     const who = need(c, 'observe');
@@ -1030,6 +1047,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
+    if (j.type === STILLS_JOB_TYPE) return c.json(cancelStillsJob(store, j.id, p.actor));
     if (j.type === STABILISE_JOB_TYPE) return c.json(cancelStabiliseJob(store, j.id, p.actor));
     if (j.type === SEARCH_INDEX_JOB_TYPE) return c.json(searchRuntime.cancel(j.id, p.actor)); // a picture scan (wave 7 search): the owner's own
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
@@ -1070,6 +1088,7 @@ export function startExportBatch(store: Store, gov: Governance, exporter: Export
   const parsed = ExportBatchBody.safeParse(raw ?? {});
   if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
   const b = parsed.data;
+  assertMayExportStill(pr, b.options); // a full-size picture is the owner's own (wave 8 cover); the plan refuses a still in a batch anyway
   const items = b.items ?? b.variantIds!.map((variantId) => ({ variantId }));
   assertMayTakeRendered(pr, store.wholeProject(projectId).doc, 'export this project');
   const doc = store.getProject(projectId).doc;
