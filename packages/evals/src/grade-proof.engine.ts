@@ -70,13 +70,17 @@ export function generatedCurves(count = 37, seed = 20261126): GradeCurvePoint[][
   }
   return out;
 }
-/** The 40 curves values of G1: the three presets, the identity, and each generated curve on a rotating channel. */
+/**
+ * The 40 curves values of G1: the three presets, the identity, and 36 generated curves, each on a rotating channel. (GRADE_CHECKS
+ * says "40 … the presets, the identity, 37 from a fixed integer generator": 3 + 1 + 37 is 41, so the total of 40 is kept and the
+ * generator gives 36 here; the core unit test runs all 37.)
+ */
 export function proofCurveSets(): GradeCurves[] {
   const ch = ['master', 'r', 'g', 'b'] as const;
   return [
     ...GRADE_CURVE_PRESETS.map((p) => gradeCurvePreset(p.id)),
     { master: [[0, 0], [255, 255]] },
-    ...generatedCurves().map((c, i) => ({ [ch[i % 4]!]: c }) as GradeCurves),
+    ...generatedCurves(36).map((c, i) => ({ [ch[i % 4]!]: c }) as GradeCurves),
   ];
 }
 
@@ -231,8 +235,10 @@ const checks: GradeProofPart['checks'] = {
     refuse('caption clip', { clipId: p.cue, curves: curvedArgs() });
     refuse('sound clip', { clipId: p.sound, curves: curvedArgs() });
     refuse('locked track', { clipId: p.lockedClip, curves: curvedArgs() });
-    refuse('merge mode (cut, C10a)', { clipId: p.picture, curves: curvedArgs(), mode: 'merge' });
     const unworded = rows.filter((r) => !r.code || !r.en || !r.he || !/[א-ת]/.test(r.he));
+    // there is no merge mode (C10a): an argument `mode` is refused by the strict argument schema (the generic typed refusal, no new words)
+    const merge = refusal(() => ctx(p.doc, [{ op: 'set_grade_curves', args: { clipId: p.picture, curves: curvedArgs(), mode: 'merge' } as never }]));
+    const noMerge = merge.code === 'invalid_args' && /"mode"/.test(merge.message);
     // identity channels dropped; null removes; nothing added without a grade when there is nothing to set (C10b)
     const set = ctx(p.doc, [{ op: 'set_grade_curves', args: { clipId: p.picture, curves: { master: [[0, 0], [255, 255]], r: [[0, 10], [255, 250]] } } }]).doc;
     const dropped = JSON.stringify(gradeOf(set, p.picture)?.curves) === JSON.stringify({ r: [[0, 10], [255, 250]] });
@@ -249,8 +255,8 @@ const checks: GradeProofPart['checks'] = {
     const undo = await c.call(`/projects/${c.f1.pid}/undo`, {});
     const after = (await c.call(`/projects/${c.f1.pid}`)).body.project;
     const serverUndo = undo.status === 200 && JSON.stringify(after) === JSON.stringify(before) && JSON.stringify(mid) !== JSON.stringify(before);
-    note('G3', { refusals: rows.map((r) => ({ case: r.case, code: r.code, reason: r.reason, en: r.en.slice(0, 90), he: r.he?.slice(0, 60) })), dropped, nullRemoves, nothingAdded, coreUndo, serverUndo, undoStatus: undo.status });
-    return rows.length === 10 && unworded.length === 0 && dropped && nullRemoves && nothingAdded && coreUndo && serverUndo ? true : `unworded refusals ${JSON.stringify(unworded.map((r) => r.case))}; dropped ${dropped}; null removes ${nullRemoves}; nothing added ${nothingAdded}; undo core ${coreUndo} server ${serverUndo}`;
+    note('G3', { noMerge: { code: merge.code, message: merge.message }, refusals: rows.map((r) => ({ case: r.case, code: r.code, reason: r.reason, en: r.en.slice(0, 90), he: r.he?.slice(0, 60) })), dropped, nullRemoves, nothingAdded, coreUndo, serverUndo, undoStatus: undo.status });
+    return rows.length === 9 && unworded.length === 0 && noMerge && dropped && nullRemoves && nothingAdded && coreUndo && serverUndo ? true : `unworded refusals ${JSON.stringify(unworded.map((r) => r.case))}; merge refused ${noMerge}; dropped ${dropped}; null removes ${nullRemoves}; nothing added ${nothingAdded}; undo core ${coreUndo} server ${serverUndo}`;
   },
 
   async G4() {
@@ -411,7 +417,9 @@ const checks: GradeProofPart['checks'] = {
       mp4Worst = 0;
       for (let band = 0; band < 4; band++) for (let x = 4; x < W - 4; x++) { const a = px(frame, x, rowOf(band)), b = px(still, x, rowOf(band)); for (let ch = 0; ch < 3; ch++) mp4Worst = Math.max(mp4Worst, Math.abs(a[ch]! - b[ch]!)); }
     }
-    const worker = { png: pj.output?.worker ?? pj.output?.renderer ?? null, mp4: mj.output?.worker ?? mj.output?.renderer ?? null, mode: process.env.PF_RENDER_GPU ?? 'auto (the render host chose)' };
+    // the worker: PF_RENDER_GPU (unset here: the render host searches the launch modes) and what the render cache's fingerprint names
+    const cacheStatus = (await c.call('/storage/render-cache')).body as Record<string, unknown>;
+    const worker = { mode: process.env.PF_RENDER_GPU ?? 'unset (the render host chose)', renderCache: JSON.stringify(cacheStatus).slice(0, 400) };
     note('G7', { adapter: c.adapter, worker, previewCanvas: canvas, previewMeanDifference: previewMean, pngJob: pj.status, pngEqual, mp4Job: mj.status, mp4WorstOpaque: mp4Worst, pageErrors: errors });
     return previewMean !== null && previewMean < 0.5 && pngEqual && mp4Worst !== null && mp4Worst <= 12 && errors.length === 0 ? true : `preview mean ${previewMean} (canvas ${canvas}); png equal ${pngEqual} (${pj.status}); mp4 worst ${mp4Worst} (${mj.status}); page errors ${errors.length}`;
   },
