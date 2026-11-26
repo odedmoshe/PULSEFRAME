@@ -21,7 +21,7 @@
  * card says «מחובר דרך נקודת הקצה התואמת» for providers reached through family C (preset.compatNote).
  *
  * Errors (C16): every adapter maps its provider's answer to AgentProviderError with one of AGENT_PROVIDER_ERROR_CODES (core):
- *  Anthropic (R§1.5): 401 unauthorized · 402 / 400 "spend limit" → no_credit · 429 → rate_limited (retry-after) · 529 / 500 / 504
+ *  Anthropic (R§1.5): 401 / 403 unauthorized · 402 / 400 "spend limit" → no_credit · 429 → rate_limited (retry-after) · 529 / 500 / 504
  *  → overloaded · 400 "prompt is too long" or stop_reason model_context_window_exceeded → context_too_long · stop_reason refusal → refused.
  *  OpenAI-style (R§2.6, R§3.5, R§4.6): 401 unauthorized · 429 credit_balance_exhausted / insufficient_quota / *_spend_limit_exceeded
  *  → no_credit · other 429 → rate_limited · 503 / 500 → overloaded · 402 (Gemini payment_required) → no_credit · ECONNREFUSED on a
