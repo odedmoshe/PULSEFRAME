@@ -24,3 +24,16 @@ describe('made fetch-once: internet addresses only', () => {
     expect(calls).toEqual(['https://pictures.example/a.png']);
   });
 });
+
+describe('MADE_LIBRARIES: the installed flag says what is installed (integration decision 1)', () => {
+  it('a row is installed: true exactly when the renderer has its pinned version, and every installed row is served', async () => {
+    const { MADE_LIBRARIES } = await import('@pulseframe/core');
+    const { installedVersion, servedLibraries } = await import('./libs.ts');
+    const served = servedLibraries().map((r) => r.name);
+    for (const r of MADE_LIBRARIES) {
+      expect(r.installed, `${r.name}: installed flag`).toBe(installedVersion(r.name) === r.version);
+      if (r.installed) expect(served, r.name).toContain(r.name);
+    }
+    expect(MADE_LIBRARIES.filter((r) => r.installed).map((r) => r.name).sort()).toEqual(['gsap', 'three']);
+  });
+});

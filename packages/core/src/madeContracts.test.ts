@@ -34,10 +34,10 @@ describe('made contract', () => {
     expect(madeSizeFor(1080, 1920)).toEqual({ width: 1080, height: 1920 });
     expect(madeSizeFor(641, 361)).toEqual({ width: 642, height: 362 });
   });
-  it('libraries: GSAP and three.js pinned exactly with the licence read at the source; a row not read is a todo and names why', () => {
+  it('libraries: GSAP and three.js pinned exactly with the licence read at the source; a row not read is never installed and names the lead\'s decision (integration decision 7: HyperFrames is out)', () => {
     for (const l of MADE_LIBRARIES) {
       expect(l.version).toMatch(/^\d+\.\d+\.\d+$/);
-      if (l.licenceRead === null) expect(l.note).toMatch(/TODO W1/);
+      if (l.licenceRead === null) { expect(l.installed).toBe(false); expect(l.files).toEqual([]); expect(l.note).toMatch(/^OUT of made clips \(lead, integration decision \d/); }
     }
     expect(MADE_LIBRARIES.find((l) => l.name === 'three')).toMatchObject({ version: '0.187.0', licence: expect.stringContaining('MIT') });
     expect(MADE_LIBRARIES.find((l) => l.name === 'gsap')).toMatchObject({ version: '3.15.1' });
