@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-26T01:36:15.914Z",
+  "ranAt": "2026-11-26T04:57:55.930Z",
   "machine": "Linux 6.18.44-fc-v880 x64",
   "browser": "Playwright Chromium (headless)",
   "checks": [
@@ -151,7 +151,7 @@
       "name": "the family option of the archive changes the download address to the family-free archive",
       "ok": true,
       "detail": {
-        "hrefAfter": "/api/v1/projects/prj_90RvZ3Dx2gs/archive?family=omit"
+        "hrefAfter": "/api/v1/projects/prj_9DTKWu52xBA/archive?family=omit"
       }
     },
     {
