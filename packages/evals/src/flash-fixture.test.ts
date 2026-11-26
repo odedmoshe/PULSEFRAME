@@ -55,6 +55,7 @@ export function frameOf(doc: ProjectDocument, i: number, picture: Picture): { rg
     if (tr) {
       const outL = vids.find((l) => l.transition?.role === 'out'), o = outL ? pic(outL.sourceFrameIndex) : base, p = tr.progress;
       if (tr.type === 'flash') { w = Math.sin(p * Math.PI) ** 2; const m = smooth(0.4, 0.6, p); for (let k = 0; k < base.length; k++) base[k] = Math.min(1, o[k]! * (1 - m) + base[k]! * m + w); }
+      else if (tr.type === 'dip-black' || tr.type === 'dip-white') { const a = p < 0.5 ? p * 2 : (1 - p) * 2, fill = tr.type === 'dip-white' ? 1 : 0, src = p < 0.5 ? o : base; for (let k = 0; k < base.length; k++) base[k] = src[k]! * (1 - a) + fill * a; } // canvasTransitions.ts dip
       else throw new Error(`no stand-in for transition ${tr.type}`);
     }
   }
@@ -72,13 +73,16 @@ export function check(doc: ProjectDocument, picture: Picture, frames = 180): Fla
 const view = (r: FlashReport) => ({ verdict: r.verdict, ranges: r.ranges.map((x) => ({ from: x.from, to: x.to, kind: x.kind, area: x.area })) });
 
 describe('the audiences-proof flash fixture: what the export check counts', () => {
-  // verdicts and ranges (frames, inclusive) as the check gave them before the rate over the area was reported; they must not move
+  // verdicts and ranges (frames, inclusive): unchanged by the rate over the area (checked against the previous analyser); the
+  // two pictures with the flash transition changed when it began to reserve its frames in the light plan (noted on each)
   const cases = [
-    { name: 'barcode + strobe + flash transition (the proof)', o: { strobe: true, transition: true }, pic: 'barcode', verdict: 'fail', ranges: [{ from: 4, to: 173, kind: 'general', area: 0.993 }], area: 5, busiest: 14, areaPeak: 5 },
+    // before the flash transition reserved its frames (2026-11-26): the same range with area 0.993 (strobe and transition together)
+    { name: 'barcode + strobe + flash transition (the proof)', o: { strobe: true, transition: true }, pic: 'barcode', verdict: 'fail', ranges: [{ from: 4, to: 173, kind: 'general', area: 0.306 }], area: 5, busiest: 14, areaPeak: 5 },
     { name: 'barcode alone', o: { strobe: false, transition: false }, pic: 'barcode', verdict: 'pass', ranges: [], areaPeak: 2.5 },
     { name: 'barcode + strobe', o: { strobe: true, transition: false }, pic: 'barcode', verdict: 'fail', ranges: [{ from: 4, to: 173, kind: 'general', area: 0.299 }], area: 5, busiest: 14, areaPeak: 5 },
     { name: 'barcode + flash transition', o: { strobe: false, transition: true }, pic: 'barcode', verdict: 'pass', ranges: [], areaPeak: 2.5 },
-    { name: 'flat grey + strobe + flash transition', o: { strobe: true, transition: true }, pic: 'grey', verdict: 'fail', ranges: [{ from: 64, to: 125, kind: 'general', area: 1 }], area: 4, busiest: 4, areaPeak: 4 },
+    // before the flash transition reserved its frames: fail, frames 64–125, area 1, 4 a second over the area
+    { name: 'flat grey + strobe + flash transition', o: { strobe: true, transition: true }, pic: 'grey', verdict: 'pass', ranges: [], areaPeak: 3 },
     { name: 'flat grey + strobe', o: { strobe: true, transition: false }, pic: 'grey', verdict: 'pass', ranges: [], areaPeak: 3 },
   ] as const;
   for (const c of cases) {
@@ -92,4 +96,39 @@ describe('the audiences-proof flash fixture: what the export check counts', () =
       }
     });
   }
+});
+
+describe('a strobe at its ceiling next to a transition that is itself a flash (ADR-0009 amendment 2026-11-26)', () => {
+  // Before the amendment the flash transition was outside the light plan: flat grey + strobe + flash failed at 4 a second.
+  for (const rate of [{ num: 24, den: 1 }, { num: 25, den: 1 }, { num: 30000, den: 1001 }, { num: 30, den: 1 }, { num: 60, den: 1 }]) {
+    for (const type of ['flash', 'dip-white', 'dip-black'] as const) {
+      it(`${type} at ${(rate.num / rate.den).toFixed(2)} fps: the check passes, at most 3 a second over the area`, () => {
+        const doc = fixtureDoc({ strobe: true, transition: true, rate, transitionType: type });
+        const r = check(doc, 'grey', 165 + 15);
+        expect(r.verdict).toBe('pass');
+        expect(r.areaPeak.general).toBeLessThanOrEqual(3);
+        expect(r.areaPeak.general).toBeGreaterThanOrEqual(2.5); // the strobe still flashes around it
+      }, 30_000);
+    }
+  }
+});
+
+
+describe('what the light plan does not limit: transitions that are a flash, close together (measured, not limited)', () => {
+  /** Clips of `every` frames from frame 15, a 10-frame flash transition (or `every` if shorter) on each cut after the first, flat grey, no strobe. */
+  function cuts(every: number, count: number, type = 'flash') {
+    const rate = { num: 30, den: 1 }, f = (n: number) => T.frameTime(n, rate);
+    const video = { kind: 'video' as const, name: 'v.mp4', contentHash: `sha256:${'8'.repeat(64)}`, byteSize: 1, container: 'mp4', mimeType: 'video/mp4', duration: T.rt(600, 1), video: { width: W, height: H, frameRate: rate, codec: 'h264', rotation: 0, frameCount: 100_000 }, provenance };
+    let r = tx(createProject({ id: 'prj_cc', name: 'C', width: W, height: H, frameRate: rate }), [{ op: 'import_asset', args: { asset: video } }], true);
+    const vid = r.results[0]!.output!.assetId as string;
+    for (let i = 0; i < count; i++) {
+      r = tx(r.doc, [{ op: 'add_clip', args: { assetId: vid, start: f(15 + i * every), sourceIn: f(15 + i * every), duration: f(every), withLinkedAudio: false } }]);
+      if (i > 0) r = tx(r.doc, [{ op: 'set_transition', args: { clipId: r.results[0]!.output!.clipId as string, type, frames: Math.min(10, every) } }]);
+    }
+    return r.doc;
+  }
+  it('flash transitions on cuts 8 frames apart flash 4 times a second (the check fails); 10 and 12 apart 3 (at the limit); 20 apart 2', () => {
+    const rate = (every: number) => check(cuts(every, 6), 'grey', 15 + 6 * every + 15).areaPeak.general;
+    expect({ 20: rate(20), 12: rate(12), 10: rate(10), 8: rate(8) }).toEqual({ 20: 2, 12: 3, 10: 3, 8: 4 });
+  }, 60_000);
 });

@@ -138,17 +138,17 @@ function ParamControl({ name, prop, value, onCommit, keyer, effectType, beat }: 
 
 /**
  * What the strobe does, as the renderer does it (packages/engine/src/strobeSchedule.ts): every strobe of the timeline takes its
- * flashes from one schedule, which starts at most three flashes in any second, so with several strobes, or with fast music,
- * some flashes are left out; a strobe that follows the music flashes on analysed beats only, so it shows nothing where no
+ * flashes from one schedule, which starts at most three flashes in any second, counting the transitions that are a flash
+ * themselves, so with several strobes, such a transition nearby, or fast music, some flashes are left out; a strobe that follows the music flashes on analysed beats only, so it shows nothing where no
  * analysed music plays (other effects fall back to their own tempo there).
  */
 const STROBE_STRINGS = {
   he: {
-    limit: 'מגבלת בטיחות לכל ציר הזמן: בכל שנייה מתחילים לכל היותר שלושה הבזקים, מכל אפקטי ההבזקים יחד. לכן, כשיש כמה אפקטים כאלה או מוזיקה מהירה, חלק מההבזקים לא יופיעו.',
+    limit: 'מגבלת בטיחות לכל ציר הזמן: בכל שנייה מתחילים לכל היותר שלושה הבזקים, מכל אפקטי ההבזקים יחד ומהמעברים שהם הבזק בעצמם (הבזק, דרך לבן או שחור, בלוקי צבע, דפדוף). לכן, כשיש כמה אפקטים כאלה, מעבר כזה בקרבת מקום או מוזיקה מהירה, חלק מההבזקים לא יופיעו.',
     noMusic: 'אין כאן מוזיקה עם פעימות מזוהות, ולכן לא יופיעו כאן הבזקים. מנתחים פעימות בלשונית קליפ ← ניתוח, כשקליפ המוזיקה נבחר.',
   },
   en: {
-    limit: 'Safety limit for the whole timeline: at most three flashes start in any second, from all strobes together. So with several strobes, or with fast music, some flashes are left out.',
+    limit: 'Safety limit for the whole timeline: at most three flashes start in any second, from all strobes together and the transitions that are a flash themselves (flash, dip to white or black, colour blocks, page turn). So with several strobes, such a transition nearby, or fast music, some flashes are left out.',
     noMusic: 'No music with detected beats plays here, so this strobe shows no flashes here. Detect beats in the Clip tab → Analysis with the music clip selected.',
   },
 } as const;

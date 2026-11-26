@@ -511,12 +511,12 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
   }
 
   type Built = { doc: ProjectDocument; lightClips: string[]; seconds: number };
-  const transition = fc.record({ type: fc.constantFrom('film-burn', 'light-leak', 'film-burn', 'light-leak', 'dissolve', 'flash', 'ink-bleed', 'wipe-left'), frames: fc.integer({ min: 1, max: 30 }), sync: fc.boolean() });
+  const transition = fc.record({ type: fc.constantFrom('film-burn', 'light-leak', 'film-burn', 'light-leak', 'dissolve', 'flash', 'ink-bleed', 'wipe-left', 'dip-white', 'block-left', 'page-turn-right'), frames: fc.integer({ min: 1, max: 30 }), sync: fc.boolean() });
   const clip = fc.record({ gap: fc.oneof({ weight: 4, arbitrary: fc.constant(0) }, { weight: 1, arbitrary: fc.integer({ min: 1, max: 20 }) }), frames: fc.integer({ min: 2, max: 40 }), transition: fc.option(transition, { freq: 4 }) });
   const track = fc.record({ hidden: fc.oneof({ weight: 5, arbitrary: fc.constant(false) }, { weight: 1, arbitrary: fc.constant(true) }), clips: fc.array(clip, { minLength: 1, maxLength: 14 }) });
   const strobe = fc.record({ start: fc.integer({ min: 0, max: 400 }), frames: fc.integer({ min: 2, max: 400 }), params: fc.oneof(fc.record({ rate: fc.constantFrom(3, 2.9, 2.5, 1.7, 1, 0.4) }), fc.record({ follow: fc.constant('music'), every: fc.integer({ min: 1, max: 4 }) })) });
   const LIGHT_DOC = fc.record({
-    fps: fc.constantFrom<Rate>({ num: 24, den: 1 }, { num: 25, den: 1 }, { num: 30, den: 1 }, { num: 50, den: 1 }, { num: 60, den: 1 }),
+    fps: fc.constantFrom<Rate>({ num: 24, den: 1 }, { num: 25, den: 1 }, { num: 30000, den: 1001 }, { num: 30, den: 1 }, { num: 50, den: 1 }, { num: 60, den: 1 }),
     tracks: fc.array(track, { minLength: 1, maxLength: 3 }),
     strobes: fc.array(strobe, { maxLength: 3 }),
     beatMs: fc.option(fc.integer({ min: 120, max: 900 })),
@@ -548,7 +548,9 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
         const clipId = a.results[0]!.output!.clipId as string;
         at += c.frames;
         if (c.transition) {
-          const type = lights ? c.transition.type : transitionDef(c.transition.type)!.light ? 'dissolve' : c.transition.type;
+          // without lights: neither light transitions nor transitions that are a flash of their own (both take part in the plan)
+          const def = transitionDef(c.transition.type)!;
+          const type = lights ? c.transition.type : def.light || def.flashes ? 'dissolve' : c.transition.type;
           const n = Math.min(c.transition.frames, c.frames);
           doc = tx(doc, [{ op: 'set_transition', args: { clipId, type, frames: n } }, ...(c.transition.sync && n >= 3 ? [{ op: 'set_transition_options', args: { clipId, sync: 'beat' } }] : [])]).doc;
           if (transitionDef(type)!.light && !t.hidden) lightClips.push(clipId);
@@ -568,8 +570,8 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
   /** Every kept start of the schedule (strobes and light transitions), distinct and in order. */
   const keptStarts = (s: FlashSchedule) => [...new Set([...[...s.shown.values()].flatMap((x) => [...x]), ...[...s.lights.values()].filter((l) => l.kept).map((l) => l.frame)])].sort((a, b) => a - b);
 
-  it('any mix of strobes and light transitions on several tracks at 24, 25, 30, 50 and 60 fps: kept starts are a gap apart, at most three in any second, each light kept or held by the rule, and what is drawn follows it (property)', () => {
-    let lights = 0, held = 0;
+  it('any mix of strobes, light transitions and transitions that are a flash on several tracks at 24, 25, 29.97, 30, 50 and 60 fps: kept starts are a gap apart and a gap from each flashing transition, at most three flashes in any second that holds a start, each light kept or held by the rule, and what is drawn follows it (property)', () => {
+    let lights = 0, held = 0, flashing = 0;
     fc.assert(fc.property(LIGHT_DOC, (m) => {
       const { doc, lightClips, seconds } = build(m);
       const s = flashSchedule(doc), perSecond = s.fps, gap = s.gapFrames;
@@ -577,6 +579,20 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
       const starts = keptStarts(s);
       for (let i = 1; i < starts.length; i++) expect(starts[i]! - starts[i - 1]!, `kept starts ${starts[i - 1]} and ${starts[i]}`).toBeGreaterThanOrEqual(gap);
       for (let i = 0, j = 0; i < starts.length; i++) { while (starts[i]! - starts[j]! >= perSecond) j++; expect(i - j + 1, `kept starts in the second before frame ${starts[i]}`).toBeLessThanOrEqual(3); }
+      // transitions that are a flash of their own (ADR-0009 amendment 2026-11-26): every kept start is a gap from each one's
+      // frames, and a second holding any kept start holds at most three flashes, counting each transition it touches whole
+      const second = Math.ceil(perSecond - 1e-9);
+      const near = (x: number) => s.flashing.some((h) => (x < h.first ? h.first - x : x > h.last ? x - h.last : 0) < gap);
+      for (const x of starts) expect(near(x), `kept start ${x} near a flashing transition`).toBe(false);
+      const fullAt = (x: number, others: number[]) => {
+        for (let a = x - second + 1; a <= x; a++) {
+          const e = a + second - 1, tr = s.flashing.filter((h) => h.last >= a && h.first <= e).reduce((n, h) => n + h.flashes, 0);
+          if (tr && others.filter((y) => y >= a && y <= e).length + 1 + tr > 3) return true;
+        }
+        return false;
+      };
+      for (const x of starts) expect(fullAt(x, starts.filter((y) => y !== x)), `kept start ${x}: a second with more than three flashes`).toBe(false);
+      flashing += s.flashing.length;
       // every visible light transition is planned where it starts to light, and kept exactly when no kept start lies less than the gap before it
       expect([...s.lights.keys()].sort()).toEqual([...lightClips].sort());
       for (const id of lightClips) {
@@ -585,8 +601,10 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
         expect(plan.frame).toBe(T.frameIndexAt(c.start, doc.settings.frameRate) + lightStartFrame(n, perSecond, switchFrame(n, beatSwitchFrame(doc, c)))!);
         const before = starts.filter((x) => x < plan.frame);
         const since = before.length ? plan.frame - before[before.length - 1]! : Infinity;
-        expect(plan.kept, `light of ${id} at ${plan.frame}, ${since} frames after a kept start`).toBe(since >= gap);
-        expect(plan.since).toBe(plan.kept ? null : since);
+        // kept exactly when the gap has passed since the last kept start and no flashing transition holds it back
+        const heldByTransition = near(plan.frame) || fullAt(plan.frame, before);
+        expect(plan.kept, `light of ${id} at ${plan.frame}, ${since} frames after a kept start`).toBe(since >= gap && !heldByTransition);
+        if (plan.kept || since < gap) expect(plan.since).toBe(plan.kept ? null : since);
         lights++; if (!plan.kept) held++;
       }
       // the drawn frames: a light rises from nothing only on a kept start, and a strobe flash starts only on one
@@ -608,13 +626,15 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
     // the property is not met by never lighting or never holding: over the runs both happen often
     expect(lights).toBeGreaterThan(RUNS);
     expect(held).toBeGreaterThan(RUNS / 4);
+    expect(flashing).toBeGreaterThan(RUNS); // transitions that are a flash take part in most runs
   }, 120_000 + RUNS * 4000);
 
-  it('documents with no light transition get exactly the schedule they had before light transitions joined it (property)', () => {
+  it('documents with no light transition and no transition that is a flash get exactly the schedule they had before light transitions joined it (property)', () => {
     fc.assert(fc.property(LIGHT_DOC, (m) => {
       const { doc } = build(m, false);
       const now = flashSchedule(doc), before = scheduleBeforeLights(doc);
       expect(now.lights.size).toBe(0);
+      expect(now.flashing).toEqual([]);
       expect(now.shown).toEqual(before.shown);
       expect(now.runOf).toEqual(before.runOf);
     }), { numRuns: RUNS, endOnFailure: true, ...REPLAY });
@@ -641,6 +661,28 @@ describe('light transitions in the one flash schedule (ADR-0012, amending ADR-00
     const later = tx(doc, [{ op: 'move_clip', args: { clipId: inClip, start: f(72) } }]).doc;
     const plan = flashSchedule(later).lights.get(inClip)!;
     expect(plan).toEqual({ frame: 81, kept: true, since: null });
+  });
+
+  it('a strobe that follows the music is held near a flash transition (the transition is drawn unchanged): beats within the gap of its frames, or that would make a fourth flash in a second, start no flash', () => {
+    // 30 fps, gap 11. Beats every half second from 1 s (frames 30, 45, 60, 75, 90, …); a 10-frame flash transition on frames 60–69.
+    const { doc: m, assetId } = withMusic(every(500, 20, 1000));
+    let r = tx(m, [{ op: 'add_clip', args: { assetId, start: f(0) } }, { op: 'import_asset', args: { asset: picture(1) } }, { op: 'import_asset', args: { asset: picture(2) } }], true);
+    const [a, b] = [r.results[1]!.output!.assetId as string, r.results[2]!.output!.assetId as string];
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: a, start: f(0), duration: f(60) } }, { op: 'add_clip', args: { assetId: b, start: f(60), duration: f(60) } }]);
+    const inClip = r.results[1]!.output!.clipId as string;
+    const without = withStrobe(r.doc, { follow: 'music' }, 150).doc;
+    const flashStarts = (d: ProjectDocument) => [...flashSchedule(d).shown.values()].flatMap((x) => [...x]).sort((x, y) => x - y);
+    expect(flashStarts(without)).toEqual([30, 45, 60, 75, 90, 105, 120, 135]);
+    const withFlash = withStrobe(tx(r.doc, [{ op: 'set_transition', args: { clipId: inClip, type: 'flash', frames: 10 } }]).doc, { follow: 'music' }, 150).doc;
+    const s = flashSchedule(withFlash);
+    expect(s.flashing).toEqual([{ clipId: inClip, type: 'flash', first: 60, last: 69, flashes: 1 }]);
+    // 60 is inside the transition and 75 six frames after it: held; 45 is 15 frames before it and 90 21 after it: kept
+    expect(flashStarts(withFlash)).toEqual([30, 45, 90, 105, 120, 135]);
+    // the transition itself is drawn as before: same type, same progress on every frame, no light taken out
+    for (let l = 0; l < 10; l++) {
+      const g = (d: ProjectDocument) => (evaluate(d, f(60 + l)).layers.find((x) => 'transition' in x && x.transition?.role === 'in') as { transition: unknown }).transition;
+      expect(g(withFlash)).toEqual(g(tx(r.doc, [{ op: 'set_transition', args: { clipId: inClip, type: 'flash', frames: 10 } }]).doc));
+    }
   });
 });
 
