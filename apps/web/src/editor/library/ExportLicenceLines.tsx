@@ -9,16 +9,27 @@ import { useEditorState } from '../store.ts';
 import { LIBRARY_TESTIDS as TID } from './library.testids.ts';
 import { fillLib, LIBRARY_UI_STRINGS } from './library.strings.ts';
 import { exportLicence } from './library.logic.ts';
+import { WarningLine } from '../sources/SourceParts.tsx';
+import { SOURCE_WARNING_CODES, type SourceWarning } from '@pulseframe/core';
+
+/** output.licence.licenceNotes (wave 8 sources; core CreditsView): the licence and term findings of the source files, each quoting its licence. Unknown shapes are skipped. non_commercial_content keeps its own line above. */
+export function licenceNotesOf(output: Record<string, unknown> | null | undefined): SourceWarning[] {
+  const l = output?.licence as { licenceNotes?: unknown } | undefined;
+  if (!l || !Array.isArray(l.licenceNotes)) return [];
+  return l.licenceNotes.filter((n): n is SourceWarning => !!n && typeof n === 'object' && (SOURCE_WARNING_CODES as readonly string[]).includes((n as SourceWarning).code) && Array.isArray((n as SourceWarning).termIds));
+}
 
 export function ExportLicenceLinesView({ output, lang }: { output: Record<string, unknown> | null | undefined; lang: Lang }): ReactElement | null {
   const L = LIBRARY_UI_STRINGS[lang];
   const [copied, setCopied] = useState(false);
   const lic = exportLicence(output);
-  if (!lic || (lic.nonCommercial.length === 0 && !lic.credits)) return null;
+  const notes = licenceNotesOf(output);
+  if (!lic || (lic.nonCommercial.length === 0 && !lic.credits && notes.length === 0)) return null;
   const copy = async () => { try { await navigator.clipboard.writeText(lic.credits!.descriptionText); setCopied(true); } catch { setCopied(false); } };
   return (
     <div className="pf-lib-export">
       {lic.nonCommercial.length > 0 && <p className="pf-lib-export-nc" role="note" data-testid={TID.exportNonCommercial} dir="auto">{fillLib(L.nonCommercialLine, { titles: lic.nonCommercial.join(', ') })}</p>}
+      {notes.length > 0 && <div className="pf-lib-export-notes">{notes.map((n, i) => <WarningLine key={`${n.code}-${n.assetId ?? i}-${i}`} w={n} lang={lang} />)}</div>}
       {lic.credits && (
         <div className="pf-lib-export-credits" data-testid={TID.exportCredits}>
           <h4>{L.creditsTitle}</h4>
