@@ -81,7 +81,7 @@ export function BlendCard({ clip, field }: { clip: Clip; field: ReactNode }) {
     <button key={m} type="button" className="cc-pill" aria-pressed={m === mode} aria-describedby={sayId} disabled={locked} data-testid={`blend-pill-${m}`} onClick={() => choose(m)}>{W[m].name}</button>
   );
   return (
-    <Section id="blend" title={S.blendTitle} summary={W[mode].name}>
+    <Section id="blend" title={S.blendTitle} defaultOpen={false} summary={W[mode].name} /* closed at first (its summary names the mode) so the three cards' titles fit the panel; a choice to keep it open is remembered */>
       <div className="cc-pills" role="group" aria-label={S.blendGroup}>
         {BLEND_MAIN.map(pill)}
         <button type="button" className="cc-pill cc-pill-more" aria-expanded={showMore} aria-controls={moreId} disabled={showMore && !more} data-testid="blend-more" onClick={() => setMore(!more)}>{showMore ? S.blendLess : S.blendMore}</button>

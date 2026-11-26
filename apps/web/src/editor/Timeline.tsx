@@ -50,6 +50,8 @@ import { RangeFlags, RangeTint } from './range/RangeMarks.tsx';
 import { ClipSound } from './clipwave/ClipSound.tsx';
 
 const MAX_MARKERS = 3000;
+/** Below this width of the timeline the worded toolbar (≈ 948 px), the zoom group (≈ 410) and the ride bar (≈ 380) do not fit in one row (timeline.css data-narrow). */
+const TOOLBAR_NARROW_PX = 1760;
 type MediaClip = Extract<Clip, { type: 'media' }>;
 
 /** «N · label» of a multicam tag: N is the angle's place among the group's picture angles (a sound angle has the mark ♪). */
@@ -806,7 +808,7 @@ export function Timeline() {
   return (
     <section ref={root} id="pf-timeline" className="timeline pf-ds" dir="ltr" aria-label={t('timeline')} data-mode={mode} data-tool={tool} style={pulse.bpm ? ({ '--pf-bpm': Math.round(pulse.bpm) } as React.CSSProperties) : undefined}>
       {/* The toolbar is one row of fixed height, so the lanes below it get exactly the height that is left (timeline.css). It mirrors with the interface; the lanes never do. */}
-      <div className="tl-bar" dir={uiDir} role="group" aria-label={s.toolbar}>
+      <div className="tl-bar" dir={uiDir} role="group" aria-label={s.toolbar} data-narrow={view.width > 0 && view.width < TOOLBAR_NARROW_PX ? 'true' : undefined}>
         <div className="tl-tools">
           <ToolbarActions s={s} />
         </div>

@@ -56,13 +56,15 @@
 .timeline.pf-ds .tl-more-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-2) var(--pf-sp-3); }
 .timeline.pf-ds .tl-more-word { min-inline-size: 72px; color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
 .timeline.pf-ds .tl-more-narrow { display: none; }
-/* narrow windows: the range buttons and «שכפול» move into «עוד» first, then undo and redo keep their icons only */
-@media (max-width: 1366px) {
-  .timeline.pf-ds .tl-bar .tl-range, .timeline.pf-ds .tl-bar .tl-tools .tl-dup { display: none; }
-  .timeline.pf-ds .tl-more-narrow { display: flex; }
-  .timeline.pf-ds .tl-hist .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
-  .timeline.pf-ds .tl-hist { inline-size: var(--pf-h-sm); padding-inline: 0; justify-content: center; }
-}
+/* a timeline narrower than its worded row (948 px), the zoom group (≈ 410) and the ride bar (≈ 380) need: the range buttons and «שכפול»
+   move into «עוד», and undo and redo keep their icons only. Measured on the timeline itself (not the window): from 1367 to about 1800 px
+   wide windows the ride bar had 14–42 px and lay over the toolbar's controls (wave 8D integration). Timeline.tsx sets data-narrow
+   from the measured width of the lanes' scroll area (TOOLBAR_NARROW_PX); a container query would make the timeline the containing
+   block of its fixed menus. */
+.timeline.pf-ds .tl-bar[data-narrow='true'] .tl-range, .timeline.pf-ds .tl-bar[data-narrow='true'] .tl-tools .tl-dup { display: none; }
+.timeline.pf-ds .tl-bar[data-narrow='true'] .tl-more-narrow { display: flex; }
+.timeline.pf-ds .tl-bar[data-narrow='true'] .tl-hist .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.timeline.pf-ds .tl-bar[data-narrow='true'] .tl-hist { inline-size: var(--pf-h-sm); padding-inline: 0; justify-content: center; }
 .timeline.pf-ds .tl-tools, .timeline.pf-ds .tl-view { flex: none; display: flex; align-items: center; gap: var(--pf-sp-2); }
 .timeline.pf-ds .tl-view { gap: var(--pf-sp-3); }
 .timeline.pf-ds .tl-sep { flex: none; inline-size: 1px; block-size: 18px; margin-inline: var(--pf-sp-2); background: var(--pf-line-strong); }
@@ -123,6 +125,13 @@
   .timeline.pf-ds .tl-bar { gap: var(--pf-sp-4); padding-inline: var(--pf-sp-4); }
 }
 @media (max-width: 1500px) { .timeline.pf-ds .ride-btn:not(.keeps-label, .is-icon) { padding-inline: var(--pf-sp-3); } }
+/* 1366 px and less: the zoom group gives the ride bar its room (the whole-film button keeps its name for assistive technology and its tooltip) */
+@media (max-width: 1366px) {
+  .timeline.pf-ds [data-testid=tl-zoom-fit] .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .timeline.pf-ds [data-testid=tl-zoom-fit] { inline-size: var(--pf-h-sm); padding-inline: 0; justify-content: center; }
+  .timeline.pf-ds .tl-view .tl-zoom-slider { inline-size: 56px; }
+  .timeline.pf-ds .tl-more-btn .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+}
 
 /* ---------- the scrolling area ---------- */
 .timeline.pf-ds .tl-scroll { flex: 1 1 0; min-height: 0; overflow: auto; background: var(--pf-canvas); scrollbar-width: thin; scrollbar-color: var(--pf-surface-4) transparent; overscroll-behavior: contain; }

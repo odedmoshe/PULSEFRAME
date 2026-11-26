@@ -262,7 +262,10 @@ async function main() {
       const len = (d: any, id: string) => T.frameIndexAt(clipOf(d, id)?.duration ?? T.ZERO, R);
       const total = (d: any) => Math.max(...clips(d).map((c: any) => T.frameIndexAt(T.add(c.start, c.duration), R)));
       const hist = (await call(`/projects/${pid}/history?limit=3`)).body;
-      const flagsGone = await page.locator('[data-testid^=range-]').count();
+      // the marks go when the editor's commit returns (after the server's answer reaches the page): waited for, and the wait recorded
+      const tGone = Date.now();
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid^=range-]').length === 0, undefined, { timeout: 5000 }).catch(() => {});
+      const flagsGone = await page.locator('[data-testid^=range-]').count(), flagsGoneMs = Date.now() - tGone;
       const head = await frameNow();
       const cutOk = after.revision === r0 + 1 && posts - p0 === 1 && total(before) - total(after) === 60 && flagsGone === 0 && head === 30;
       await page.keyboard.press('Control+KeyZ');
@@ -270,7 +273,7 @@ async function main() {
       for (let i = 0; i < 50 && undone.revision === after.revision; i++) { await sleep(100); undone = await doc(); }
       const same = JSON.stringify(undone.sequences) === JSON.stringify(before.sequences);
       check('c1 X cuts [30, 90) from every track in ONE commit (one POST, revision +1, the film 60 frames shorter, the marks gone, the playhead at 30); one Ctrl+Z gives back exactly the sequences of before',
-        cutOk && same, { revisions: [r0, after.revision, undone.revision], posts: posts - p0, length: [total(before), total(after)], clipLengths: [len(before, videoClip), len(after, videoClip)], flagsGone, head, undoExact: same, history: Array.isArray(hist?.entries) ? hist.entries.slice(0, 2).map((e: any) => e.label ?? e.summary) : undefined });
+        cutOk && same, { revisions: [r0, after.revision, undone.revision], posts: posts - p0, length: [total(before), total(after)], clipLengths: [len(before, videoClip), len(after, videoClip)], flagsGone, flagsGoneMs, head, undoExact: same, history: Array.isArray(hist?.entries) ? hist.entries.slice(0, 2).map((e: any) => e.label ?? e.summary) : undefined });
     }
     {
       const audioTrack = (await doc()).sequences[(await doc()).mainSequenceId].tracks.find((t: any) => t.clips.some((c: any) => c.id === audioClipId));
