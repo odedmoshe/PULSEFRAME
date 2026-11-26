@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { ASSISTANT_JOB_TYPE, BOOTH_BUSY_JOB_KINDS as _k, BOOTH_CHECKS, BoothCheckRowSchema, MOMENTS_JOB_TYPE, STABILISE_JOB_TYPE, TRACKING_JOB_TYPE, type BoothCheckRow } from '@pulseframe/core';
+import { ASSISTANT_JOB_TYPE, BOOTH_CHECKS, BoothCheckRowSchema, MOMENTS_JOB_TYPE, STABILISE_JOB_TYPE, TRACKING_JOB_TYPE, type BoothCheckRow } from '@pulseframe/core';
 import { loadConfig, type Config } from '../config.ts';
 import type { Principal } from '../governance.ts';
 import { IMPORT_JOB_TYPE } from '../importContracts.ts';
@@ -15,7 +15,6 @@ import { SEARCH_INDEX_JOB_TYPE } from '../search/contract.ts';
 import { Store } from '../store.ts';
 import { BOOTH_BUSY_ALSO, BOOTH_BUSY_JOB_TYPES, BOOTH_SERVER_CHECK_IDS, boothBusy, parseEncoders, rowText, runBoothCheck, safeText, type BoothCheckDeps } from './checks.ts';
 import { BOOTH_BUSY_JOB_KINDS } from './contract.ts';
-void _k;
 
 const OWNER: Principal = { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] };
 const PLANTED = ['dana', 'Users', 'C:', 'python', 'models', '192.168', 'ENOENT', 'OneDrive', 'sk-ant', 'example.com', '\\', '/'];

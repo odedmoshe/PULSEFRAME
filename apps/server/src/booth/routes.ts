@@ -12,11 +12,13 @@ import {
   BOOTH_FIRST_GROUPS, BOOTH_FIRST_SITTING_CARDS, BOOTH_GROUPS, BOOTH_LIMITS, BoothAnswerBodySchema, BoothItemIdSchema, BOOTH_ASCII,
   namesInNote, peopleOf, scrubNote, type BoothAnswer, type BoothAnswerResult, type BoothItem, type BoothView,
 } from '@pulseframe/core';
+import { Hono } from 'hono';
+import type { Principal } from '../governance.ts';
 import { libraryServiceFor } from '../library/index.ts';
-import type { Store } from '../store.ts';
+import { ApiError, type Store } from '../store.ts';
 import { boothBuild, boothMachine } from './build.ts';
 import { isServerCheck, lastExportGpuAdapter, machineLiterals, runBoothCheck } from './checks.ts';
-import { BOOTH_BUILT, boothError, boothOwner, type BoothApp, type BoothRouteDeps } from './contract.ts';
+import { BOOTH_BUILT, boothError, boothOwner, type BoothApp, type BoothEnv, type BoothRouteDeps } from './contract.ts';
 import { boothAudio, boothExportStill, servedSha } from './media.ts';
 import { boothRegistry } from './registry.ts';
 import { deleteAnswer, itemViews, putAnswer, readOwnerReview } from './store.ts';
@@ -119,4 +121,17 @@ export function registerBoothRoutes(app: BoothApp, deps: BoothRouteDeps, built: 
     if (!isServerCheck(id)) throw boothError('unknownCheck');
     return c.json(await runBoothCheck(id, { ...deps, owner }));
   });
+}
+
+/**
+ * PROOF HARNESS (labelled; used by packages/evals/src/booth-proof.server.ts while BOOTH_BUILT is false): the SAME handlers, mounted with
+ * built = true on a small app whose principal is always `principal` and whose refusals are answered as the product app answers them.
+ * Never mounted by the server.
+ */
+export function boothHarness(deps: BoothRouteDeps, principal: Principal): (req: Request) => Promise<Response> {
+  const app: BoothApp = new Hono<BoothEnv>();
+  app.onError((e, c) => (e instanceof ApiError ? c.json(e.toJSON(), e.status as never) : c.json({ error: { code: 'internal_error', message: 'unexpected server error' } }, 500)));
+  app.use('*', async (c, next) => { c.set('principal', principal); await next(); });
+  registerBoothRoutes(app, { ...deps, need: (c) => c.var.principal }, true);
+  return async (req) => app.fetch(req);
 }
