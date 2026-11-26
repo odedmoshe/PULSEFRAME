@@ -24,9 +24,10 @@ const big = (t: T.RationalTime) => [BigInt(t.value), BigInt(t.timescale)] as con
 /**
  * Source time of a non-ramped media clip at timeline time t is sourceIn + (t − start)·speed (forward) or, reversed,
  * sourceIn + (duration − (t − start))·speed minus nothing more (its stretch read backwards). True when that time is before the
- * asset's end, so a frame there shows a new source picture (exact: all in BigInt fractions).
+ * asset's end, so a frame there shows a new source picture (exact: all in BigInt fractions). Exported for qcChecks.ts (wave 8 qc),
+ * which compares with the PICTURE end instead (verifier C1); this function and pictureExpectation stay as they are (proof:send K rows).
  */
-function insideSource(c: MediaClip, a: Asset, t: T.RationalTime): boolean {
+export function insideSource(c: MediaClip, a: Asset, t: T.RationalTime): boolean {
   if (c.speedEnd) return true; // a ramp is not modelled: counted as moving for its whole length
   const sp = c.speed ?? { num: 1, den: 1 };
   const rel = T.sub(t, c.start);
@@ -39,8 +40,8 @@ function insideSource(c: MediaClip, a: Asset, t: T.RationalTime): boolean {
   return c.reverse ? srcN * dd <= dn * srcD : srcN * dd < dn * srcD; // reversed, `local` is one frame past the shown picture
 }
 const isVideoAsset = (a: Asset | undefined): a is Asset => !!a && a.kind === 'video';
-/** True when this clip, by document geometry alone, hides everything under it in the whole frame. */
-function coversFrame(doc: ProjectDocument, c: MediaClip): boolean {
+/** True when this clip, by document geometry alone, hides everything under it in the whole frame. Effects and transitions are not looked at: qcChecks.ts adds C3's guard for title_hidden. */
+export function coversFrame(doc: ProjectDocument, c: MediaClip): boolean {
   const a = doc.assets[c.assetId];
   if (!a) return false;
   const opaqueSource = a.kind === 'video' ? !!a.video : a.kind === 'image' ? !!a.image && !a.image.hasAlpha : false;

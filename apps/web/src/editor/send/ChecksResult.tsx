@@ -11,6 +11,7 @@ import { Button } from '../../ds/index.ts';
 import { SEND_TESTIDS as ID } from './send.testids.ts';
 import { SEND_STRINGS } from './send.strings.ts';
 import { findingRows, lookedKinds } from './send.logic.ts';
+import { ExplainedFindings } from '../qc/ExplainedFindings.tsx';
 
 export interface ChecksResultProps { lang: 'he' | 'en'; checks: ExportChecks | null; onJump(at: RationalTime): void; rate?: { num: number; den: number } }
 export function ChecksResult({ lang, checks, onJump, rate = { num: 30, den: 1 } }: ChecksResultProps) {
@@ -39,6 +40,7 @@ export function ChecksResult({ lang, checks, onJump, rate = { num: 30, den: 1 } 
         ) : (
           <span data-testid="export-checks-quiet">{allMeasured ? S.quiet : kinds.length ? `${S.notFound}: ${kinds.map(name).join(', ')}. ${S.notMeasured}: ${(['black', 'frozen', 'silence', 'clipped'] as const).filter((k) => !kinds.includes(k)).map(name).join(', ')}` : `${S.notMeasured}`}</span>
         )}
+        <ExplainedFindings lang={lang} checks={checks} rate={rate} onJump={onJump} />
         <span className="pf-xs-note"><bdi lang="en" dir="ltr">{checks.picture.method}</bdi> · <bdi lang="en" dir="ltr">{checks.sound.method}</bdi></span>
         <span className="pf-xs-note">{D['send.heuristic']} · {S.reportOnly}</span>
       </div>

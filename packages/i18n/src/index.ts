@@ -28,6 +28,7 @@ import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { COVER_EN, COVER_HE } from './cover.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
 import { BOOTH_EN, BOOTH_HE } from './booth.ts';
+import { QC_EN, QC_HE } from './qc.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -244,6 +245,7 @@ export const he = {
   ...INSTRUMENTS_HE,
   ...BOOTH_HE,
   ...COVER_HE,
+  ...QC_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -460,6 +462,7 @@ export const en: Record<keyof typeof he, string> = {
   ...INSTRUMENTS_EN,
   ...BOOTH_EN,
   ...COVER_EN,
+  ...QC_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };

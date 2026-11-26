@@ -10,7 +10,7 @@ import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { FindSharpBody, FindSharpResult, SharpAnswer, StillExport } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
-import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
+import type { ClipLoudnessRequest, ClipLoudnessResult, SoundChecks } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
 import type { AudienceChanges } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
@@ -47,7 +47,8 @@ export interface RevisionEvent { projectId: string; revision: number; transactio
   /** The undo or redo that reversed this one, else null (ADR-0027: the bar names its exact undo target). */ undoneBy?: string | null }
 export interface Proposal { id: string; actor: string; label: string | null; summary: string; status: string; baseRevision: number; createdAt: string; previewFrame: number }
 export interface JobEvent { id: string; type: string; status: string; stage: string | null; output: any; error: any }
-export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; fix?: { label: string; ops: OpCall[] } }
+/** `range` in the chosen output's own frames; `measured`: the numbers behind the issue (wave 8 qc rules carry them, older codes may not). */
+export interface PreflightIssue { code: string; severity: 'blocker' | 'warning' | 'note'; message: string; ids: string[]; range?: { startFrame: number; endFrame: number }; measured?: Record<string, number>; fix?: { label: string; ops: OpCall[] } }
 export interface PreflightReport { revision: number; ok: boolean; blockers: number; warnings: number; notes: number; issues: PreflightIssue[]; output: unknown; scope: string }
 export interface CommitResult { revision: number; committed: boolean; /** the transaction this commit made (null when nothing changed): undo names it to reverse exactly this edit */ transactionId?: string | null; summary: string; affectedIds: string[]; results: { op: string; output?: Record<string, any> }[] }
 export interface SilenceResult { revision: number; candidates: { start: unknown; end: unknown; startSeconds: number; seconds: number }[]; removableSeconds: number; ops: OpCall[]; note?: string; /** clips of a copy that does not keep the recording's timing, not searched */ skippedClips?: { clipId: string; assetId: string; reason: 'untimed_copy' }[] }
@@ -58,7 +59,7 @@ export interface VoiceCheck { revision: number; assetId: string; clipIds: string
 export interface ColourMatchRequest { method?: 'match' | 'balance'; referenceClipId?: string; targetClipIds: string[] | 'all'; amount?: number; samples?: 1 | 3 }
 export interface ColourMatchTarget { clipId: string; params: GradeParams; residual: { model: number; verified: number | null }; verdict: GradeFit['verdict']; limitedBy: (keyof GradeParams)[]; warnings: ('changes_within_clip' | 'not_verified' | 'replaces_grade' | 'animated_grade')[]; statsBefore: PictureStats; statsAfter: PictureStats | null }
 export interface ColourMatch { revision: number; method: 'match' | 'balance'; reference: { clipId: string; stats: PictureStats } | null; targets: ColourMatchTarget[]; /** set_colour_grade candidates: send as ONE transaction */ ops: OpCall[]; unavailable: string | null; note: string }
-export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; /** the measured output's loudness target (a short's own format loudness, else the project's); null = no normalisation */ target: { target: number; truePeak: number } | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string }
+export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; /** the measured output's loudness target (a short's own format loudness, else the project's); null = no normalisation */ target: { target: number; truePeak: number } | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string; /** silence and clipped sound read from the WAV export would write for this output (wave 7 send); wave 8 qc shows them before export */ soundChecks?: SoundChecks }
 
 export type RecipeParams = Record<string, unknown>;
 export interface RecipeAlternative { label: string; params: RecipeParams }

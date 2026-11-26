@@ -12,6 +12,7 @@
  */
 import type * as T from '@pulseframe/time';
 import type { OpErrorCode } from './ops.ts';
+import type { ExplainedReason } from './qcContract.ts';
 
 // ---------- size-fit ----------
 /** Fixed numbers of the fit plan (send-decisions §2.1). Ratios are integers over 100 so the plan has no float rounding. */
@@ -94,6 +95,12 @@ export interface ExportFinding {
   soundPlays?: boolean;
   /** the measurement behind the finding, shown with it (frames, cells, samples, peak …) */
   measured: Record<string, number>;
+  /**
+   * wave 8 qc: what in the edit explains it (qcContract.ts EXPLAINED_REASONS), set only by the one pass explainFindings, after
+   * assembleChecks, on every route that reports findings (C6). Absent = not explained (and every job row written before wave 8).
+   * The file card and the ruler and status bar count only findings without it (C8).
+   */
+  explained?: ExplainedReason;
 }
 export interface PictureChecks { method: string; status: 'measured' | 'not_measured'; findings: ExportFinding[] }
 export interface SoundChecks { method: string; status: 'measured' | 'not_measured'; findings: ExportFinding[] }
