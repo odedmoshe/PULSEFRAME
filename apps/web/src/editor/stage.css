@@ -206,3 +206,11 @@
 .source-viewer .source-canvas { inline-size: 100%; max-block-size: 46vh; object-fit: contain; background: var(--pf-stage); border-radius: var(--pf-r-sm); }
 .source-viewer .source-canvas.sound-only { block-size: 48px; }
 .source-viewer input[type=range] { inline-size: 100%; }
+
+/* The sequence tabs in the transport's end group (wave 8D integration): they take the room the other tools leave and scroll
+   (shorts.css .seq-tabs), so a project with shorts does not push «חלק» and full screen out of the stage (1440×900: the row was
+   833 px in a 730 px stage). inline-size 0 + grow: their width no longer counts in the row's minimum. */
+.transport .stage-head { flex: 1 1 auto; }
+.transport .stage-head .seq-switch { flex: 1 1 0; inline-size: 0; min-inline-size: 132px; }
+/* a narrow stage with shorts: the play-sharpness choice (also in Settings «התמונה בזמן ניגון») gives the tabs its room */
+@container (max-width: 820px) { .transport:has(.seq-switch) .stage-quality { display: none; } }
