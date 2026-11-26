@@ -8,7 +8,8 @@
 import * as T from '@pulseframe/time';
 import { contentTransform, expm, hasTextLook } from '@pulseframe/core';
 import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type LutStrip } from './gpu.ts';
-import { ADJUST_PASS_SLOT, type AdjustLayer, type ImageLayer, type PictureLayer, type RenderGraph, type TextLayer, type VideoLayer } from './evaluate.ts';
+import { ADJUST_PASS_SLOT, type AdjustLayer, type DrawnLayer, type ImageLayer, type PictureLayer, type PlacedLayer, type RenderGraph, type TextLayer, type VideoLayer } from './evaluate.ts';
+import { drawnPainter, noPainterId } from './drawnPainters.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
 import { textAtRest, unitPose } from './textAnimation.ts';
 import { applyColourMatrix, applyEffects, hasGpuEffect, applyMask, applyRegions, BT709_AS_BT601, COMPOSITE, compositeLayer, drawMaskShape, fadeBuf, REGION_MASK_SLOT, scratch, type Buf, type LayerBox, type LookEnv, type PixelRect } from './look.ts';
@@ -57,7 +58,7 @@ export function resolveDirection(text: string, dir: 'auto' | 'rtl' | 'ltr'): 'rt
   return m && RTL.test(m[0]) ? 'rtl' : 'ltr';
 }
 
-function withTransform(ctx: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer, body: () => void) {
+function withTransform(ctx: Ctx2D, g: RenderGraph, layer: PlacedLayer, body: () => void) {
   const t = layer.transform;
   ctx.save();
   ctx.globalAlpha = t.opacity;
@@ -332,16 +333,16 @@ function drawCaption(ctx: Ctx2D, g: RenderGraph, layer: CaptionLayer) {
   ctx.restore();
 }
 
-/** Size of a placed layer before its own transform: a picture fitted to the frame (contain or cover); a title spans the frame. */
-function placedSize(g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer): { w: number; h: number } {
-  if (layer.kind === 'text') return { w: g.width, h: g.height };
+/** Size of a placed layer before its own transform: a picture fitted to the frame (contain or cover); a title and a drawn overlay span the frame. */
+function placedSize(g: RenderGraph, layer: PlacedLayer): { w: number; h: number } {
+  if (layer.kind === 'text' || layer.kind === 'drawn') return { w: g.width, h: g.height };
   // Default placement of pictures, centred: contain (whole picture visible) or cover (frame filled, edges cropped). The same
   // rule as core geometry.ts, which motion tracking (ADR-0015) uses to find a tracked point in the frame.
   const fit = fitScale(g.width, g.height, layer.sourceWidth, layer.sourceHeight, g.fit);
   return { w: layer.sourceWidth * fit, h: layer.sourceHeight * fit };
 }
 /** The placed box of a layer (its picture's size and its transform), in frame px: what layer-relative effects, masks and privacy regions use. */
-function boxOf(g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer): LayerBox {
+function boxOf(g: RenderGraph, layer: PlacedLayer): LayerBox {
   const { w, h } = placedSize(g, layer), t = layer.transform;
   return { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
 }
@@ -351,8 +352,9 @@ function boxOf(g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer): Laye
  * rotate(r) · scale(zoom·e^l) → draw. The clip keeps a pillar-boxed or picture-in-picture clip inside its own edges; a picture
  * without `steady` is drawn exactly as before.
  */
-function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | TextLayer, img: FrameImage | null, note?: TextNote) {
+function placeLayer(c: Ctx2D, g: RenderGraph, layer: PlacedLayer, img: FrameImage | null, note?: TextNote) {
   if (layer.kind === 'text') { drawText(c, g, layer, note); return; }
+  if (layer.kind === 'drawn') { paintDrawn(c, g, layer, note); return; }
   const { w, h } = placedSize(g, layer);
   const st = layer.kind === 'video' ? layer.steady : undefined;
   if (!st) { withTransform(c, g, layer, () => img!.draw(c, -w / 2, -h / 2, w, h)); return; }
@@ -367,6 +369,18 @@ function placeLayer(c: Ctx2D, g: RenderGraph, layer: VideoLayer | ImageLayer | T
     img!.draw(c, -w / 2, -h / 2, w, h);
   });
 }
+/**
+ * A drawn overlay (wave 8 carrier): its kind's painter (drawnPainters.ts) with the context at the clip's anchor, rotated and
+ * scaled; opacity stays 1 here (a faded drawn layer is drawn opaque into its buffer and faded once by the caller). A kind
+ * without a painter in this build draws nothing and is reported (noPainterId), so a still or an export refuses.
+ */
+function paintDrawn(c: Ctx2D, g: RenderGraph, layer: DrawnLayer, note?: TextNote) {
+  const paint = drawnPainter(layer.drawn.kind);
+  if (!paint) { note?.(noPainterId(layer.drawn.kind), `this build has no painter for drawn ${layer.drawn.kind} clips`); return; }
+  withTransform(c, g, layer, () => paint(c, layer.drawn, { width: g.width, height: g.height, clipTime: layer.clipTime, localFrame: layer.localFrame, fps: layer.fps, note: (id, why) => note?.(id, why) }));
+}
+/** A layer with no picture to fetch: a title or a drawn overlay. */
+const unpictured = (l: { kind: string }): l is TextLayer | DrawnLayer => l.kind === 'text' || l.kind === 'drawn';
 /**
  * The box privacy regions are drawn in (ADR-0015): the placed box, or for a stabilised picture (wave 7) where its CONTENT is drawn
  * (core contentTransform), so a region stays on what it hides. Masks and layer effects keep the own box (a window stays still).
@@ -442,7 +456,7 @@ export function frameDecoders(g: RenderGraph): { count: number; clipIds: string[
   for (const l of g.layers) {
     if (l.kind === 'caption' || l.kind === 'adjust' || !l.time) continue;
     for (const tap of l.time.taps) {
-      if (tap.layer.kind === 'text' || shown.has(pictureKey(tap.layer))) continue;
+      if (unpictured(tap.layer) || shown.has(pictureKey(tap.layer))) continue;
       shown.add(pictureKey(tap.layer));
       take(tap.layer);
     }
@@ -522,13 +536,13 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
   /** Why a tap's picture could not be had, by layer index and tap index. */
   const tapWhy = new Map<string, string>();
   const requests = g.layers.map((l) => {
-    if (l.kind === 'text' || l.kind === 'caption' || l.kind === 'adjust') return null; // an adjustment has no picture of its own (ADR-0016)
+    if (unpictured(l) || l.kind === 'caption' || l.kind === 'adjust') return null; // an adjustment has no picture of its own (ADR-0016)
     const own = frames(l);
     if (!shared.has(pictureKey(l))) shared.set(pictureKey(l), own);
     return own;
   });
   const tapRequests = g.layers.map((l, i) => (l.kind === 'caption' || l.kind === 'adjust' || !l.time ? null : l.time.taps.map((tap, k) => {
-    if (tap.layer.kind === 'text') return null;
+    if (unpictured(tap.layer)) return null;
     const layer = tap.layer;
     // a tap whose picture cannot be decoded leaves its time effect out of this frame (reported below), it does not fail the frame
     return ask(layer).then((img) => { if (!img) tapWhy.set(`${i}:${k}`, frames.refusal?.(layer) ?? 'source frame unavailable'); return img; }, (e) => { tapWhy.set(`${i}:${k}`, `source frame unavailable: ${String((e as Error)?.message ?? e).slice(0, 200)}`); return null; });
@@ -558,13 +572,14 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
   for (const [i, layer] of g.layers.entries()) {
     if (layer.kind === 'caption') { drawCaption(ctx, g, layer); continue; }
     if (layer.kind === 'adjust') { await adjustPass(ctx, g, layer, { luts, lutReasons }); continue; }
-    const img = layer.kind === 'text' ? null : images[i];
-    if (layer.kind !== 'text' && !img) { missing.push(layer.clipId); const why = frames.refusal?.(layer); if (why) missingReasons[layer.clipId] = why; continue; }
+    const img = unpictured(layer) ? null : images[i];
+    if (!unpictured(layer) && !img) { missing.push(layer.clipId); const why = frames.refusal?.(layer); if (why) missingReasons[layer.clipId] = why; continue; }
     const { w, h } = placedSize(g, layer);
     const colourFix = layer.kind === 'video' ? layer.colourFix : undefined;
     const regions = layer.kind === 'video' ? layer.regions : undefined;
     // A picture below full opacity is placed opaque in a scratch buffer and faded there (fadeBuf), never drawn onto the frame
     // with globalAlpha. A title keeps its globalAlpha: its stroke shows through its fill, which a fade of the whole would change.
+    // A drawn overlay (wave 8) takes the picture path: drawn opaque, faded once, so its overlapping shapes never darken at crossings.
     const faded = layer.kind !== 'text' && layer.transform.opacity < 1;
     const hasLook = !!(faded || colourFix || regions?.length || layer.time || layer.effects?.length || layer.mask || layer.transition || (layer.blend && layer.blend !== 'normal'));
     if (!hasLook) { placeLayer(ctx, g, layer, img ?? null, textNote); continue; } // fast path: identical to drawing without the look system
@@ -596,7 +611,8 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
       // Without its time effect (a tap's picture could not be had): the layer's own picture alone, and the effect is reported,
       // so a preview says so and a still or an export refuses.
       if (taps && layer.time) timeLeftOut.set(layer.time.type, tapWhy.get(`${i}:${lost}`) ?? 'source frame unavailable');
-      if (faded && draft && !(layer.blend && layer.blend !== 'normal')) {
+      if (faded && draft && layer.kind !== 'drawn' && !(layer.blend && layer.blend !== 'normal')) {
+        // (not a drawn overlay: it is many fills, and 'copy' would keep only the last of them)
         // draft playback (DrawOptions), normal blend: copied into the empty buffer with its opacity as globalAlpha, no fill
         buf.ctx.globalCompositeOperation = 'copy';
         placeLayer(buf.ctx, g, layer, img ?? null, textNote);
@@ -606,7 +622,7 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
         // the same step as before, so colour fix, privacy regions, effects, mask, transition and blend see the faded picture
         // as they always did
         placeLayer(buf.ctx, g, { ...layer, transform: { ...layer.transform, opacity: 1 } }, img ?? null, textNote);
-        fadeBuf(buf, layer.transform.opacity, g.width, g.height, opts.fadeArea === 'frame' ? undefined : placedArea(g, layer));
+        fadeBuf(buf, layer.transform.opacity, g.width, g.height, opts.fadeArea === 'frame' || layer.kind === 'drawn' ? undefined : placedArea(g, layer));
       } else placeLayer(buf.ctx, g, layer, img ?? null, textNote);
       if (colourFix === 'bt709-as-bt601') applyColourMatrix(buf, BT709_AS_BT601); // before effects: it corrects the source, it is not a look
       if (regions?.length) {

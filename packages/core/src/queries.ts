@@ -1,6 +1,7 @@
 import { pearlsSummary } from './sourceRanges.ts';
 import { sequenceList } from './sequences.ts';
 import * as T from '@pulseframe/time';
+import { drawnSummary } from './drawn.ts';
 import type { Asset, MediaClip, ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
 import { timelineMarkers } from './cleanup.ts';
@@ -92,7 +93,7 @@ export function timeline(doc: ProjectDocument, sequenceId = doc.mainSequenceId) 
       clips: t.clips.map((c) => ({
         id: c.id, type: c.type, start: c.start, duration: c.duration, end: clipEnd(c),
         startSeconds: sec(c.start), endSeconds: sec(clipEnd(c)),
-        ...(c.type === 'media' ? { assetId: c.assetId, sourceIn: c.sourceIn, gain: c.gain, linkGroupId: c.linkGroupId, ...(c.speed ? { speed: c.speed.num / c.speed.den } : {}), ...(t.kind === 'audio' ? soundFields(c, tails) : {}) } : c.type === 'text' ? { text: c.text, style: c.style, ...(c.fields ? { fields: true as const } : {}) } : c.type === 'caption' ? { text: c.text } : { ...(c.label ? { label: c.label } : {}) }),
+        ...(c.type === 'media' ? { assetId: c.assetId, sourceIn: c.sourceIn, gain: c.gain, linkGroupId: c.linkGroupId, ...(c.speed ? { speed: c.speed.num / c.speed.den } : {}), ...(t.kind === 'audio' ? soundFields(c, tails) : {}) } : c.type === 'text' ? { text: c.text, style: c.style, ...(c.fields ? { fields: true as const } : {}) } : c.type === 'caption' ? { text: c.text } : c.type === 'drawn' ? { drawn: drawnSummary(c.drawn) } : { ...(c.label ? { label: c.label } : {}) }),
         transform: c.transform,
       })),
     })),

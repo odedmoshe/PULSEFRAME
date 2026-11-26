@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
+import { DrawnPayloadSchema } from './drawn.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
 import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
@@ -769,7 +770,13 @@ export type MulticamGroup = z.infer<typeof MulticamGroupSchema>;
  * The mask is in frame space (the adjustment's box is the whole frame).
  */
 export const AdjustmentClipSchema = z.object({ ...ClipBase, type: z.literal('adjustment'), label: z.string().max(80).optional(), mask: MaskSchema.optional() }).strict();
-export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema, AdjustmentClipSchema]);
+/**
+ * A drawn overlay on a text track (wave 8 carrier, drawn.ts): a drawing or a trip map, by its `drawn.kind`. It has a title's
+ * placement (transform, keyframes, effects, blend, follow) and none of its words (text, style, letter animation, live fields, role).
+ * The payload's kind must be registered in this build (drawn.ts DrawnPayloadSchema); production registers none until ink or the map lands.
+ */
+export const DrawnClipSchema = z.object({ ...ClipBase, type: z.literal('drawn'), drawn: DrawnPayloadSchema }).strict();
+export const ClipSchema = z.discriminatedUnion('type', [MediaClipSchema, TextClipSchema, CaptionClipSchema, AdjustmentClipSchema, DrawnClipSchema]);
 
 export const TrackSchema = z
   .object({
@@ -999,6 +1006,7 @@ export type MediaClip = z.infer<typeof MediaClipSchema>;
 export type TextClip = z.infer<typeof TextClipSchema>;
 export type CaptionClip = z.infer<typeof CaptionClipSchema>;
 export type AdjustmentClip = z.infer<typeof AdjustmentClipSchema>;
+export type DrawnClip = z.infer<typeof DrawnClipSchema>;
 export type CaptionStyle = z.infer<typeof CaptionStyleSchema>;
 export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;

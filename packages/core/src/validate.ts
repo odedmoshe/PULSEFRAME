@@ -4,6 +4,7 @@ import { sourceEnd, speedValue } from './speed.ts';
 import { findAudioEffect } from './audioEffects.ts';
 import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE, MAX_SEQUENCES, PersonSchema, TransformSchema, type Clip, type ProjectDocument, type Track } from './schema.ts';
 import { personNameKey } from './people.ts';
+import { drawnIssues } from './drawn.ts';
 import { lifeIssues } from './fields.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 import { momentsProblem } from './momentsContract.ts';
@@ -202,7 +203,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         if ((c.effects?.length || c.blend) && (tr.kind === 'audio' || tr.kind === 'caption')) issues.push({ code: 'incompatible_track', message: `clip ${c.id} on a ${tr.kind} track cannot carry picture effects`, ids: [c.id, tr.id] });
         // Motion tracking (ADR-0015): new optional fields, so these rules can only fire on documents that use them.
         if (c.follow) {
-          if (!(c.type === 'text' || (c.type === 'media' && tr.kind === 'video'))) issues.push({ code: 'follow_clip', message: `clip ${c.id}: only a title, or a picture on a video track, can follow a motion track`, ids: [c.id, tr.id] });
+          if (!(c.type === 'text' || c.type === 'drawn' || (c.type === 'media' && tr.kind === 'video'))) issues.push({ code: 'follow_clip', message: `clip ${c.id}: only a title or a drawing, or a picture on a video track, can follow a motion track`, ids: [c.id, tr.id] });
           if (!Object.hasOwn(motionTracks, c.follow.motionTrackId)) issues.push({ code: 'follow_track', message: `clip ${c.id} follows motion track ${c.follow.motionTrackId}, which does not exist`, ids: [c.id, c.follow.motionTrackId] });
           const first = c.effects?.find((e) => e.enabled);
           if (first && isTimeEffect(first.type)) issues.push({ code: 'follow_time_effect', message: `clip ${c.id}: a clip with a time effect cannot follow a motion track yet`, ids: [c.id] });
@@ -252,6 +253,12 @@ export function validateProject(doc: ProjectDocument): Issue[] {
         }
         if (c.type === 'text' || c.type === 'caption') {
           if (tr.kind !== c.type) issues.push({ code: 'incompatible_track', message: `${c.type} clip ${c.id} on ${tr.kind} track`, ids: [c.id, tr.id] });
+          continue;
+        }
+        if (c.type === 'drawn') {
+          // a drawn overlay (wave 8 carrier, drawn.ts) lives on a text track only; its kind adds its own document checks
+          if (tr.kind !== 'text') issues.push({ code: 'drawn_track', message: `drawn clip ${c.id} on ${tr.kind} track: a drawing goes on a titles track`, ids: [c.id, tr.id] });
+          for (const i of drawnIssues(c.drawn, { doc, clipId: c.id, sequenceId: seq.id })) issues.push({ code: i.code, message: `drawn clip ${c.id}: ${i.message}`, ids: [c.id] });
           continue;
         }
         if (tr.kind === 'caption') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on caption track`, ids: [c.id, tr.id] });

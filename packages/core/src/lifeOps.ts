@@ -31,7 +31,7 @@
  *   PEOPLE_REFUSALS.unknownPerson) when one names a person who is not there.
  */
 import { z } from 'zod';
-import { defineOp, mustClip, OpError, type OpErrorCode } from './ops.ts';
+import { defineOp, mustClip, OpError, refuseDrawnText, type OpErrorCode } from './ops.ts';
 import { CAPTURE_MAX_YEAR, CAPTURE_MIN_YEAR, CaptureSchema, isRealWallDate, MAX_CAPTURE_SHIFT_MINUTES, MAX_EVENT_FILES, MAX_LIFE_EVENTS, WALL_DATE_TIME, type Asset, type Capture, type LifeEvent, type ProjectDocument } from './schema.ts';
 import { addWallSeconds, captureOf, parseWall, shownCapture } from './capture.ts';
 import { clusterCaptures, type DatedAsset } from './events.ts';
@@ -241,6 +241,7 @@ defineOp({
   args: SetTextFieldsArgs,
   apply(d, a) {
     const { clip } = mustClip(d, a.clipId);
+    refuseDrawnText(clip);
     if (clip.type !== 'text') throw lifeRefusal('notATitle', { clipId: a.clipId });
     if (!!clip.fields === a.enabled) throw lifeRefusal('fieldsAlready', { clipId: clip.id }, a.enabled);
     // the title's own text and each format's own wording of it

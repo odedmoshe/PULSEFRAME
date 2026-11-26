@@ -1,4 +1,5 @@
 export * from './schema.ts';
+export * from './drawn.ts';
 export * from './validate.ts';
 export * from './ops.ts';
 export * from './queries.ts';

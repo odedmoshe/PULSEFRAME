@@ -26,3 +26,4 @@ export * from './segmentGrid.ts';
 export { limiterCeilingLinear, limiterWindow, MasterLimiter, MASTER_LIMITER_BUILT, type LimiterStats } from './masterLimiter.ts';
 export { SoundCheck, SOUND_CHECK_BUILT, type SoundRun } from './soundCheck.ts';
 export { PictureCheck, PICTURE_CHECK_BUILT, type PictureRun } from './pictureCheck.ts';
+export { registerDrawnPainter, unregisterDrawnPainter, drawnPainter, noPainterId, type DrawnPainter, type DrawnPaintEnv } from './drawnPainters.ts';
