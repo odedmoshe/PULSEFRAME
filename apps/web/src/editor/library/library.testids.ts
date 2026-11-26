@@ -20,7 +20,7 @@ export const LIBRARY_TESTIDS = {
   notConfigured: 'library-not-configured', openSettings: 'library-open-settings', indexing: 'library-indexing', noMusic: 'library-no-music',
   // Settings: the section, the folder field, save, reindex, the state line, the counts
   settings: 'settings-library', settingsRoot: 'settings-library-root', settingsSave: 'settings-library-save', settingsReindex: 'settings-library-reindex',
-  settingsState: 'settings-library-state', settingsCounts: 'settings-library-counts',
+  settingsState: 'settings-library-state', settingsBuildFailed: 'settings-library-build-failed', settingsCounts: 'settings-library-counts',
   // the project library card: its badges (data-badge) and the licence entry of the card menu
   assetBadges: 'asset-library-badges', assetLicence: 'asset-library-licence',
   // Deliver: the credits panel, its lines, copy to description, the credits card, what is missing on screen; the archive choice

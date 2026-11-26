@@ -411,8 +411,9 @@ export class LibraryService {
     const root = this.configuredRoot();
     return {
       state, ...(owner && root ? { root } : {}), counts, notListed: sum?.notListed ?? [], unusable,
-      problems: [...('problems' in rs && rs.problems ? rs.problems : []), ...(this.lastBuildError && rs.state === 'ok' ? [{ item: null, reason: `the last index build failed (${this.lastBuildError}); the previous index answers. Reindex to try again.` }] : []), ...(sum?.problems ?? [])].slice(0, 20),
+      problems: [...('problems' in rs && rs.problems ? rs.problems : []), ...(sum?.problems ?? [])].slice(0, 20),
       ...(this.building ? { progress: { ...this.building.progress } } : {}),
+      ...(this.lastBuildError && rs.state === 'ok' ? { indexBuildFailed: { code: this.lastBuildError } } : {}),
       indexedAt: sum ? this.meta('builtAt') : null, verifiedAt: null, svgRasteriser,
     };
   }

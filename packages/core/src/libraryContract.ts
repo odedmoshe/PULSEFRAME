@@ -99,6 +99,11 @@ export interface LibraryStatus {
   problems: { item: string | null; reason: string }[];
   /** While indexing: rows read so far. */
   progress?: { rows: number; entriesDone: number; entriesTotal: number };
+  /**
+   * The last index build failed (the error's code, never a path or a message); `state` stays `ready` because the previous index still
+   * answers. Absent after a build that succeeded. The settings page says it in the owner's language and offers «סריקה מחדש».
+   */
+  indexBuildFailed?: { code: string };
   /** ISO time the current index was built, or null. */
   indexedAt: string | null;
   /** Always null this wave: the ledger records no `--verify` time, so the status says «לא אומת מאז ההורדה». */

@@ -128,5 +128,13 @@ describe('project file card, export lines, archive', () => {
   it('settings status: state in words, counts, not verified since download', () => {
     const html = renderToStaticMarkup(createElement(LibraryStatusView, { lang: 'he', status: status({ state: 'indexing', progress: { rows: 9, entriesDone: 1, entriesTotal: 2 }, notListed: [{ dir: 'models', entries: 3 }], unusable: { credit_missing: 2 } }) }));
     expect(html).toContain('סורקים את הספרייה'); expect(html).toContain('לא אומת מאז ההורדה'); expect(html).toContain(TID.settingsCounts); expect(html).toContain('לא נקרא');
+    expect(html).not.toContain(TID.settingsBuildFailed);
+  });
+  it('settings status: a failed scan is said in words with its code, next to the state of the index that still answers', () => {
+    for (const lang of ['he', 'en'] as const) {
+      const html = renderToStaticMarkup(createElement(LibraryStatusView, { lang, status: status({ state: 'ready', indexBuildFailed: { code: 'SQLITE_IOERR' } }) }));
+      expect(html).toContain(`"${TID.settingsBuildFailed}"`); expect(html).toContain('role="alert"'); expect(html).toContain('SQLITE_IOERR'); expect(html).not.toContain('{code}');
+      expect(html).toContain(lang === 'he' ? 'הסריקה האחרונה נכשלה' : 'The last scan failed');
+    }
   });
 });

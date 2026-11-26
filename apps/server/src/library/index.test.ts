@@ -184,7 +184,8 @@ describe('the index file: swapped whole, cancellable, rebuilt after a cut', () =
     s.startBuild();
     await s.idle();
     const st = await s.status(true);
-    expect(st.problems.some((p) => p.item === null && p.reason.startsWith('the last index build failed'))).toBe(true);
+    expect(st.state).toBe('ready');
+    expect(st.indexBuildFailed?.code).toMatch(/^[A-Za-z_]{1,40}$/); // an error code or name: never a path or a message
     expect(fs.existsSync(path.join(dataDir, 'library-index.sqlite.tmp'))).toBe(false);
   });
 });
