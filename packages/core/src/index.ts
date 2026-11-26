@@ -179,6 +179,9 @@ export * from './booth/contract.ts';
 export * from './booth/report.ts';
 export * from './booth/scrub.ts';
 export * from './booth/scene.ts';
+// the local picture-model runtime and `eyes` (wave 8 picmodels track): lead contract; the picture-map contract is types only this wave
+export * from './picmodelsContract.ts';
+export * from './pictureMapContract.ts';
 // a version for every audience «גרסה לכל קהל» (wave 8 audiences track): the contract, limits, validation and the three ops are
 // lead-built; audience.ts (rules, sound roles, change list) is W1's
 export * from './audienceLimits.ts';

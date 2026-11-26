@@ -73,6 +73,8 @@ import { registerLibraryRoutes } from './library/routes.ts';
 import { notBuiltRuntime, SEARCH_INDEX_JOB_TYPE, type SearchRuntime } from './search/contract.ts';
 import { registerSearchRoutes } from './search/routes.ts';
 import { registerBoothRoutes } from './booth/routes.ts';
+import { notBuiltPictureModels, type PictureModelsRuntime } from './picmodels/contract.ts';
+import { registerPicmodelsRoutes } from './picmodels/routes.ts';
 import type { RenderHost } from '@pulseframe/renderer';
 
 const TxBody = z
@@ -147,7 +149,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost }
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** the local picture-model runtime and eyes (wave 8 picmodels; picmodels/runtime.ts): absent = the not-built runtime */ pictureModels?: PictureModelsRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -946,6 +948,9 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // document, agentAnswerOf), the picture index for the owner's own session only; index.ts passes the built runtime (a test host without one gets 501)
   const searchRuntime = extras.search ?? notBuiltRuntime();
   registerSearchRoutes(app, { cfg, store, gov, runtime: searchRuntime, need });
+  // the local picture-model runtime and «הציעו עיניים» (wave 8 picmodels; picmodels/contract.ts PICMODELS_ROUTES): the state report for
+  // observers (no yunet row but for the owner's own session), eyes for the owner's own session only; nothing of eyes is stored
+  registerPicmodelsRoutes(app, { cfg, store, gov, runtime: extras.pictureModels ?? notBuiltPictureModels(), need });
 
   // ----- the command bar's language assistant (ADR-0027; assistant/contract.ts ASSISTANT_ROUTES): status for any observer (whole
   // for the owner's own session, connected or not for anyone else: assistant/visibility.ts), the rest for the owner's own session

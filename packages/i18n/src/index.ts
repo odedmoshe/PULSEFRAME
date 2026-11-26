@@ -28,6 +28,7 @@ import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { COVER_EN, COVER_HE } from './cover.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
+import { PICMODELS_EN, PICMODELS_HE } from './picmodels.ts';
 import { BOOTH_EN, BOOTH_HE } from './booth.ts';
 export type Lang = 'he' | 'en';
 export const he = {
@@ -243,6 +244,7 @@ export const he = {
   ...MUSICFIT_HE,
   ...AUDIENCES_HE,
   ...FOOTAGE_HE,
+  ...PICMODELS_HE,
   ...INSTRUMENTS_HE,
   ...BOOTH_HE,
   ...COVER_HE,
@@ -460,6 +462,7 @@ export const en: Record<keyof typeof he, string> = {
   ...MUSICFIT_EN,
   ...AUDIENCES_EN,
   ...FOOTAGE_EN,
+  ...PICMODELS_EN,
   ...INSTRUMENTS_EN,
   ...BOOTH_EN,
   ...COVER_EN,
@@ -493,6 +496,7 @@ export * from './growing.ts';
 export * from './musicFit.ts';
 export * from './audiences.ts';
 export * from './footageSearch.ts';
+export * from './picmodels.ts';
 export * from './instruments.ts';
 export * from './booth.ts';
 export * from './cover.ts';
