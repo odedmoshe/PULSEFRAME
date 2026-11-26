@@ -3,14 +3,18 @@
  * tripmap-verify.md: no follow camera, no place route or find_place, two looks, bars only, no MAP_DATA_SHA256, no preflight blocker).
  * LEAD: the entry point and the list of checks. Built in parts: tripmap-proof.core.ts (W1: 1, 8, 12, 14 against the real ops and the
  * server), tripmap-proof.draw.ts (W2: 2–4, 6, 7, 9–11, 13, 16–19 against the pinned Chromium render page) and tripmap-proof.ui.ts
- * (W3: 5, 15); the integration step imports them here and sets TRIPMAP_PROOF_BUILT. Until then it runs nothing and exits 2 (blocked),
- * the code the proofs use for "cannot run here", never a pass.
+ * (W3: 5, 15); wired here at integration (TRIPMAP_PROOF_BUILT). The parts run one after another (one server and one browser at a time).
+ * Exit 0 when every gated check passes, 1 when one fails, 2 when none fails but one is blocked (cannot run here). Check 19 is recorded,
+ * not gated; check 5 is labelled "pinned Chromium only, not verified on the laptop" (C12). Evidence: docs/evidence/tripmap-proof.json.
  * Fixtures are SYNTHETIC only, made at proof time: a 6-second accented click loop at 120 bpm in 4/4 from ffmpeg sine bursts (the first
  * of every four louder), analysed by the existing beat job; stops typed as coordinates; a 1280×720 project at 30 fps (60 fps for the
  * second flash sweep) and a 720×1280 linked format. No owner media; deleted at the end. Nobody here can look: every check is a
  * measurement, none says how a map looks.
  */
-export const TRIPMAP_PROOF_BUILT = false;
+import fs from 'node:fs';
+import path from 'node:path';
+
+export const TRIPMAP_PROOF_BUILT = true;
 export const TRIPMAP_CHECKS: Readonly<Record<string, string>> = {
   1: 'add_trip_map with three stops makes exactly one drawn clip of kind map on a titles track, coordinates at 0.01°, even times; one undo restores the document hash',
   2: 'at each arrival frame the marker\'s centroid (its look colour, searched in a 24-px window) is within 1.5 px of the position Node predicts with cameraAt + mercator',
@@ -33,7 +37,50 @@ export const TRIPMAP_CHECKS: Readonly<Record<string, string>> = {
   19: 'recorded, not gated: ms per frame of the painter at 1080p for an Israel view and a Europe view, round against bevel joins (one sample each)',
 };
 
-if (!TRIPMAP_PROOF_BUILT) {
-  console.error(`tripmap-proof: not built yet; ${Object.keys(TRIPMAP_CHECKS).length} checks pending (${Object.keys(TRIPMAP_CHECKS).join(', ')}); nothing was measured`);
-  process.exit(2);
+/** Checks that are measured and written down but never fail the proof. */
+export const TRIPMAP_RECORDED_ONLY: readonly number[] = [19];
+/** Labels written beside a check's result. */
+export const TRIPMAP_LABELS: Readonly<Record<number, string>> = { 5: 'pinned Chromium only, not verified on the laptop (C12)', 19: 'recorded, not gated (one sample each)' };
+
+interface Row { id: number; name: string; ok: boolean; blocked?: string; label?: string; detail?: unknown }
+
+async function main(): Promise<number> {
+  const { runTripmapCore } = await import('./tripmap-proof.core.ts');
+  const { runTripmapDraw } = await import('./tripmap-proof.draw.ts');
+  const { runTripmapUi } = await import('./tripmap-proof.ui.ts');
+  const rows = new Map<number, Row>();
+  const put = (r: Row) => { rows.set(r.id, { ...r, name: TRIPMAP_CHECKS[r.id] ?? r.name, ...(TRIPMAP_LABELS[r.id] ? { label: TRIPMAP_LABELS[r.id] } : {}) }); };
+  const started = Date.now();
+  console.log('tripmap-proof: part core (checks 1, 8, 12, 14)');
+  const core = await runTripmapCore();
+  if ('blocked' in core) for (const id of [1, 8, 12, 14]) put({ id, name: '', ok: false, blocked: core.blocked });
+  else for (const [k, v] of Object.entries(core)) put({ id: Number(k), name: '', ok: v.ok, detail: v.detail });
+  console.log('tripmap-proof: part draw (checks 2-4, 6, 7, 9-11, 13, 16-19)');
+  const draw = await runTripmapDraw();
+  for (const c of draw.checks) put({ id: c.id, name: c.name, ok: c.ok, ...(c.blocked ? { blocked: c.blocked } : {}), detail: c.detail });
+  console.log('tripmap-proof: part ui (checks 5, 15)');
+  const ui = await runTripmapUi();
+  for (const [k, v] of Object.entries(ui)) put({ id: Number(k), name: '', ok: v === true, ...(v === true ? {} : { detail: v }) });
+  // a check no part answered fails: every check of TRIPMAP_CHECKS runs and can fail
+  for (const k of Object.keys(TRIPMAP_CHECKS)) if (!rows.has(Number(k))) put({ id: Number(k), name: '', ok: false, detail: 'no part answered this check' });
+  const all = [...rows.values()].sort((a, b) => a.id - b.id);
+  const gated = all.filter((r) => !TRIPMAP_RECORDED_ONLY.includes(r.id));
+  const failed = gated.filter((r) => !r.ok && !r.blocked), blocked = gated.filter((r) => r.blocked);
+  console.log('');
+  for (const r of all) console.log(`${r.ok ? '  ok  ' : r.blocked ? ' BLOCK' : TRIPMAP_RECORDED_ONLY.includes(r.id) ? ' (rec)' : ' FAIL '} ${r.id}. ${r.label ? `[${r.label}] ` : ''}${r.blocked ?? ''}${!r.ok && !r.blocked ? ` ${JSON.stringify(r.detail).slice(0, 300)}` : ''}`);
+  const evidence = {
+    proof: 'proof:tripmap', ranAt: new Date().toISOString(), seconds: Math.round((Date.now() - started) / 1000),
+    note: 'Measurements on synthetic fixtures in the pinned headless Chromium. Nobody here has looked at a map: no check says how a map looks.',
+    passed: gated.filter((r) => r.ok).length, gated: gated.length, failed: failed.map((r) => r.id), blocked: blocked.map((r) => r.id), recordedOnly: TRIPMAP_RECORDED_ONLY,
+    checks: all, measurements: draw.measurements,
+  };
+  const out = path.resolve(import.meta.dirname, '../../../docs/evidence/tripmap-proof.json');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
+  console.log(`tripmap-proof: ${evidence.passed}/${evidence.gated} gated checks passed; failed [${evidence.failed.join(', ')}]; blocked [${evidence.blocked.join(', ')}]; written ${path.relative(process.cwd(), out)}`);
+  return failed.length ? 1 : blocked.length ? 2 : 0;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().then((code) => process.exit(code), (e) => { console.error(e); process.exit(1); });
 }
