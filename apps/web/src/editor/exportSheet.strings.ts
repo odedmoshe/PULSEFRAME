@@ -23,7 +23,7 @@ export const EXPORT_STRINGS = {
     checking: 'בודקים…', allClear: 'לא נמצאו בעיות', recheck: 'בדיקה מחדש',
     preflightFail: 'הבדיקה לא הושלמה', retry: 'ניסיון חוזר',
     flashRow: 'בדיקת הבהובים', flashPending: 'תרוץ בסוף הייצוא ותוצג כאן, עם קפיצה לקטע אם יימצא',
-    loud: 'עוצמת שמע', loudMeasuring: 'מודדים…', loudOk: (v: string) => `${v} LUFS · מתאים לרשתות`, loudLow: (v: string) => `${v} LUFS · שקט מדי לרשתות`, loudHigh: (v: string) => `${v} LUFS · חזק מדי לרשתות`, loudSet: 'יישור ל־14−', loudNone: 'אין שמע בסרטון',
+    loud: 'עוצמת שמע', loudMeasuring: 'מודדים…', loudOk: (v: string) => `${v} LUFS · מתאים לרשתות`, loudLow: (v: string) => `${v} LUFS · שקט מדי לרשתות`, loudHigh: (v: string) => `${v} LUFS · חזק מדי לרשתות`, loudSet: 'יישור ל־14−', loudNone: 'אין שמע בסרטון', loudLeadOnly: 'נמדד רק הראשון מבין הפורמטים שנבחרו:',
     // the labels of the fix buttons the server's checks offer (apps/server preflight.ts words them in English), read by exportSheet.logic.ts fixLabel
     fix: {
       removeStretch: 'להסיר את הקטע הזה מכל הערוצים', removeTransition: 'להסיר את המעבר', removeRamp: 'להסיר את שינוי המהירות במעבר',
@@ -83,7 +83,7 @@ export const EXPORT_STRINGS = {
     checking: 'Checking…', allClear: 'No problems found', recheck: 'Check again',
     preflightFail: 'The check did not finish', retry: 'Try again',
     flashRow: 'Flash check', flashPending: 'Runs at the end of the export and shows here, with a jump to the stretch if one is found',
-    loud: 'Sound level', loudMeasuring: 'Measuring…', loudOk: (v: string) => `${v} LUFS · fits social networks`, loudLow: (v: string) => `${v} LUFS · too quiet for social networks`, loudHigh: (v: string) => `${v} LUFS · too loud for social networks`, loudSet: 'Set to −14', loudNone: 'The video has no sound',
+    loud: 'Sound level', loudMeasuring: 'Measuring…', loudOk: (v: string) => `${v} LUFS · fits social networks`, loudLow: (v: string) => `${v} LUFS · too quiet for social networks`, loudHigh: (v: string) => `${v} LUFS · too loud for social networks`, loudSet: 'Set to −14', loudNone: 'The video has no sound', loudLeadOnly: 'Only the first of the chosen formats is measured:',
     fix: {
       removeStretch: 'Remove this stretch from every track', removeTransition: 'Remove the transition', removeRamp: 'Remove the velocity ramp',
       shorten: (m: string) => `Shorten the transition to ${m} frames`, lowerRamp: (v: string) => `Lower the velocity ramp to ×${v}`,

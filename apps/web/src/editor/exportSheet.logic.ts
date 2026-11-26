@@ -5,7 +5,8 @@
  * is shown only when the server's plan carries one.
  */
 import type { ExportRequest } from './store.ts';
-import { FORMAT_PROFILES, type ProjectDocument } from '@pulseframe/core';
+import { FORMAT_PROFILES, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { isShortActive, loudnessOps } from './shorts.view.ts';
 
 export const ACTIVE_JOB = ['queued', 'running', 'cancel-requested'] as const;
 export const isActiveJob = (status: string) => (ACTIVE_JOB as readonly string[]).includes(status);
@@ -231,3 +232,13 @@ export function sendBlock(dest: Destination['id'] | null, choices: Pick<ExportCh
 }
 /** Job stage words of the size fit ('fitting size 1/2', 'checking size', 'checking the export'), for the progress line. */
 export const isFitStage = (stage: string | null | undefined) => !!stage && /^(fitting size|checking size|checking the export)( |$)/.test(stage);
+
+/**
+ * The output the sheet's loudness row measures and what its «יישור ל־14−» commits (wave 8 qc, verifier C2): the CHOSEN output, as
+ * export renders it — the short on screen (a short exports as itself, store.startExport) and the lead format or audience version.
+ * On a short the fix sets that short's own target (update_sequence format.loudness), never the project's; otherwise the project's.
+ */
+export function loudnessCheckOf(raw: ProjectDocument | null, activeSequenceId: string, variantId: string | null | undefined): { sequenceId: string | null; variantId: string | null; fix: (target: number) => OpCall[] } {
+  const sequenceId = isShortActive(raw, activeSequenceId) ? activeSequenceId : null;
+  return { sequenceId, variantId: variantId ?? null, fix: (target) => (raw ? loudnessOps(raw, activeSequenceId, target) : [{ op: 'set_loudness_target', args: { target } }]) };
+}

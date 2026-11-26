@@ -30,6 +30,7 @@ import {
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
   fixLabel as fixLabelOf, isFitStage, sendBlock,
 } from './exportSheet.logic.ts';
+import { loudnessCheckOf } from './exportSheet.logic.ts';
 import './exportSheet.css';
 import { CacheDoneLine, CacheFailure, cacheStageLabel, ExportReuseLine } from './ExportReuseLine.tsx';
 import { cacheText } from './renderCache.strings.ts';
@@ -284,7 +285,7 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
           <p className="pf-xs-note">{S.savedIn} · {S.nameNote}</p>
         </section>
 
-        <Checks editor={editor} S={S} lead={lead} />
+        <Checks editor={editor} S={S} lead={lead} chosen={chosen.length} />
       </div>
 
       <Preview doc-id={doc.id} lead={lead} S={S} lang={lang} frame={editor.frame} revision={state.revision} sec={sec} frames={frames} choices={p.choices} />
@@ -366,14 +367,16 @@ const FORMAT_SAFE = (profileId: string | null) => {
 };
 
 // ---------------------------------------------------------------- the checks before export
-function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: ExportTarget }) {
+function Checks({ editor, S, lead, chosen }: { editor: Editor; S: ExportStrings; lead: ExportTarget; chosen: number }) {
   const { state } = useEditorState();
   const doc = state.doc!;
   const [rep, setRep] = useState<PreflightReport | null>(null);
   const [busy, setBusy] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [loud, setLoud] = useState<{ lufs: number | null } | 'measuring' | 'none'>('measuring');
+  const [loud, setLoud] = useState<{ lufs: number | null; target: number | null } | 'measuring' | 'none'>('measuring');
   const variantId = lead.variantId;
+  // the loudness row measures the CHOSEN output (verifier C2): the short on screen and the lead format or version, with its own target
+  const lc = loudnessCheckOf(state.rawDoc, state.activeSequenceId, variantId);
   const run = async () => {
     setBusy(true); setFailed(false);
     try { setRep(await api.preflight(doc.id, variantId, state.rawDoc && state.activeSequenceId !== state.rawDoc.mainSequenceId ? state.activeSequenceId : null)); } catch { setFailed(true); } finally { setBusy(false); }
@@ -382,11 +385,11 @@ function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: E
   useEffect(() => {
     let dead = false;
     setLoud('measuring');
-    api.measureLoudness(doc.id).then((r) => { if (!dead) setLoud(r.integratedLufs == null ? 'none' : { lufs: r.integratedLufs }); }).catch(() => { if (!dead) setLoud('none'); });
+    api.measureLoudness(doc.id, { sequenceId: lc.sequenceId, variantId: lc.variantId }).then((r) => { if (!dead) setLoud(r.integratedLufs == null ? 'none' : { lufs: r.integratedLufs, target: r.target?.target ?? null }); }).catch(() => { if (!dead) setLoud('none'); });
     return () => { dead = true; };
-  }, [state.revision, doc.id]);
+  }, [state.revision, doc.id, lc.sequenceId, lc.variantId]);
   const fix = async (i: PreflightIssue) => { if (i.fix && (await editor.commit(i.fix.ops, 'Preflight fix'))) await run(); };
-  const target = doc.settings.loudness?.target ?? null;
+  const target = typeof loud === 'object' ? loud.target : null; // the measured output's own target (a short's, else the project's)
   const lufs = typeof loud === 'object' ? loud.lufs : null;
   const loudBad = lufs != null && target !== -14 && Math.abs(lufs + 14) > 2;
   const fmt = (v: number) => v.toFixed(1).replace('-', '−');
@@ -411,8 +414,8 @@ function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: E
         })}
         <li className={`pf-xs-check ${loudBad ? 'is-warn' : ''}`} data-testid="export-loudness">
           {loudBad ? <TriangleAlert size={16} aria-hidden="true" /> : <ShieldCheck size={16} aria-hidden="true" />}
-          <span><b>{S.loud}</b><small>{loud === 'measuring' ? S.loudMeasuring : loud === 'none' || lufs == null ? S.loudNone : loudBad ? (lufs < -14 ? S.loudLow(fmt(lufs)) : S.loudHigh(fmt(lufs))) : S.loudOk(fmt(lufs))}</small></span>
-          {loudBad && <Button size="sm" variant="secondary" onClick={() => void editor.commit([{ op: 'set_loudness_target', args: { target: -14 } }], 'Loudness target')}>{S.loudSet}</Button>}
+          <span><b>{S.loud}</b><small>{loud === 'measuring' ? S.loudMeasuring : loud === 'none' || lufs == null ? S.loudNone : loudBad ? (lufs < -14 ? S.loudLow(fmt(lufs)) : S.loudHigh(fmt(lufs))) : S.loudOk(fmt(lufs))}</small>{chosen > 1 && <small data-testid="export-loudness-lead-only">{S.loudLeadOnly} {isolate(lead.name[state.lang])}</small>}</span>
+          {loudBad && <Button size="sm" variant="secondary" onClick={() => void editor.commit(lc.fix(-14), 'Loudness target')}>{S.loudSet}</Button>}
         </li>
         <li className="pf-xs-check" data-testid="export-flash-pending">
           <ShieldCheck size={16} aria-hidden="true" />

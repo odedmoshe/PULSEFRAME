@@ -58,7 +58,7 @@ export interface VoiceCheck { revision: number; assetId: string; clipIds: string
 export interface ColourMatchRequest { method?: 'match' | 'balance'; referenceClipId?: string; targetClipIds: string[] | 'all'; amount?: number; samples?: 1 | 3 }
 export interface ColourMatchTarget { clipId: string; params: GradeParams; residual: { model: number; verified: number | null }; verdict: GradeFit['verdict']; limitedBy: (keyof GradeParams)[]; warnings: ('changes_within_clip' | 'not_verified' | 'replaces_grade' | 'animated_grade')[]; statsBefore: PictureStats; statsAfter: PictureStats | null }
 export interface ColourMatch { revision: number; method: 'match' | 'balance'; reference: { clipId: string; stats: PictureStats } | null; targets: ColourMatchTarget[]; /** set_colour_grade candidates: send as ONE transaction */ ops: OpCall[]; unavailable: string | null; note: string }
-export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; target: number | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string }
+export interface LoudnessResult { integratedLufs: number | null; truePeakDbtp: number | null; rangeLu: number | null; mixPeakDbfs: number | null; wouldClipWithoutNormalisation: boolean; /** the measured output's loudness target (a short's own format loudness, else the project's); null = no normalisation */ target: { target: number; truePeak: number } | null; exportWouldApplyGainDb: number | null; limitedByPeak: boolean; method: string; note?: string }
 
 export type RecipeParams = Record<string, unknown>;
 export interface RecipeAlternative { label: string; params: RecipeParams }
@@ -159,8 +159,8 @@ export const api = {
   findSilences: (id: string, body: { assetId: string; minSeconds: number; keepSeconds: number }) =>
     call<SilenceResult>(`/projects/${id}/analysis/silences`, json(body)),
   findFillers: (id: string, body: { assetId: string; words?: string[] }) => call<SilenceResult & { words: { kind: 'hesitation' | 'repeat' | 'listed'; text: string; sourceStartSeconds: number; onTimeline: { startSeconds: number }[] }[] }>(`/projects/${id}/analysis/fillers`, json(body)),
-  /** The programme loudness of the main edit, or of one sequence (a short) with `sequenceId`. */
-  measureLoudness: (id: string, sequenceId?: string) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json(sequenceId ? { sequenceId } : {})),
+  /** The programme loudness of one output as it exports: the main edit, a sequence (a short) with `sequenceId`, a linked format or audience version with `variantId`. `target` is that output's own. */
+  measureLoudness: (id: string, t: { sequenceId?: string | null; variantId?: string | null } = {}) => call<LoudnessResult>(`/projects/${id}/analysis/loudness`, json({ ...(t.sequenceId ? { sequenceId: t.sequenceId } : {}), ...(t.variantId ? { variantId: t.variantId } : {}) })),
   measureVoice: (id: string, body: VoiceMeasureRequest) => call<VoiceCheck>(`/projects/${id}/analysis/voice`, json(body)),
   /** Loudness of single clips (wave 7 send; 501 not_built until built). Commit match_clip_loudness with expectedRevision = revision. */
   measureClipLoudness: (id: string, body: ClipLoudnessRequest) => call<ClipLoudnessResult>(`/projects/${id}/analysis/clip-loudness`, json(body)),
