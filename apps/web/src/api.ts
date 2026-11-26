@@ -86,8 +86,18 @@ export interface GrantItem { id: string; name: string; mode: GrantMode; projectI
 export interface SpeechStatus {
   narration: { ready: boolean; reason: 'engine_not_configured' | 'engine_not_working' | 'model_missing' | null; detail: string; device: 'cpu' | 'cuda' | null; maxCharacters: number };
   transcription: { ready: boolean; reason: 'engine_not_configured' | 'engine_not_working' | 'model_missing' | null; detail: string; device: 'cpu' | 'cuda' | null };
-  engine: { configured: boolean; ok: boolean; detail: string };
+  engine: { configured: boolean; ok: boolean; detail: string; source?: 'environment' | 'installed' | null };
   models: { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; license: string | null; totalBytes: number; missingDownloadBytes: number; ready: boolean }[];
+}
+/** «התקנת מנוע הדיבור» (GET /speech/engine; the owner's own session only, 403 owner_required otherwise). */
+export interface SpeechEngineInstall {
+  state: 'environment' | 'installed' | 'installing' | 'not_installed';
+  job: { id: string; status: string; stage: string | null } | null;
+  lastFailure: { jobId: string; code: string; message: string; details?: Record<string, unknown> } | null;
+  plan: {
+    supported: boolean; host: string; downloadBytes: number | null; files: number | null; diskNeededBytes: number | null; diskFreeBytes: number | null; minPython: string | null; maxPython: string | null;
+    python: { found: false; tried: string[] } | { found: true; version: string; fits: boolean; min: string; max: string; bits: number };
+  };
 }
 export interface SoundEffectInfo { id: string; version: number; name: { he: string; en: string }; seconds: number; category: string }
 export const api = {
@@ -176,6 +186,8 @@ export const api = {
   derivatives: (id: string, assetId: string) => call<{ derivatives: { kind: string; status: string; meta: any }[] }>(`/projects/${id}/assets/${assetId}/derivatives`),
   presence: (id: string, sessionId: string, frame: number, selection: string[]) => call<unknown>(`/projects/${id}/presence`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, frame, selection }) }),
   speech: () => call<SpeechStatus>('/speech'),
+  speechEngine: () => call<SpeechEngineInstall>('/speech/engine'),
+  installSpeechEngine: (id: string, confirmBytes: number, replace = false) => call<{ jobId: string }>(`/projects/${id}/speech/engine/install`, json({ confirmBytes, ...(replace ? { replace: true } : {}) })),
   downloadSpeechModel: (id: string, modelId: string, confirmBytes: number) => call<{ jobId: string }>(`/projects/${id}/speech/models/${encodeURIComponent(modelId)}/download`, json({ confirmBytes })),
   transcribe: (id: string, assetId: string, body: { language: string; overwrite?: boolean; mode?: 'recognise' | 'align' }) => call<{ jobId: string }>(`/projects/${id}/assets/${assetId}/transcribe`, json(body)),
   transcribeAll: (id: string, language: string) => call<{ jobs: { assetId: string; jobId: string }[]; alreadyQueued: number }>(`/projects/${id}/transcribe`, json({ language })),

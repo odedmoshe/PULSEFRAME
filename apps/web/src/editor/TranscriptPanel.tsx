@@ -6,6 +6,7 @@ import { CAPTION_LOOKS, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
 import { api, type SilenceResult, type SpeechStatus } from '../api.ts';
 import { CaptionLooks } from './CaptionLooks.tsx';
+import { EngineInstall } from './EngineInstall.tsx';
 import { CAP_STRINGS } from './captions.strings.ts';
 import './captionsPanel.css';
 import { useEditorState, type Editor } from './store.ts';
@@ -95,10 +96,12 @@ function AutoTranscribe({ assetId, language, overwrite, align }: { assetId: stri
         <div className="muted" data-testid="asr-unavailable">
           <p>{C.broken}</p>
           <details><summary>{C.brokenDetail}</summary><bdi>{tr.detail}</bdi></details>
+          {status.engine.source === 'installed' && <EngineInstall broken onChanged={() => void refresh()} />}
         </div>
       ) : !overwrite && !align ? (
         <div className="muted" data-testid="asr-unavailable">
           <p>{C.notConfigured}</p>
+          <EngineInstall onChanged={() => void refresh()} />
           <details><summary>{C.howTo}</summary><ol>{C.notConfiguredHow.map((x) => <li key={x}>{x}</li>)}</ol></details>
         </div>
       ) : null}

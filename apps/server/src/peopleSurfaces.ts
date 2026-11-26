@@ -64,6 +64,7 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'GET /api/v1/capabilities': ['no-document'],
   'POST /api/v1/capabilities/import': ['no-document'],
   'GET /api/v1/speech': ['no-document'],
+  'GET /api/v1/speech/engine': ['owner-only'],
   'GET /api/v1/sfx/:sfxId/audio': ['no-document'],
   'GET /api/v1/packs': ['no-document'],
   // with projectId the birthdays of its people are hints: read through the store, so without birth dates for a 'names' credential
@@ -186,6 +187,7 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   [`POST ${P}/capabilities/:capabilityId/models/request`]: ['no-document'],
   [`POST ${P}/capabilities/:capabilityId/models/download`]: ['no-document'],
   [`POST ${P}/speech/models/:modelId/download`]: ['no-document'],
+  [`POST ${P}/speech/engine/install`]: ['owner-only'],
   // exports and jobs
   [`POST ${P}/exports/plan`]: ['reader-document'],
   [`POST ${P}/exports`]: ['rendered-refused', 'reader-document'],
