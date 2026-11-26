@@ -19,8 +19,8 @@ import {
 } from './mapContract.ts';
 import { barStopFrames, evenStopFrames } from './tripMap.ts';
 
-/** W1 sets this when tripMap.ts's timing functions are built and the engine painter draws a map. */
-export const MAP_OPS_BUILT = false;
+/** Set by W1: tripMap.ts is built and the ops use it. The painter is the engine's own gate (engine map/paintMap.ts MAP_PAINTER_BUILT): until it is on, a still or an export of a map clip refuses naming drawn.map. */
+export const MAP_OPS_BUILT = true;
 export const MAP_PUBLIC_OPS = ['add_trip_map', 'update_trip_map', 'time_trip_map'] as const;
 
 const R = z.object({ value: z.string(), timescale: z.number().int().positive() }).strict();
@@ -39,6 +39,7 @@ export const AddTripMapArgsSchema = z.object({
   start: R, duration: R,
   stops: z.array(StopArgSchema).max(64),
   look: z.enum(MAP_LOOKS).optional().describe('paper (default) or night'),
+  timing: z.enum(MAP_TIMINGS).optional().describe('time the new map in the same edit, exactly as time_trip_map `to` does afterwards (even, or bars of the analysed music under the start of the map); absent = the stops as given, or even'),
 }).strict();
 export const UpdateTripMapArgsSchema = z.object({
   clipId: z.string(),
@@ -85,7 +86,13 @@ function evenly(stops: MapStop[], durationFrames: number, rate: T.Rate): MapStop
   const n = stops.length, minLeg = mapFrames(MAP_MIN_LEG_SECONDS, rate);
   if (durationFrames - mapFrames(MAP_INTRO_SECONDS, rate) - mapFrames(MAP_OUTRO_SECONDS, rate) < (n - 1) * minLeg) throw mapRefusal('tooShort', { legs: n - 1, minLeg }, n - 1, minLeg);
   const at = evenStopFrames(n, durationFrames, rate);
+  // the check above uses INTRO and OUTRO rounded each on its own; at a rate where they round down the exact legs can fall short of
+  // a whole minLeg, so the legs as rounded are checked again (validate would refuse them)
+  assertLegs(at, n, minLeg);
   return stops.map((s, i) => ({ ...s, at: at[i]! }));
+}
+function assertLegs(at: readonly number[], n: number, minLeg: number) {
+  for (let i = 1; i < at.length; i++) if (at[i]! - at[i - 1]! < minLeg) throw mapRefusal('tooShort', { legs: n - 1, minLeg }, n - 1, minLeg);
 }
 function mustMap(d: ProjectDocument, clipId: string): { clip: DrawnClip & { drawn: MapPayload }; seqId: string } {
   const f = mustClip(d, clipId);
@@ -93,10 +100,27 @@ function mustMap(d: ProjectDocument, clipId: string): { clip: DrawnClip & { draw
   return { clip: f.clip as DrawnClip & { drawn: MapPayload }, seqId: f.seq.id };
 }
 
+/** time_trip_map's body: the map payload timed `to` (even, or bars of the music under the clip's start in its own sequence: C3). */
+function timedPayload(d: ProjectDocument, clip: DrawnClip & { drawn: MapPayload }, seqId: string, to: (typeof MAP_TIMINGS)[number]): MapPayload {
+  const rate = d.settings.frameRate, durationFrames = T.frameIndexAt(clip.duration, rate);
+  const next: MapPayload = structuredClone(clip.drawn);
+  if (to === 'even') { next.stops = evenly(next.stops, durationFrames, rate); next.timing = 'even'; delete next.timedTo; return next; }
+  const music = musicAt(d, clip.start, seqId);
+  if (!music) throw mapRefusal('noMusic', { clipId: clip.id });
+  if (!music.bars.length) throw mapRefusal('noBars', { clipId: clip.id, assetId: music.viaAssetId });
+  const r = barStopFrames(music.bars, clip.start, durationFrames, next.stops.length, rate);
+  if ('need' in r) throw mapRefusal('unitsShort', { clipId: clip.id, need: r.need, have: r.have }, r.need, r.have);
+  assertLegs(r.at, next.stops.length, mapFrames(MAP_MIN_LEG_SECONDS, rate)); // bars under half a second: two per leg are still short
+  next.stops = next.stops.map((st, i) => ({ ...st, at: r.at[i]! }));
+  next.timing = 'bars';
+  next.timedTo = { assetId: music.viaAssetId, barsPerLeg: r.barsPerLeg };
+  return next;
+}
+
 defineOp({
   name: 'add_trip_map',
   version: 1,
-  description: `Add a trip map clip («מפת טיול») on a titles track: ${MIN_MAP_STOPS}–${MAX_MAP_STOPS} stops (name as typed, micro-degree coordinates rounded to 0.01°, the travel mode of each leg), coastlines and lakes only (no borders), a line travelling from stop to stop and each name appearing on arrival. Look paper or night; the camera shows the whole route. Without times the stops are spaced evenly; time_trip_map puts them on the bars of the music. Placed like add_text (a named text track, else a free one, else a new one).`,
+  description: `Add a trip map clip («מפת טיול») on a titles track: ${MIN_MAP_STOPS}–${MAX_MAP_STOPS} stops (name as typed, micro-degree coordinates rounded to 0.01°, the travel mode of each leg), coastlines and lakes only (no borders), a line travelling from stop to stop and each name appearing on arrival. Look paper or night; the camera shows the whole route. Without times the stops are spaced evenly; timing 'bars' (here, or time_trip_map later) puts them on the bars of the music. Placed like add_text (a named text track, else a free one, else a new one).`,
   args: AddTripMapArgsSchema,
   apply(d, a, ctx) {
     notBuilt('add_trip_map');
@@ -104,6 +128,8 @@ defineOp({
     const { stops } = stopsOf(d, a.stops, T.frameIndexAt(a.duration, rate), () => ctx.newId('stp'));
     const drawn: MapPayload = { kind: MAP_KIND, v: 1, stops, look: a.look ?? 'paper', camera: 'whole', timing: 'even' };
     const { clip, track } = placeDrawnClip(d, { sequenceId: a.sequenceId, trackId: a.trackId, start: a.start, duration: a.duration, drawn }, ctx);
+    // `timing`: the same result as time_trip_map run next on this clip, in this one edit (one undo); absent = unchanged
+    if (a.timing) { const m = mustMap(d, clip.id); m.clip.drawn = timedPayload(d, m.clip, m.seqId, a.timing); }
     return { affectedIds: [clip.id], summary: `Added a trip map with ${stops.length} stops`, output: { clipId: clip.id, trackId: track.id } };
   },
 });
@@ -136,20 +162,7 @@ defineOp({
   apply(d, a) {
     notBuilt('time_trip_map');
     const { clip, seqId } = mustMap(d, a.clipId);
-    const rate = d.settings.frameRate, durationFrames = T.frameIndexAt(clip.duration, rate);
-    const next: MapPayload = structuredClone(clip.drawn);
-    if (a.to === 'even') { next.stops = evenly(next.stops, durationFrames, rate); next.timing = 'even'; delete next.timedTo; }
-    else {
-      const music = musicAt(d, clip.start, seqId);
-      if (!music) throw mapRefusal('noMusic', { clipId: clip.id });
-      if (!music.bars.length) throw mapRefusal('noBars', { clipId: clip.id, assetId: music.viaAssetId });
-      const r = barStopFrames(music.bars, clip.start, durationFrames, next.stops.length, rate);
-      if ('need' in r) throw mapRefusal('unitsShort', { clipId: clip.id, need: r.need, have: r.have }, r.need, r.have);
-      next.stops = next.stops.map((s, i) => ({ ...s, at: r.at[i]! }));
-      next.timing = 'bars';
-      next.timedTo = { assetId: music.viaAssetId, barsPerLeg: r.barsPerLeg };
-    }
-    clip.drawn = next;
+    clip.drawn = timedPayload(d, clip, seqId, a.to);
     return { affectedIds: [clip.id], summary: `Timed the trip map: ${a.to}` };
   },
 });

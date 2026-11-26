@@ -47,6 +47,7 @@ import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cach
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
 import { coverA11yScenarios } from './a11y-cover.ts';
+import { tripmapA11yScenarios } from './a11y-tripmap.ts';
 import { musicfitA11yScenarios } from './a11y-musicfit.ts';
 import { instrumentsA11yScenarios } from './a11y-instruments.ts';
 import { boothA11yScenarios } from './a11y-booth.ts';
@@ -848,6 +849,7 @@ async function main() {
         await sc.leave?.({ page, lang, pid });
       }
       for (const sc of coverA11yScenarios) { const r = await sc.prepare({ page, lang, pid }); await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal); await sc.leave?.({ page, lang, pid }); } // «הפריים הכי חד» (wave 8 cover, a11y-cover.ts)
+      for (const sc of tripmapA11yScenarios) { const r = await sc.prepare({ page, lang, pid }); await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal); await sc.leave?.({ page, lang, pid }); } // «מפת טיול» (wave 8 tripmap, a11y-tripmap.ts)
       // marked ranges «פנינים» (wave 7): the list, the pearl form, «מי בקליפ?» and the screen-time table (a11y-pearls.ts, builder C)
       for (const sc of pearlsA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -1245,6 +1247,12 @@ async function main() {
       }
       // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover) in the light theme: the same scenarios as the dark pass (a11y-cover.ts)
       for (const sc of coverA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «מפת טיול» (wave 8 tripmap) in the light theme: the dialog and the picker, as in the dark pass (a11y-tripmap.ts)
+      for (const sc of tripmapA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });

@@ -73,8 +73,11 @@ export const mapFrames = (seconds: number, rate: T.Rate): number => Math.round((
  */
 export interface MapLookColours { sea: string; land: string; lake: string; coast: string; route: string; marker: string; label: string; labelOutline: string }
 export const MAP_LOOK_COLOURS: Readonly<Record<MapLook, MapLookColours>> = {
-  paper: { sea: '#C9DCE3', land: '#E9E1CE', lake: '#C9DCE3', coast: '#8A9A9E', route: '#2F4B7C', marker: '#2F4B7C', label: '#1F2A36', labelOutline: '#F7F3EA' },
-  night: { sea: '#14233A', land: '#25344A', lake: '#14233A', coast: '#52657D', route: '#F2C14E', marker: '#F2C14E', label: '#F4F1E8', labelOutline: '#0E1726' },
+  // W2 (2026-11-26), measured through flashCells in engine map/paintMap.test.ts, nobody has looked at them: paper's coast lightened from
+  // #8A9A9E (its step against the land was 0.447, over MAP_COAST_MAX_STEP) to #A3B1B4 (0.331); each marker now differs from its route
+  // colour so the proof can find the marker by colour (paper #0F7A5C, night #7FE0C8; neither is saturated red).
+  paper: { sea: '#C9DCE3', land: '#E9E1CE', lake: '#C9DCE3', coast: '#A3B1B4', route: '#2F4B7C', marker: '#0F7A5C', label: '#1F2A36', labelOutline: '#F7F3EA' },
+  night: { sea: '#14233A', land: '#25344A', lake: '#14233A', coast: '#52657D', route: '#F2C14E', marker: '#7FE0C8', label: '#F4F1E8', labelOutline: '#0E1726' },
 };
 export const MAP_COAST_MAX_STEP = 0.35;
 

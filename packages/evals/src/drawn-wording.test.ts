@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, OpError, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, DRAWN_NOT_TEXT, OpError, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { registerTestDrawnOp, testDrawn } from '@pulseframe/core/drawn.testKind.ts';
 import { dictionaries, translateRefusal } from '../../i18n/src/index.ts';
 import { HE_DRAWN } from '../../i18n/src/drawn.ts';
@@ -41,7 +41,7 @@ describe('drawn clips: the Hebrew of every carrier refusal', () => {
     }
   });
   it('every pattern of HE_DRAWN is used (the payload refusal by its own sentence)', () => {
-    const messages = [...got.map((e) => e.message), 'drawn payload refused: color: Invalid string', 'transaction would produce an invalid project: drawn clip clp_1 on video track: a drawing goes on a titles track'];
+    const messages = [...got.map((e) => e.message), DRAWN_NOT_TEXT.message('trip map') /* the map's own line, provoked in tripmap-wording.test.ts */, 'drawn payload refused: color: Invalid string', 'transaction would produce an invalid project: drawn clip clp_1 on video track: a drawing goes on a titles track'];
     for (const [re] of HE_DRAWN) expect(messages.some((m) => re.test(m)), String(re)).toBe(true);
   });
   it('the error codes have Hebrew and English names', () => {
