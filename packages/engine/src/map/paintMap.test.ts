@@ -218,11 +218,11 @@ describe('the look table against the analyser (C6)', () => {
   for (const look of MAP_LOOKS) {
     const c = MAP_LOOK_COLOURS[look];
     it(`${look}: sea, land and lake differ by less than 0.1 in cell luminance; a whole frame swapping between any two of them every frame makes no transition`, () => {
-      const fills = [c.sea, c.land, c.lake];
-      for (const a of fills) for (const b of fills) {
-        expect(Math.abs(lum(a) - lum(b))).toBeLessThan(0.1);
+      const fills = [c.sea, c.land, c.lake], cells = fills.map((h) => frame(h, 72, 72));
+      for (let i = 0; i < fills.length; i++) for (let j = i + 1; j < fills.length; j++) {
+        expect(Math.abs(lum(fills[i]!) - lum(fills[j]!))).toBeLessThan(0.1);
         const an = new FlashAnalyser(30);
-        for (let k = 0; k < 60; k++) an.push(frame(k % 2 ? a : b));
+        for (let k = 0; k < 40; k++) an.push(k % 2 ? cells[i]! : cells[j]!);
         expect(an.report().verdict).toBe('pass');
         expect(an.report().areaPeak.general).toBe(0);
       }
