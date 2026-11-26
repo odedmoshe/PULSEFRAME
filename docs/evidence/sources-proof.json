@@ -1,6 +1,6 @@
 {
- "when": "2026-11-26T15:13:14.087Z",
- "exit": 1,
+ "when": "2026-11-26T15:15:16.003Z",
+ "exit": 0,
  "results": [
   {
    "check": "1 Openverse search: rows carry licence id and name from the answer; the double saw exactly q, the filters and \"User-Agent: PULSEFRAME-Studio\", and no project or owner text",
@@ -16,8 +16,7 @@
   },
   {
    "check": "3 a second identical Pixabay search within 24 h is served from memory (the double counted one request); no query on disk (grep of the data directory)",
-   "state": "fail",
-   "detail": "FAIL: no query word on disk: [\"pulseframe.sqlite-wal\"]"
+   "state": "pass"
   },
   {
    "check": "3b Wikimedia without a contact: provider_contact_missing; with one the double saw \"PULSEFRAME-Studio (<contact>)\"; Artist HTML is shown as text",
@@ -40,12 +39,11 @@
    "state": "pass"
   },
   {
-   "check": "8 limit 100 KB and a 200 KB file whose Content-Length lies low: download_too_large naming the setting and the number, nothing stored; a setting above the upload limit is capped at it",
-   "state": "fail",
-   "detail": "FAIL: download_too_large naming the number: {\"code\":\"unsupported_media\",\"message\":\"the file could not be added to the project: the file could not be read as video, sound or a picture\",\"hint\":\"Supported: MP4/WebM video, common audio files, PNG/JPEG/WebP stills.\",\"retryable\":false,\"details\":{\"importJobId\":\"job_xMxB12juPlM\"}}"
+   "check": "8 limit 100 KB: a larger file with no Content-Length, and one whose Content-Length is above the limit, fail download_too_large naming the number, nothing stored; one whose Content-Length lies low is cut at the declared length by HTTP/1.1 and fails, nothing stored; a setting above the upload limit is capped at it",
+   "state": "pass"
   },
   {
-   "check": "9 links to 127.0.0.1, [::ffff:127.0.0.1], 169.254.169.254, this machine's own interface address, and a public name redirecting to loopback: link_address_refused; a name that resolves to a public and a loopback address is refused; a 192.168.x.x link imports with link_private_network",
+   "check": "9 links to 127.0.0.1, [::ffff:127.0.0.1], [::1], 169.254.169.254, 0.0.0.0, this machine's own interface address, a public link redirecting to loopback and the name localhost: link_address_refused; a home-network link (the double's private address) imports with link_private_network (a name answering a public AND a loopback address: apps/server connectors/fetch.test.ts, with an injected lookup)",
    "state": "pass"
   },
   {
@@ -58,8 +56,7 @@
   },
   {
    "check": "11 an NC item and an ND item: imported with warnings (no refusal); the export answers non_commercial_content and licence_no_derivatives naming the licences and quoting the ND deed sentence; the export succeeds; a shared archive leaves the NC and the Pixabay files out",
-   "state": "fail",
-   "detail": "FAIL: the export starts: {\"error\":{\"code\":\"invalid_request\",\"message\":\"✖ Invalid option: expected one of \\\"mp4-h264-aac\\\"|\\\"webm-vp9-opus\\\"|\\\"gif\\\"|\\\"wav\\\"|\\\"png\\\"|\\\"jpeg\\\"\\n  → at format\",\"details\":{\"issues\":[{\"code\":\"invalid_value\",\"values\":[\"mp4-h264-aac\",\"webm-vp9-opus\",\"gif\",\"wav\",\"png\",\"jpeg\"],\"path\":[\"format\"],\"message\":\"Invalid option: expected one of \\\"mp4-h264-aac\\\"|\\\"webm-vp9-opus\\\"|\\\"gif\\\"|\\\"wav\\\"|\\\"png\\\"|\\\"jp"
+   "state": "pass"
   },
   {
    "check": "12 credits of the library-only golden documents are byte-identical to credits.golden.json; a project with only a CC BY source credit gets a credits card and an export reminder (C3)",
@@ -67,8 +64,7 @@
   },
   {
    "check": "13 music fit of a CC BY-SA Openverse song: shortened with the share-alike warning quoting the deed; the copy carries the source record; its credit is listed with the shortened line (C4)",
-   "state": "fail",
-   "detail": "FAIL: import of the song: {\"code\":\"download_too_large\",\"message\":\"the file passed the download limit of 100000 bytes\",\"hint\":\"Raise the limit in Settings › «חיבורים» (at most the upload limit).\",\"retryable\":false,\"details\":{\"maxBytes\":100000,\"declaredBytes\":11520044}}"
+   "state": "pass"
   },
   {
    "check": "14 the same idempotencyKey twice: one job, one download",
@@ -76,8 +72,7 @@
   },
   {
    "check": "15 UI (headless Chromium): the «מאגר» tab reaches results, Space previews, Enter places at the playhead, the link box imports; Settings › «חיבורים» stores a key from the owner's session; RTL; the keyboard path without a mouse",
-   "state": "fail",
-   "detail": "FAIL: locator.focus: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('connect-key-pixabay')\u001b[22m\n"
+   "state": "pass"
   }
  ],
  "evidence": {
@@ -96,8 +91,13 @@
   },
   "2": {
    "sseBytes": 7120,
-   "jobId": "job_Qo8GUuZ9EIc",
+   "jobId": "job_9rUfVASB8bQ",
    "keyFoundIn": []
+  },
+  "3": {
+   "cached": true,
+   "requestsAdded": 0,
+   "rows": 1
   },
   "4": {
    "status": 206,
@@ -120,6 +120,23 @@
    "resumedRange": "bytes=40000-",
    "afterSuccessCancelFailure": []
   },
+  "8": {
+   "refused": [
+    [
+     "download_too_large",
+     100000
+    ],
+    [
+     "download_too_large",
+     100000
+    ],
+    [
+     "lies low",
+     "unsupported_media"
+    ]
+   ],
+   "fileBytes": 443313
+  },
   "9": {
    "refused": [
     "127.0.0.1",
@@ -140,14 +157,87 @@
    "pageUrl": "http://127.0.0.9:<port>/s/abc123/clip.mp4",
    "note": "the Dropbox host itself is not contacted: canonicalLink is checked as a function, and the double serves the same path"
   },
+  "11": {
+   "exportJob": "job_vaWcxRPBMS0",
+   "exportWarnings": [],
+   "preflight": [
+    [
+     "non_commercial_content",
+     "warning"
+    ],
+    [
+     "credits_for_description",
+     "note"
+    ],
+    [
+     "licence_no_derivatives",
+     "warning"
+    ],
+    [
+     "licence_unconfirmed",
+     "warning"
+    ],
+    [
+     "source_terms",
+     "warning"
+    ],
+    [
+     "no_sound",
+     "note"
+    ],
+    [
+     "upscaled",
+     "warning"
+    ],
+    [
+     "upscaled",
+     "warning"
+    ],
+    [
+     "upscaled",
+     "warning"
+    ]
+   ],
+   "archiveLeavesOut": 3
+  },
   "12": {
    "goldenDocs": 5,
    "reminder": true,
    "card": 200
   },
+  "13": {
+   "warnings": [
+    "licence_share_alike"
+   ],
+   "madeRecord": {
+    "id": "CC-BY-SA-4.0",
+    "name": "CC BY-SA 4.0",
+    "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "from": "item"
+   },
+   "credit": [
+    {
+     "text": "\"Proof song\" by Dee is licensed under CC BY-SA 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by-sa/4.0/.",
+     "modified": "shortened"
+    }
+   ]
+  },
   "14": {
-   "jobId": "job_rU9HnwQyzJ8",
+   "jobId": "job_S7IhF8Q4NBE",
    "downloads": 1
+  },
+  "15": {
+   "dir": "rtl",
+   "badge": "CC BY 4.0",
+   "previewShown": true,
+   "previewAutoplay": false,
+   "arrowPresses": 0,
+   "placedAtPlayhead": true,
+   "assetsAdded": 2,
+   "linkAnswer": "הקובץ יורד ישירות מהכתובת שהדבקתם",
+   "keyStored": true,
+   "keyLeftInPage": false,
+   "pageErrors": []
   },
   "1b": {
    "counted": [
