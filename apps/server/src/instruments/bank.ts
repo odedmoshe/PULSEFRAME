@@ -294,7 +294,7 @@ export async function loadBank(check: ReadyKit, kit: MusicKit, notes: readonly S
   const parts: ResolvedBank['parts'] = {};
   for (const role of Object.keys(kit.parts) as KitPartRole[]) {
     const p = kit.parts[role]!;
-    parts[role] = { instrument: resolved.get(p.instrument)! as ResolvedInstrument, gainDb: p.gainDb, vel: p.vel, ...(p.attackMax !== undefined ? { attackMax: p.attackMax } : {}), ...(p.releaseMax !== undefined ? { releaseMax: p.releaseMax } : {}) };
+    parts[role] = { instrument: resolved.get(p.instrument)! as ResolvedInstrument, gainDb: p.gainDb, vel: p.vel, ...(p.attackMax !== undefined ? { attackMax: p.attackMax } : {}), ...(p.releaseMax !== undefined ? { releaseMax: p.releaseMax } : {}), ...(p.edge !== undefined ? { edge: p.edge } : {}) };
   }
   let plan: ReturnType<typeof samplerPlanZones>;
   try { plan = deps.planZones(notes, { parts }); } catch (e) {

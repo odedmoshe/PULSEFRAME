@@ -181,9 +181,10 @@ describe('honest states: nothing is offered and nothing is made unless every fil
     const none = world({ library: false });
     const c0 = await checkKit(none.cfg, MUSIC_KITS[0]!);
     expect([c0.state, c0.state !== 'ready' && c0.error.code]).toEqual(['library_not_set', 'instruments_library_not_set']);
-    // with a library set, the real kit of this build is not calibrated: entry null, files [] (no file names or checksums committed)
+    // with a library set, the real kit of this build is not calibrated: the piano's 70 files are listed (read on the owner's computer
+    // 2026-11-26), the strings instrument has no entry and no files yet, so the kit is offered nowhere
     const w = world();
-    expect([MUSIC_KITS[0]!.instruments.every((i) => i.entry === null && i.files.length === 0)]).toEqual([true]);
+    expect(MUSIC_KITS[0]!.instruments.map((i) => [i.id, i.entry, i.files.length])).toEqual([['strings', null, 0], ['piano', 'UprightPiano.sfz', 70]]);
     const c1 = await checkKit(w.cfg, MUSIC_KITS[0]!);
     expect([c1.state, c1.state !== 'ready' && c1.error.code, c1.state !== 'ready' && c1.error.hint]).toEqual(['not_calibrated', 'instruments_kit_not_ready', expect.stringMatching(/synthesised/)]);
     const listed = await listMusicKits(w.cfg);

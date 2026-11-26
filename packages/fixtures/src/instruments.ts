@@ -22,7 +22,7 @@ export interface KitFileRow { path: string; bytes: number; sha256: string }
 export interface KitTable {
   id: string; version: number; styleId: string; review: 'unheard';
   instruments: { id: string; title: { he: string; en: string }; ledgerItem: string; ledgerPin: string; entry: string | null; files: KitFileRow[]; cc?: Record<string, number> }[];
-  parts: Partial<Record<Role, { instrument: string; gainDb: number; vel: [number, number]; attackMax?: number; releaseMax?: number }>>;
+  parts: Partial<Record<Role, { instrument: string; gainDb: number; vel: [number, number]; attackMax?: number; releaseMax?: number; edge?: number }>>;
 }
 export interface LedgerRow {
   item: string; source: string; sourceTitle: string; manifest: string; manifestSha256: string; kind: 'file' | 'archive' | 'npm' | 'git'; identity: string; url: string;
