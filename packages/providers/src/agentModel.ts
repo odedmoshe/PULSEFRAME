@@ -104,7 +104,8 @@ export interface AnthropicMessagesRequest {
   model: string;
   max_tokens: number;
   system?: string | AnthropicTextBlock[];
-  tools: { name: string; description: string; input_schema: JsonSchema; cache_control?: { type: 'ephemeral' } }[];
+  /** left out when the request has no tools (the describer of wave 8 understand; the probe sends none either) */
+  tools?: { name: string; description: string; input_schema: JsonSchema; cache_control?: { type: 'ephemeral' } }[];
   /** always {type:'auto'} (forced choice is a 400 on the 5.5 models, R§1.1); disable_parallel_tool_use when parallelToolCalls is false */
   tool_choice?: { type: 'auto'; disable_parallel_tool_use?: boolean };
   messages: { role: 'user' | 'assistant'; content: string | (AnthropicTextBlock | AnthropicImageBlock | AnthropicToolUseBlock | AnthropicToolResultBlock)[] }[];
@@ -129,7 +130,8 @@ export type OpenAIChatMessage =
 export interface OpenAIChatRequest {
   model: string;
   messages: OpenAIChatMessage[];
-  tools: { type: 'function'; function: { name: string; description: string; parameters: JsonSchema } }[];
+  /** left out when the request has no tools (an empty array is not a documented value, R§2.3; wave 8 understand verify C1) */
+  tools?: { type: 'function'; function: { name: string; description: string; parameters: JsonSchema } }[];
   /** 'auto' except for providers whose preset says tool_choice is unsupported (Ollama, R§5): then omitted */
   tool_choice?: 'auto';
   parallel_tool_calls?: boolean;
@@ -200,7 +202,7 @@ export function toAnthropicRequest(req: AgentTurnRequest, model: string): Anthro
   }
   if (pendingCalls.length) push('user', pendingCalls.map((c) => ({ type: 'tool_result' as const, tool_use_id: c.id, content: MISSING_RESULT_TEXT, is_error: true })));
   const tools = req.tools.map((t, i) => ({ name: t.name, description: t.description, input_schema: t.inputSchema, ...(req.cache && i === req.tools.length - 1 ? { cache_control: { type: 'ephemeral' as const } } : {}) }));
-  const body: AnthropicMessagesRequest = { model, max_tokens: req.maxOutputTokens, tools, messages: out };
+  const body: AnthropicMessagesRequest = { model, max_tokens: req.maxOutputTokens, ...(tools.length ? { tools } : {}), messages: out };
   if (req.system) body.system = req.cache ? [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }] : req.system;
   if (tools.length) body.tool_choice = req.parallelToolCalls ? { type: 'auto' } : { type: 'auto', disable_parallel_tool_use: true };
   return body;
@@ -297,9 +299,10 @@ export function toOpenAIChatRequest(req: AgentTurnRequest, model: string, preset
     messages.push({ role: 'user', content: m.images?.length ? [...(m.text ? [{ type: 'text' as const, text: m.text }] : []), ...m.images.map(part)] : m.text });
   }
   closeMissing();
-  const body: OpenAIChatRequest = { model, messages, tools: req.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })), max_tokens: req.maxOutputTokens };
-  if (body.tools.length && preset.supportsToolChoice) body.tool_choice = 'auto';
-  if (body.tools.length && (!req.parallelToolCalls || !preset.parallelToolCalls)) body.parallel_tool_calls = false;
+  const body: OpenAIChatRequest = { model, messages, max_tokens: req.maxOutputTokens };
+  if (req.tools.length) body.tools = req.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } }));
+  if (req.tools.length && preset.supportsToolChoice) body.tool_choice = 'auto';
+  if (req.tools.length && (!req.parallelToolCalls || !preset.parallelToolCalls)) body.parallel_tool_calls = false;
   return body;
 }
 
