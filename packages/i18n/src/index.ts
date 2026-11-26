@@ -20,9 +20,13 @@ import { CRAFT_EN, CRAFT_HE } from './craft.ts';
 import { STABILISE_EN, STABILISE_HE } from './stabilise.ts';
 import { PEARLS_EN, PEARLS_HE } from './pearls.ts';
 import { STORY_EN, STORY_HE } from './story.ts';
+import { GROWING_EN, GROWING_HE } from './growing.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
+import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
+import { COVER_EN, COVER_HE } from './cover.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
+import { BOOTH_EN, BOOTH_HE } from './booth.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -231,9 +235,13 @@ export const he = {
   ...STABILISE_HE,
   ...PEARLS_HE,
   ...STORY_HE,
+  ...GROWING_HE,
   ...MUSICFIT_HE,
+  ...AUDIENCES_HE,
   ...FOOTAGE_HE,
   ...INSTRUMENTS_HE,
+  ...BOOTH_HE,
+  ...COVER_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -442,9 +450,13 @@ export const en: Record<keyof typeof he, string> = {
   ...STABILISE_EN,
   ...PEARLS_EN,
   ...STORY_EN,
+  ...GROWING_EN,
   ...MUSICFIT_EN,
+  ...AUDIENCES_EN,
   ...FOOTAGE_EN,
   ...INSTRUMENTS_EN,
+  ...BOOTH_EN,
+  ...COVER_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -471,6 +483,10 @@ export * from './craft.ts';
 export * from './stabilise.ts';
 export * from './pearls.ts';
 export * from './story.ts';
+export * from './growing.ts';
 export * from './musicFit.ts';
+export * from './audiences.ts';
 export * from './footageSearch.ts';
 export * from './instruments.ts';
+export * from './booth.ts';
+export * from './cover.ts';

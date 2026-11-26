@@ -1,4 +1,5 @@
 import type { StoryApplyResult, StoryParams, StoryPlanView, StoryRegenerateResult } from '@pulseframe/core';
+import type { GrowingApplyResult, GrowingApplyRequest, GrowingPlanView, GrowingRebuildRequest, GrowingRegenerateResult } from '@pulseframe/core';
 import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBody, ReframePlanView, SequenceSummary, ShortCandidatesView, ShortsApplyResult, ShortsPlanView, FamilyFilmApplyResult, FamilyFilmParams, FamilyFilmPlanView, FamilyFilmRegenerateResult, MomentsData, OpCall, ProjectDocument, RenderCacheStatus, SegmentPlanView, SelfCheckMode, StartMomentsBody } from '@pulseframe/core';
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
@@ -6,12 +7,15 @@ import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulsefram
 import type { AssistantConfigBody, AssistantLocalCheck, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
 import type { ArchiveLibraryMode, CreditsView, LibraryFacets, LibraryItemsPage, LibraryItemsQuery, LibraryKind, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
 import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
+import type { FindSharpBody, FindSharpResult, SharpAnswer, StillExport } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
 import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
+import type { AudienceChanges } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 import type { MusicKitStatus } from '@pulseframe/core';
+import type { BoothAnswerBody, BoothAnswerResult, BoothCheckRow, BoothServerCheckId, BoothView } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -265,6 +269,13 @@ export const api = {
   restoreVersion: (id: string, versionId: string, body: { expectRevision?: number; confirmPrivacy?: boolean } = {}) => call<{ revision: number; transactionId: string | null; summary: string; diff: DiffSummary }>(`/projects/${id}/versions/${encodeURIComponent(versionId)}/restore`, json(body)),
   findText: (id: string, query: FindQuery) => call<FindResult>(`/projects/${id}/text/find`, json(query)),
   // stabilisation (wave 7; apps/server/src/stabilise.ts)
+  // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover; apps/server/src/stills.ts, export option still)
+  /** Start measuring one stretch (202 → job; its output.answer is the SharpAnswer), or { cached: true, answer } when every frame is measured. */
+  findSharpFrames: (id: string, body: FindSharpBody) => call<FindSharpResult>(`/projects/${id}/stills`, json(body)),
+  /** What is stored for source frames [from, to) of a file (never starts a job). */
+  readSharpFrames: (id: string, assetId: string, from: number, to: number) => call<SharpAnswer>(`/projects/${id}/stills?assetId=${encodeURIComponent(assetId)}&from=${from}&to=${to}`),
+  /** Save one source frame as a picture: a server export job (owner's own session only); output.still describes it. */
+  exportStill: (id: string, format: 'png' | 'jpeg', still: StillExport) => call<{ jobId: string; status: string }>(`/projects/${id}/exports`, json({ format, still })),
   stabiliseClip: (id: string, clipId: string, body: StabiliseRunBody = {}) => call<{ jobId: string; status: string }>(`/projects/${id}/clips/${encodeURIComponent(clipId)}/stabilise`, json(body)),
   cameraMotion: (id: string, assetId: string) => call<CameraMotionView>(`/projects/${id}/assets/${encodeURIComponent(assetId)}/camera-motion`),
   // marked ranges «פנינים» (wave 7; apps/server/src/pearls.ts): usage and screen time of one sequence; labels empty with labelsHidden for a credential without the people scope
@@ -274,15 +285,30 @@ export const api = {
   applyStory: (projectId: string, params: StoryParams, expectedRevision: number) => call<StoryApplyResult>(`/projects/${projectId}/recipes/story/apply`, json({ params, expectedRevision })),
   /** Rebuild a story run with changed options (never other taps: 409 story_retap_not_built), against the revision the bar showed. */
   regenerateStory: (projectId: string, runId: string, params: Partial<StoryParams> | undefined, expectedRevision: number, restoreRemoved = false) => call<StoryRegenerateResult>(`/projects/${projectId}/template-runs/${runId}/regenerate`, json({ ...(params ? { params } : {}), expectedRevision, ...(restoreRemoved ? { restoreRemoved: true } : {}) })),
+  // ----- «גדלים מול העיניים» (wave 8 growing): the recipe routes, owner's own session only; the eyes travel here once and are never stored -----
+  planGrowing: (projectId: string, req: Pick<GrowingApplyRequest, 'params'>) => call<GrowingPlanView>(`/projects/${projectId}/recipes/growing/plan`, json({ params: req.params })),
+  applyGrowing: (projectId: string, req: GrowingApplyRequest) => call<GrowingApplyResult>(`/projects/${projectId}/recipes/growing/apply`, json(req)),
+  /** Rebuild: untouched pictures keep their place (their eyes are worked out from their transforms); a picture marked again sends its eyes in params.picks. */
+  regenerateGrowing: (projectId: string, runId: string, req: GrowingRebuildRequest) => call<GrowingRegenerateResult>(`/projects/${projectId}/recipe-runs/${runId}/regenerate`, json(req)),
   // ----- «מוזיקה שמתאימה לסרט» (wave 7 musicfit; apps/server/src/musicfit/routes.ts) -----
   musicFitPlan: (projectId: string, req: MusicFitPlanRequest) => call<MusicFitPlan>(`/projects/${projectId}/music-fit/plan`, json(req)),
   musicFitApply: (projectId: string, req: MusicFitApplyRequest) => call<MusicFitApplyResult>(`/projects/${projectId}/music-fit/apply`, json(req)),
   /** The owner's own session only (agents get 403 human_approval_required). */
+  // ----- «גרסה לכל קהל» (wave 8 audiences; apps/server/src/audiences/routes.ts): 501 audience_not_built until built -----
+  audienceChanges: (projectId: string, variantId: string) => call<AudienceChanges>(`/projects/${projectId}/variants/${encodeURIComponent(variantId)}/audience`),
   markJoinHeard: (projectId: string, assetId: string, heard: boolean) => call<unknown>(`/projects/${projectId}/assets/${encodeURIComponent(assetId)}/music-join/heard`, json({ heard })),
   // ----- «כלים מוקלטים» (wave 7 instruments; apps/server/src/instruments/routes.ts) -----
   musicKits: () => call<{ kits: MusicKitStatus[] }>('/music/kits'),
   /** The owner's own session only (everyone else gets 403 owner_required). */
   markKitHeard: (kitId: string, heard: boolean) => call<{ kitId: string; version: number; heard: { at: string } | null }>(`/music/kits/${encodeURIComponent(kitId)}/heard`, json({ heard })),
+  // «תא הבדיקה» (wave 8 booth; apps/server/src/booth/contract.ts BOOTH_ROUTES): owner's own session only; 501 booth_not_built until W1
+  booth: () => call<BoothView>('/booth'),
+  boothAudioUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/audio`,
+  boothTestPictureUrl: (which: 'a' | 'b') => `/api/v1/booth/test-picture/${which}`,
+  boothExportStillUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/export-still`,
+  putBoothAnswer: (itemId: string, body: BoothAnswerBody) => call<BoothAnswerResult>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  deleteBoothAnswer: (itemId: string) => call<void>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
+  runBoothCheck: (rowId: BoothServerCheckId, signal?: AbortSignal) => call<BoothCheckRow>(`/booth/checks/${encodeURIComponent(rowId)}`, { method: 'POST', ...(signal ? { signal } : {}) }),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

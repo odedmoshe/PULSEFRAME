@@ -16,7 +16,8 @@ import * as T from '@pulseframe/time';
 import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulseframe/core';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
 import { assembleChecks, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type ExportFinding, type PictureChecks, type SizeFitFault, type SizeFitManifest, type SizeFitOutput, type SoundChecks } from '@pulseframe/core';
-import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
+import { STILL_EXCLUSIVE_OPTIONS, STILL_EXPORT_BUILT, STILLS_REFUSALS, StillExportSchema } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, OUTPUT_WARNINGS, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, PictureCheck, soundEnd, type AudioPlan, type FlashCells, type PlannedAudioClip } from '@pulseframe/engine';
 import { mixRoomBytes, renderMix, type MixResult } from './audiomix.ts';
@@ -39,7 +40,7 @@ const exec = promisify(execFile);
 
 export const ExportOptionsSchema = z
   .object({
-    format: z.enum(['mp4-h264-aac', 'webm-vp9-opus', 'gif', 'wav', 'png']).default('mp4-h264-aac').describe('Container/codecs. gif = animated picture without sound; wav = audio only; png = one still frame'),
+    format: z.enum(['mp4-h264-aac', 'webm-vp9-opus', 'gif', 'wav', 'png', 'jpeg']).default('mp4-h264-aac').describe('Container/codecs. gif = animated picture without sound; wav = audio only; png = one still frame; jpeg = only with `still`'),
     captions: z.enum(['burned', 'sidecar-srt', 'sidecar-vtt', 'none']).default('burned').describe('burned = captions drawn into the picture (as previewed); sidecar-* = clean picture plus a subtitle file timed to this export; none = clean picture, no file'),
     quality: z.enum(['draft', 'standard', 'high']).default('high'),
     scale: z.union([z.literal(1), z.literal(0.5), z.literal(0.25)]).default(1).describe('Output size relative to the project size (rounded to even dimensions)'),
@@ -53,6 +54,8 @@ export const ExportOptionsSchema = z
     selfCheck: z.enum(SELF_CHECK_MODES).optional().describe('incremental only: before rendering, frames of reused segments are rendered again and compared with what was stored; auto (the default) = 3 frames of every reused segment until 20 clean fast exports with this build, then one frame of a sample of them. It proves the frames it checks, nothing more'),
     // send and keep (wave 7, track send). Optional without a default, so the options of every job made before stay as they were.
     sizeFit: z.object({ targetBytes: z.number().int().min(SEND_FIT.minTargetBytes).max(SEND_FIT.maxTargetBytes) }).strict().optional().describe('MP4 only: make the file at or under targetBytes (1 MB = 1,000,000 bytes). The server picks the picture size and bit rates (a labelled heuristic, stated in the plan), encodes the full-quality film once and then to the target in two passes, checks the bytes, retries once, and otherwise fails with size_fit_missed and saves nothing. It promises bytes only, not how any app treats the file'),
+    // «שמירת התמונה» (wave 8 cover). Optional without a default, so the options of every job made before stay as they were.
+    still: StillExportSchema.optional().describe('Save one source frame of one file as a picture (format png or jpeg) at the stored file\'s own pixels: the whole frame or a crop in source pixels, optionally shaped for a paper. Rendered by the same compositor as the editor (the browser\'s reading of the stored file), cropped afterwards, written without any tags. The owner\'s own session only (403 owner_required for every other credential). Cannot be combined with frame, range, sequenceId, variantId, sizeFit, mode or selfCheck'),
   })
   .strict();
 export type ExportOptions = z.infer<typeof ExportOptionsSchema>;
@@ -255,6 +258,37 @@ const soundRange = (doc: ProjectDocument, firstFrame: number, frames: number): S
 /** The clip is heard in samples [a, b): from its start to the end of its tail (soundEnd), as the mix keeps it. */
 const sounds = (c: PlannedAudioClip, a: number, b: number) => c.at < b && soundEnd(c) > a;
 
+/**
+ * The option rules of a saved picture (wave 8 cover, lead pre-pass, complete): `still` needs format png or jpeg, jpeg needs `still`,
+ * a still cannot be combined with STILL_EXCLUSIVE_OPTIONS or a scale other than 1. Until W2 builds the still branch every `still`
+ * is also an honest still_not_built blocker. The asset checks (file, picture, frame, size, crop, paper shape) are W2's.
+ */
+export function stillOptionBlockers(options: Partial<ExportOptions>): Blocker[] {
+  const R = STILLS_REFUSALS, out: Blocker[] = [];
+  const b = (r: { code: string; hint: string }, message: string) => out.push({ code: r.code, message, ids: [], hint: r.hint });
+  if (!options.still) {
+    if (options.format === 'jpeg') b(R.jpegNeedsStill, R.jpegNeedsStill.message());
+    return out;
+  }
+  if (options.format !== 'png' && options.format !== 'jpeg') b(R.stillFormat, R.stillFormat.message(String(options.format)));
+  for (const k of STILL_EXCLUSIVE_OPTIONS) if (options[k] !== undefined) b(R.stillOptions, R.stillOptions.message(k));
+  if (options.scale !== undefined && options.scale !== 1) b(R.stillScale, R.stillScale.message());
+  if (!STILL_EXPORT_BUILT) b(R.stillNotBuilt, R.stillNotBuilt.message());
+  return out;
+}
+/**
+ * A full-size picture is the owner's own (verify C11; decisions "cover"): every other credential asking for `still` is refused 403
+ * owner_required before anything is planned. Called by every route that starts or retries an export: POST …/exports,
+ * …/exports/batch (startExportBatch), …/exports/browser, POST /jobs/:id/retry and the MCP tools export_project, export_batch and
+ * retry_job. `options` = the raw request options (or the retried job's). The owner's own session = assistant/contract.ts isOwnerSession.
+ */
+export function assertMayExportStill(p: { kind: 'user' | 'agent'; actor: string }, options: unknown): void {
+  const still = !!options && typeof options === 'object' && (options as Record<string, unknown>).still !== undefined;
+  if (!still || (p.kind === 'user' && p.actor === 'user:local')) return;
+  const r = STILLS_REFUSALS.ownerRequired;
+  throw new ApiError(r.status, r.code, r.message(), {}, r.hint);
+}
+
 export class Exporter {
   readonly sessions = new Map<string, RenderSession>();
   private queue: Promise<void> = Promise.resolve();
@@ -282,14 +316,17 @@ export class Exporter {
   /**
    * Everything a render depends on, fixed at the moment the job is created (SPEC §9): the document snapshot,
    * the exact asset and font bytes, engine versions and options. Returns blockers instead of starting a render that cannot be faithful.
+   * `resolved`: `doc` is ALREADY the document to render (a job's snapshot: a retry, or a job without a manifest), so the sequence and
+   * the linked format named in the options are not projected again (wave 8 audiences, verifier C1: a version's rules, such as a size
+   * ×4/3, must apply exactly once; no marker in the data says so). The options still describe the output (range, format, scale).
    */
-  plan(doc: ProjectDocument, revision: number, raw: unknown): { manifest: Manifest; blockers: Blocker[]; warnings: Blocker[] } {
+  plan(doc: ProjectDocument, revision: number, raw: unknown, opts: { resolved?: boolean } = {}): { manifest: Manifest; blockers: Blocker[]; warnings: Blocker[] } {
     const parsed = ExportOptionsSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
     let options = parsed.data;
     const target = { sequenceId: options.sequenceId, variantId: options.variantId };
-    const targetWarnings = outputWarnings(doc, target);
-    doc = outputDoc(doc, target);
+    const targetWarnings = opts.resolved ? [] : outputWarnings(doc, target);
+    if (!opts.resolved) doc = outputDoc(doc, target);
     const { width, height, frameRate, sampleRate } = doc.settings;
     const total = T.frameCount(sequenceDuration(doc), frameRate);
     const blockers: Blocker[] = [];
@@ -310,6 +347,8 @@ export class Exporter {
       if (frames <= 0) blockers.push({ code: 'empty_range', message: `range [${options.range.startFrame}, ${options.range.endFrame}) contains no frames (sequence has ${total})`, ids: [] });
     }
     if (total === 0) blockers.push({ code: 'empty_sequence', message: 'the sequence has no clips to export', ids: [] });
+    // «שמירת התמונה» (wave 8 cover): the option checks are the lead's (stillOptionBlockers); W2 replaces the plan of a still here
+    blockers.push(...stillOptionBlockers(options));
     // size-fit (wave 7 send, C4–C6): the plan picks the picture size (never above the asked scale) and the rates; the job then
     // renders the full-quality intermediate at that size (quality high) and fits it. Segment keys see only quality, size and frames,
     // so a fit export keys exactly as a plain high-quality export at the fitted scale (sizeFit.test.ts).
@@ -453,7 +492,10 @@ export class Exporter {
     // start exports through this function (the MCP tool used to skip the check that only the REST route made).
     if (!opts.roomChecked) assertStorageRoom(this.store, 1, retryOf ? 'retry this export' : 'start an export');
     const p = retryOf ? { doc: retryOf.input.snapshot as ProjectDocument, revision: retryOf.input.revision as number } : this.store.getProject(projectId);
-    const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
+    // a retry plans its snapshot as it is (resolved): the snapshot is already the projected document (C1); the target warning the
+    // first plan gave (variant_over_sequence_format) is carried over, since the snapshot no longer shows the sequence's own frame
+    const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions, { resolved: !!retryOf });
+    if (retryOf) for (const w of (retryOf.input.warnings ?? []) as Blocker[]) if ((OUTPUT_WARNINGS as readonly string[]).includes(w.code) && !warnings.some((x) => x.code === w.code)) warnings.unshift(w);
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
     // size-fit (C6): the full-quality intermediate and the fitted file live side by side until the publish; ask room for both now
     if (manifest.fit) assertStorageRoom(this.store, (manifest.estimate.bytes ?? 0) + manifest.fit.targetBytes, retryOf ? 'retry this export' : 'start an export at a target size');
@@ -582,7 +624,7 @@ export class Exporter {
     fs.mkdirSync(work, { recursive: true });
     const doc: ProjectDocument = job.input.snapshot;
     // Jobs created before manifests existed (or recovered ones) get a default plan from their own snapshot.
-    const manifest: Manifest = job.input.manifest ?? this.plan(doc, job.input.revision, {}).manifest;
+    const manifest: Manifest = job.input.manifest ?? this.plan(doc, job.input.revision, {}, { resolved: true }).manifest;
     const { options, output } = manifest;
     let token: string | undefined;
     let flashReport: PhotosensitivityReport | null = null;
@@ -596,7 +638,7 @@ export class Exporter {
         if (!blobPresent(this.store, a)) throw new ApiError(422, 'render_blocked', `source media ${a.id} is no longer available`, { blockers: [{ code: 'missing_media', ids: [a.id] }] }, MISSING_MEDIA_HINT);
       }
       const { frameRate, sampleRate } = output;
-      const ext = { 'mp4-h264-aac': 'mp4', 'webm-vp9-opus': 'webm', gif: 'gif', wav: 'wav', png: 'png' }[options.format];
+      const ext = { 'mp4-h264-aac': 'mp4', 'webm-vp9-opus': 'webm', gif: 'gif', wav: 'wav', png: 'png', jpeg: 'jpg' }[options.format];
       const partial = path.join(work, `out.${ext}`);
       const final = path.join(this.store.outDir, `${jobId}.${ext}`);
       const firstSample = T.nearestSampleIndex(T.frameTime(output.firstFrame, frameRate), sampleRate);
@@ -741,7 +783,7 @@ export class Exporter {
       this.store.updateJob(jobId, {
         status: 'succeeded', stage: null,
         output: {
-          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png' }[ext], captions: captionsOut, ...(licence ? { licence } : {}), bytes, revision: job.input.revision, route: segmentsReport ? SEGMENTED_ROUTE : 'server-software-canvas2d', ...(segmentsReport ? { segments: segmentsReport } : {}), options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
+          file: path.basename(final), mimeType: { mp4: 'video/mp4', webm: 'video/webm', gif: 'image/gif', wav: 'audio/wav', png: 'image/png', jpg: 'image/jpeg' }[ext], captions: captionsOut, ...(licence ? { licence } : {}), bytes, revision: job.input.revision, route: segmentsReport ? SEGMENTED_ROUTE : 'server-software-canvas2d', ...(segmentsReport ? { segments: segmentsReport } : {}), options, manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, audioEffects: manifest.audioEffects ?? [], output },
           estimate: { ...manifest.estimate, actualBytes: bytes }, ...(flashReport ? { photosensitivity: flashReport } : {}), ...(fitOut ? { fit: fitOut } : {}), ...(checks ? { checks } : {}), audioClipsMixed: audioClips, audio: audioMix && { mixPeakDbfs: audioMix.mixPeakDbfs, clipped: audioMix.clipped, loudness: audioMix.loudness, ...(audioMix.limiter ? { limiter: audioMix.limiter } : {}) }, validation, renderStageMs, wallSeconds: wall, realtimeFactor: output.frames > 1 ? (output.frames * frameRate.den) / frameRate.num / wall : null,
         },
       });

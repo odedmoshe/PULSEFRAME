@@ -68,6 +68,9 @@ export const ASSISTANT_EXCLUDED_OPS = [
   // music that fits the film (wave 7 musicfit): every new public op is left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is;
   // both stay on MCP and REST as ordinary reversible edits
   'set_clip_impact', 'sync_impact',
+  // versions for an audience (wave 8 audiences): left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is; on MCP and REST as
+  // ordinary reversible edits
+  'add_audience_version', 'update_audience_version', 'set_audience_keep',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

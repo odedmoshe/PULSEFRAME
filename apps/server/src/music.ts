@@ -59,21 +59,32 @@ export const MUSIC_PREVIEW_MAX_BARS = 32;
 export const musicNotBuilt = () => new ApiError(501, 'music_not_built', 'built-in music is not built in this version yet', {}, 'Use a music file from the library (musicAssetId), or a template without music.');
 
 const invalid = (why: string, details: Record<string, unknown> = {}) => new ApiError(500, 'music_invalid', `the built-in music that was made did not pass its check: ${why}`, details, 'This is a fault in this build, not in your request. Nothing was stored.');
-/** Throws ApiError 500 music_invalid unless: wav.length === 44 + 4 · layout.totalFrames, every sample finite, peak <= MUSIC_PEAK_LIMIT, first and last frame 0. */
-export function validateMusic(r: RenderedMusic): void {
+/**
+ * Every check validateMusic makes, in its order, with the refusal of each one that fails (empty: the track is valid). A wrong length
+ * stops the list (nothing else can be read safely). validateMusic throws the first; kit:check (packages/evals/src/kit-check.ts) prints
+ * every name. `check` names: length, header, level_finite, peak, silent_ends.
+ */
+export function musicValidationFailures(r: RenderedMusic): { check: 'length' | 'header' | 'level_finite' | 'peak' | 'silent_ends'; error: ApiError }[] {
+  const out: { check: 'length' | 'header' | 'level_finite' | 'peak' | 'silent_ends'; error: ApiError }[] = [];
   const { wav, layout } = r;
   const frames = layout.totalFrames;
-  if (wav.length !== 44 + 4 * frames) throw invalid(`the file has ${wav.length} bytes instead of ${44 + 4 * frames}`, { bytes: wav.length, expected: 44 + 4 * frames });
+  if (wav.length !== 44 + 4 * frames) return [{ check: 'length', error: invalid(`the file has ${wav.length} bytes instead of ${44 + 4 * frames}`, { bytes: wav.length, expected: 44 + 4 * frames }) }];
   const header = wav.toString('ascii', 0, 4) === 'RIFF' && wav.toString('ascii', 8, 16) === 'WAVEfmt ' && wav.readUInt16LE(20) === 1 && wav.readUInt16LE(22) === 2
     && wav.readUInt32LE(24) === MUSIC_SAMPLE_RATE && wav.readUInt16LE(34) === 16 && wav.toString('ascii', 36, 40) === 'data' && wav.readUInt32LE(40) === 4 * frames && wav.readUInt32LE(4) === 36 + 4 * frames;
-  if (!header) throw invalid('its WAV header is not 48 kHz stereo 16-bit PCM of the expected length');
-  if (!Number.isFinite(r.peak) || !Number.isFinite(r.rms)) throw invalid('its level is not a finite number');
+  if (!header) out.push({ check: 'header', error: invalid('its WAV header is not 48 kHz stereo 16-bit PCM of the expected length') });
+  if (!Number.isFinite(r.peak) || !Number.isFinite(r.rms)) out.push({ check: 'level_finite', error: invalid('its level is not a finite number') });
   // 16-bit samples are finite by construction; the peak is measured again from the bytes, not taken from the renderer
   const dv = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
   let peak = 0;
   for (let o = 44; o < wav.length; o += 2) { const v = dv.getInt16(o, true); const a = v < 0 ? -v : v; if (a > peak) peak = a; }
-  if (peak / 32768 > MUSIC_PEAK_LIMIT) throw invalid(`its peak ${(peak / 32768).toFixed(4)} is above ${MUSIC_PEAK_LIMIT}`, { peak: peak / 32768 });
-  if (dv.getInt32(44, true) !== 0 || dv.getInt32(wav.length - 4, true) !== 0) throw invalid('its first or last frame is not silent');
+  if (peak / 32768 > MUSIC_PEAK_LIMIT) out.push({ check: 'peak', error: invalid(`its peak ${(peak / 32768).toFixed(4)} is above ${MUSIC_PEAK_LIMIT}`, { peak: peak / 32768 }) });
+  if (dv.getInt32(44, true) !== 0 || dv.getInt32(wav.length - 4, true) !== 0) out.push({ check: 'silent_ends', error: invalid('its first or last frame is not silent') });
+  return out;
+}
+/** Throws ApiError 500 music_invalid unless: wav.length === 44 + 4 · layout.totalFrames, every sample finite, peak <= MUSIC_PEAK_LIMIT, first and last frame 0. */
+export function validateMusic(r: RenderedMusic): void {
+  const failed = musicValidationFailures(r);
+  if (failed.length) throw failed[0]!.error;
 }
 
 // ---------- the queue: one render at a time; previews cached by bytes ----------

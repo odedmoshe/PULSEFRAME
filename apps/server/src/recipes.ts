@@ -3,12 +3,13 @@
  * (replace what the last run created and nobody touched; keep what was edited by hand).
  */
 import * as T from '@pulseframe/time';
-import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, STORY_RECIPE_ID, STORY_RUN_RECIPE_ID, timeOriginSeconds, closedGapOnly, findClip, fingerprint, isInPlaceRecipe, onOtherTrack, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, recordsRanges, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
+import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, GROWING_RECIPE_ID, GROWING_RUN_RECIPE_ID, STORY_RECIPE_ID, STORY_RUN_RECIPE_ID, timeOriginSeconds, closedGapOnly, findClip, fingerprint, isInPlaceRecipe, onOtherTrack, MULTICAM_AUTO_RECIPE_ID, multicamGroupOf, planRecipe, RecipeError, recordsRanges, type LevelEnvelope, type PlanContext, type RecipePlan, type RegenerateOptions, type TimeRange } from '@pulseframe/core';
 import { envelopeOf } from './envelope.ts';
 import { multicamDerivatives } from './multicamSync.ts';
 import { applyFamilyFilmFor, planFamilyFilmFor, regenerateFamilyFilmFor } from './familyFilm.ts';
 import { own } from '@pulseframe/core';
 import { applyStoryFor, planStoryFor, regenerateStoryFor } from './story.ts';
+import { applyGrowingFor, planGrowingFor, regenerateGrowingFor } from './growing.ts';
 import type { Principal } from './auth.ts';
 import { detectSilences, heavy } from './analysis.ts';
 import type { Governance } from './governance.ts';
@@ -57,6 +58,8 @@ export async function planRecipeFor(store: Store, projectId: string, recipeId: s
   if (recipeId === FAMILY_FILM_RECIPE_ID) { const c = needsCaller(gov, principal); return planFamilyFilmFor(store, c.gov, c.principal, projectId, params); }
   // «ספרו מה היה» (wave 7 story track): planned by its own planner, applied through apply_template (story.ts)
   if (recipeId === STORY_RECIPE_ID) { const c = needsCaller(gov, principal); return planStoryFor(store, c.gov, c.principal, projectId, params); }
+  // «גדלים מול העיניים» (wave 8): owner's own session only, planned by its own planner, applied through apply_template (growing.ts)
+  if (recipeId === GROWING_RECIPE_ID) { const c = needsCaller(gov, principal); return planGrowingFor(store, c.gov, c.principal, projectId, params); }
   const p = store.getProject(projectId);
   const ctx = await context(store, projectId, recipeId, params);
   return view(p.revision, wrap(() => planRecipe(p.doc, recipeId, params, ctx)));
@@ -65,6 +68,7 @@ export async function planRecipeFor(store: Store, projectId: string, recipeId: s
 export async function applyRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, recipeId: string, params: unknown, expectedRevision?: number) {
   if (recipeId === FAMILY_FILM_RECIPE_ID) return applyFamilyFilmFor(store, gov, principal, projectId, params, expectedRevision);
   if (recipeId === STORY_RECIPE_ID) return applyStoryFor(store, gov, principal, projectId, params, expectedRevision);
+  if (recipeId === GROWING_RECIPE_ID) return applyGrowingFor(store, gov, principal, projectId, params, expectedRevision);
   const p = store.getProject(projectId);
   const ctx = await context(store, projectId, recipeId, params);
   const plan = wrap(() => planRecipe(p.doc, recipeId, params, ctx));
@@ -81,6 +85,7 @@ export async function regenerateRecipe(store: Store, gov: Governance, principal:
   const p = store.getProject(projectId);
   const run = own(p.doc.recipeRuns, runId);
   if (!run) throw new ApiError(404, 'not_found', `recipe run ${runId} not found`, { runId });
+  if (run.recipeId === GROWING_RUN_RECIPE_ID) return regenerateGrowingFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options);
   if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) return regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options);
   if (run.recipeId === STORY_RUN_RECIPE_ID) return regenerateStoryFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options);
   // "Protected" = a clip the run created whose content no longer matches what the run left (compared by content fingerprint,

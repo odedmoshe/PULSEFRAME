@@ -12,9 +12,10 @@ import path from 'node:path';
 /**
  * Files of the data directory a backup never holds: the assistant's key and its config (assistant/contract.ts ASSISTANT_KEY_FILE,
  * ASSISTANT_CONFIG_FILE); the library folder setting and the library's derived index (library/contract.ts LIBRARY_CONFIG_FILE,
- * LIBRARY_INDEX_FILE): after a restore the state is «הספרייה לא מוגדרת».
+ * LIBRARY_INDEX_FILE): after a restore the state is «הספרייה לא מוגדרת»; the owner's review-booth answers (booth/contract.ts
+ * OWNER_REVIEW_FILE: machine state of this computer, never carried to another).
  */
-export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json', 'library.json', 'library-index.sqlite'] as const;
+export const NEVER_BACKED_UP = ['assistant.key', 'assistant.json', 'library.json', 'library-index.sqlite', 'owner-review.json'] as const;
 export interface BackupResult { dest: string; /** Projects in the verified database copy. */ projects: number; databaseBytes: number; filesCopied: number; /** Newly copied media files whose content hash was checked against their name. */ filesVerified: number; filesSkipped: number; bytesCopied: number }
 
 const sha256File = (file: string) => new Promise<string>((resolve, reject) => {

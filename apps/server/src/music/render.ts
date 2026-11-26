@@ -52,6 +52,20 @@ export interface RenderOptions {
    * kit). Absent: the style's kit in MUSIC_KITS. Either way the bank must be that kit, of this style, part for part.
    */
   kit?: MusicKit;
+  /**
+   * kit:check (packages/evals/src/kit-check.ts, laptop check L6) and tests ONLY: render only the notes whose part tag (arrange.ts
+   * Note.part: a kit role, `drum.<kind>` or `click`) is listed; everything else of the render (reverb, master, ending, length) is
+   * unchanged. Absent: every note, the bytes of before it existed. A sampled part's notes are still planned and range-checked.
+   */
+  solo?: readonly string[];
+  /**
+   * kit:check and tests ONLY: called for every frame with the master's input after the DC blocker and the style's gain, before the clamp
+   * and the soft clip. Everything before that point (notes, reverb, DC blocker, gain) is linear in the notes, so the bus of a full render
+   * is the sum of the buses of solo renders of a partition of its parts (up to float rounding) as long as every note that draws from the
+   * shared noise generator stays in one group; the finished samples are not such a sum (the soft clip x − x³/3 and 16-bit rounding).
+   * Absent: not called; the bytes do not depend on it.
+   */
+  bus?: (frame: number, left: number, right: number) => void;
 }
 /** Thrown when a render is stopped through RenderOptions.cancel. */
 export class MusicCancelled extends Error {
@@ -103,7 +117,9 @@ export async function renderMusic(styleId: string, bars: number, seed: number, o
   if (!Number.isInteger(seed) || seed < 0 || seed > MUSIC_MAX_SEED) throw new RangeError(`a seed is a whole number from 0 to ${MUSIC_MAX_SEED}; got ${seed}`);
   if (opts.cancel?.cancelled) throw new MusicCancelled();
   const spec = styleSpec(layout.styleId);
-  const notes = opts.clickOnly ? clicks(layout) : arrange(spec, layout, compose(spec, layout, seed), seed);
+  const all = opts.clickOnly ? clicks(layout) : arrange(spec, layout, compose(spec, layout, seed), seed);
+  const solo = opts.solo;
+  const notes = solo ? all.filter((n) => solo.includes(n.part)) : all;
   notes.sort((a, b) => a.at - b.at); // stable: notes that start together keep the arranger's order
   const total = layout.totalFrames, S = layout.samplesPerBeat;
   // a recorded render: the bank is checked and every sampled note planned (range, frames) before any sample is made
@@ -135,6 +151,7 @@ export async function renderMusic(styleId: string, bars: number, seed: number, o
   const gain = spec.mix.gain, fadeFrom = total - 2 * S, fadeLen = total - fadeFrom;
   let x1L = 0, y1L = 0, x1R = 0, y1R = 0, clamped = 0, peak = 0, sum = 0;
   let ni = 0, work = 0;
+  const bus = opts.bus;
   for (let from = 0; from < total; from += step) {
     const to = Math.min(total, from + step);
     for (; ni < notes.length && notes[ni]!.at < to; ni++) {
@@ -176,6 +193,7 @@ export async function renderMusic(styleId: string, bars: number, seed: number, o
       L[r] = 0; R[r] = 0; send[r] = 0;
       y1L = flush(xl - x1L + 0.9995 * y1L); x1L = xl;
       y1R = flush(xr - x1R + 0.9995 * y1R); x1R = xr;
+      if (bus) bus(n, y1L * gain, y1R * gain);
       let fade = 1;
       if (n >= fadeFrom) { const u = 1 - (n - fadeFrom + 1) / fadeLen; fade = u * u; }
       for (let ch = 0; ch < 2; ch++) {

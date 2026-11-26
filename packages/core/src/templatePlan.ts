@@ -56,7 +56,7 @@ import { findTextPreset } from './textPresets.ts';
 import { ELEMENT_IDS } from './elements.ts';
 import { flashGapFrames } from './flashSafety.ts';
 import { clipEnd } from './validate.ts';
-import { handleAfterEnd, isRamped } from './speed.ts';
+import { isRamped, spareAfter } from './speed.ts';
 import { beatsFor, ownBeats } from './lineage.ts';
 
 type RT = T.RationalTime;
@@ -328,7 +328,7 @@ const freeOver = (t: Track, ranges: readonly (readonly [RT, RT])[]) => !t.locked
 
 /**
  * What a transition at `start` on existing track `t` would play over: the clip there that ends exactly at `start`.
- * Returns the free source frames after it (Infinity for a still picture), 0 when none can be used, or null when nothing ends there.
+ * Returns the free source frames after it (Infinity for a still picture or a freeze frame), 0 when none can be used, or null when nothing ends there.
  */
 function handleBefore(doc: ProjectDocument, t: Track | undefined, start: RT): number | null {
   const rate = doc.settings.frameRate;
@@ -338,8 +338,8 @@ function handleBefore(doc: ProjectDocument, t: Track | undefined, start: RT): nu
   if (isRamped(prev)) return 0; // set_transition refuses to follow a gradual speed change
   const asset = doc.assets[prev.assetId];
   if (!asset) return 0;
-  if (asset.kind === 'image') return Infinity;
-  return Math.max(0, T.frameIndexAt(handleAfterEnd(prev, asset.duration), rate));
+  const spare = spareAfter(prev, asset, rate); // null: a still image or a freeze frame never runs out (speed.ts, the one rule)
+  return spare === null ? Infinity : Math.max(0, spare);
 }
 
 /**

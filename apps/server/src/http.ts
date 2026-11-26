@@ -33,7 +33,7 @@ import { importArchive, planArchive, writeArchive } from './archive.ts';
 import { pipeline } from 'node:stream/promises';
 import { applyRecipe, planRecipeFor, regenerateRecipe } from './recipes.ts';
 import { applyTemplateFor, listTemplates, planTemplateFor, probeElements, regenerateTemplateFor, templateCatalog } from './templates.ts';
-import { outputDoc } from './export.ts';
+import { assertMayExportStill, outputDoc } from './export.ts';
 import { envelopeDerivative, multicamView, runMulticamSyncJob, setMulticamDerivatives, syncMulticam } from './multicamSync.ts';
 import { applyShorts, cachedShortCandidates, findShortCandidates, planReframeFor, planShortsFor, shortsApiError, withShortsErrors } from './shorts.ts';
 import { registerBrowserExportRoutes } from './browser-export.ts';
@@ -41,11 +41,14 @@ import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
 import { pearlsView } from './pearls.ts';
+import { audienceChangesFor } from './audiences/routes.ts';
 import { applyMusicFitFor, markJoinHeardFor, musicJoinPreviewFor, planMusicFitFor, refuseHeardByAgent } from './musicfit/routes.ts';
 import { MusicFitApplyRequestSchema, MusicFitPlanRequestSchema } from '@pulseframe/core';
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import type { MusicKit } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
+import { cancelStillsJob, readSharpFrames, startStillsJob, withStillsErrors } from './stills.ts';
+import { FindSharpBodySchema, ReadSharpQuerySchema, STILLS_JOB_TYPE } from '@pulseframe/core';
 import type { Presence } from './presence.ts';
 import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
 import { blobPresent, logMissingMedia, missingAssets, missingMediaError } from './mediaPresence.ts';
@@ -68,6 +71,8 @@ import { libraryOwner } from './library/contract.ts';
 import { registerLibraryRoutes } from './library/routes.ts';
 import { notBuiltRuntime, SEARCH_INDEX_JOB_TYPE, type SearchRuntime } from './search/contract.ts';
 import { registerSearchRoutes } from './search/routes.ts';
+import { registerBoothRoutes } from './booth/routes.ts';
+import type { RenderHost } from '@pulseframe/renderer';
 
 const TxBody = z
   .object({
@@ -141,7 +146,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[] }
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -412,6 +417,20 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const r = startMomentsJob(store, gov, p, c.req.param('id'), b, { derivatives, lane: momentsLaneOf(exporter.lane) });
     return 'cached' in r ? c.json(r, 200) : c.json({ jobId: r.id, status: r.status }, 202);
   });
+  // ----- «הפריים הכי חד» (wave 8 cover): a durable, model-free measurement of one stretch of one file; numbers only (stills.ts) -----
+  app.post('/api/v1/projects/:id/stills', async (c) => {
+    const p = need(c, 'edit');
+    const b = await body(c, FindSharpBodySchema);
+    const r = withStillsErrors(() => startStillsJob(store, gov, p, c.req.param('id'), b, { derivatives, lane: momentsLaneOf(exporter.lane) }));
+    return 'cached' in r ? c.json(r, 200) : c.json({ jobId: r.jobId, status: r.status }, 202);
+  });
+  app.get('/api/v1/projects/:id/stills', (c) => {
+    const p = need(c, 'observe');
+    gov.assertMayAct(p, c.req.param('id'), 'observe');
+    const q = ReadSharpQuerySchema.safeParse(c.req.query());
+    if (!q.success) throw new ApiError(400, 'invalid_request', z.prettifyError(q.error), { issues: q.error.issues });
+    return c.json(withStillsErrors(() => readSharpFrames(store, c.req.param('id'), q.data, { derivatives })));
+  });
   app.get('/api/v1/projects/:id/motion-tracks/:motionTrackId', (c) => {
     need(c, 'observe');
     const p = store.getProject(c.req.param('id'));
@@ -435,6 +454,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = store.getProject(c.req.param('id'));
     return c.json(pearlsView(p.doc, p.revision, who, c.req.query('sequenceId') || undefined));
   });
+  // ----- versions for an audience «גרסה לכל קהל» (wave 8; audiences/routes.ts): the change list, 501 audience_not_built until built -----
+  app.get('/api/v1/projects/:id/variants/:variantId/audience', (c) => { need(c, 'observe'); return c.json(audienceChangesFor(store, c.req.param('id'), c.req.param('variantId'))); });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { const p = need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params, gov, p)); });
   app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });
@@ -861,6 +882,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const pr = need(c, 'edit');
     gov.assertMayAct(pr, c.req.param('id'), 'job');
     const options = await c.req.json().catch(() => ({}));
+    assertMayExportStill(pr, options); // a full-size picture is the owner's own (wave 8 cover)
     gov.takeExportQuota(pr, 1, true);
     assertMayTakeRendered(pr, store.wholeProject(c.req.param('id')).doc, 'export this project');
     // exporter.start refuses once the storage ceiling is reached (the same check for this route, the batch route, retries and MCP)
@@ -878,7 +900,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // assertMayReleaseBudget): any other credential is refused before the ledger is looked at, so its answer tells nothing of it.
   app.post('/api/v1/jobs/:jobId/budget/release', (c) => { const p = need(c, 'observe'); const jobId = c.req.param('jobId'); assertMayReleaseBudget(p, jobId); gov.releaseUnknown(p, jobId); return c.json({ jobId, ledger: gov.ledgerFor(jobId) }); });
   app.post('/api/v1/jobs/:jobId/retry', (c) => { const pr = need(c, 'edit'); const old = store.getJob(c.req.param('jobId'));
-    if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
+    if (old.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, pr, old, 'retry'); const job = extras.imports.retry(old.id, pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: old.id }, 202); } gov.assertMayAct(pr, old.projectId, 'job'); assertMayTakeJobOutput(pr, old, 'retry this export'); assertMayExportStill(pr, old.input?.manifest?.options); const job = exporter.retry(c.req.param('jobId'), pr.actor); return c.json({ jobId: job.id, status: job.status, retryOf: job.input.retryOf }, 202); });
   app.get('/api/v1/jobs/:jobId', (c) => c.json(jobViewFor(need(c, 'observe'), store.getJob(c.req.param('jobId')))));
   app.get('/api/v1/jobs/:jobId/output', (c) => {
     const who = need(c, 'observe');
@@ -928,6 +950,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   const assistant = createAssistantHandlers({ cfg, store, gov, deps: extras.assistant ?? { adapters: new Map(), endpoint: () => null } });
   // MCP cancel_job reaches an assistant job through this same handler (one cancel path; mcp.ts bindAssistant)
   (mcp as { bindAssistant?: (a: AssistantJobControls) => void }).bindAssistant?.(assistant);
+  // «תא הבדיקה» (wave 8 booth track; booth/contract.ts BOOTH_ROUTES): every route the owner's own session only, GET included
+  registerBoothRoutes(app, { cfg, store, gov, need, exporter, renderHost: extras.renderHost ?? null, speech, assistant, search: searchRuntime, door: extras.door ?? null, ...(extras.musicKits ? { musicKits: extras.musicKits } : {}) });
   const assistantOwner = (c: Context<Env>) => {
     const p = need(c, 'observe');
     if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
@@ -1026,6 +1050,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));
     if (j.type === TRACKING_JOB_TYPE) return c.json(cancelTrackingJob(store, j.id, p.actor));
     if (j.type === MOMENTS_JOB_TYPE) return c.json(cancelMomentsJob(store, j.id, p.actor));
+    if (j.type === STILLS_JOB_TYPE) return c.json(cancelStillsJob(store, j.id, p.actor));
     if (j.type === STABILISE_JOB_TYPE) return c.json(cancelStabiliseJob(store, j.id, p.actor));
     if (j.type === SEARCH_INDEX_JOB_TYPE) return c.json(searchRuntime.cancel(j.id, p.actor)); // a picture scan (wave 7 search): the owner's own
     if (speech.handles(j)) return c.json(speech.cancel(j.id, p.actor));
@@ -1066,6 +1091,7 @@ export function startExportBatch(store: Store, gov: Governance, exporter: Export
   const parsed = ExportBatchBody.safeParse(raw ?? {});
   if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
   const b = parsed.data;
+  assertMayExportStill(pr, b.options); // a full-size picture is the owner's own (wave 8 cover); the plan refuses a still in a batch anyway
   const items = b.items ?? b.variantIds!.map((variantId) => ({ variantId }));
   assertMayTakeRendered(pr, store.wholeProject(projectId).doc, 'export this project');
   const doc = store.getProject(projectId).doc;

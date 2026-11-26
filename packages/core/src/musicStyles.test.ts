@@ -113,3 +113,15 @@ describe('barsForDuration', () => {
     expect(() => barsForDuration('music.pop', T.rt(-1, 1))).toThrow(RangeError);
   });
 });
+
+describe('review heard (wave 8 booth, decisions L3)', () => {
+  it('a style the lead set to heard from the booth report says so with the day, and is not approved', async () => {
+    const { musicLabel, MUSIC_HEARD_LABEL, MUSIC_APPROVED_LABEL, MUSIC_UNHEARD_LABEL } = await import('./musicStyles.ts');
+    expect(musicLabel({ review: 'heard', heardOn: '2026-11-27' })).toEqual({ he: MUSIC_HEARD_LABEL.he.replace('{date}', '2026-11-27'), en: MUSIC_HEARD_LABEL.en.replace('{date}', '2026-11-27') });
+    expect(musicLabel({ review: 'heard', heardOn: '2026-11-27' }).he).toContain('2026-11-27');
+    expect(musicLabel({ review: 'heard', heardOn: '2026-11-27' })).not.toEqual(MUSIC_APPROVED_LABEL);
+    expect(musicLabel({ review: 'heard' })).toEqual(MUSIC_UNHEARD_LABEL);
+    expect(musicLabel({ review: 'heard', heardOn: 'yesterday' })).toEqual(MUSIC_UNHEARD_LABEL);
+    expect(musicLabel({ review: 'approved' })).toEqual(MUSIC_APPROVED_LABEL);
+  });
+});

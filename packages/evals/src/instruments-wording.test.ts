@@ -137,6 +137,11 @@ describe('instruments strings', () => {
     expect(INSTRUMENTS_HE['instruments.heardOn']).toBe(MUSIC_RECORDED_HEARD_LABEL.he);
     expect(INSTRUMENTS_EN['instruments.heardOn']).toBe(MUSIC_RECORDED_HEARD_LABEL.en);
   });
+  it('the heard label is plural and impersonal, no gendered form (wave 8 booth pre-pass; decisions "booth"); the English is unchanged', () => {
+    expect(MUSIC_RECORDED_HEARD_LABEL.he).toBe('כלים מוקלטים — נשמעו במחשב הזה ({date})');
+    expect(MUSIC_RECORDED_HEARD_LABEL.he).not.toContain('בעל הפרויקט שמע');
+    expect(MUSIC_RECORDED_HEARD_LABEL.en).toBe('Recorded instruments — the owner listened ({date})');
+  });
   it('nothing says a recorded kit sounds better, real, warm or natural (the shared words, the editor\'s own words, the refusals)', () => {
     const texts = [...Object.values(INSTRUMENTS_HE), ...Object.values(INSTRUMENTS_EN), ...Object.values(INSTRUMENTS_UI_STRINGS.he), ...Object.values(INSTRUMENTS_UI_STRINGS.en), ...samples, ...samples.map((s) => translateRefusal('he', s) ?? ''),
       ...Object.values(INSTRUMENTS_SERVER_REFUSALS).map((r) => r.hint), MUSIC_RECORDED_UNHEARD_LABEL.he, MUSIC_RECORDED_UNHEARD_LABEL.en, MUSIC_RECORDED_HEARD_LABEL.he, MUSIC_RECORDED_HEARD_LABEL.en];

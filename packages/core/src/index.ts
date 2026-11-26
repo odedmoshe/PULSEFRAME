@@ -124,6 +124,12 @@ export * from './loudnessMatch.ts';
 export * from './sendOps.ts';
 export * from './sizeFit.ts';
 export * from './exportChecks.ts';
+// «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover, version 1): the contract is lead-built; stillsRank is W1's, printFit and
+// stillDocument W2's (stubs until then)
+export * from './stillsContract.ts';
+export * from './stillsRank.ts';
+export * from './printFit.ts';
+export * from './stillDocument.ts';
 // editing craft (wave 7 craft track; .artifacts/wave7/craft-decisions.md): the contract is lead-built; craftOps, timeEntry,
 // rippleTrim, pasteAttributes and findReplace bodies are W1's, versionDiff W2's
 export * from './craftContract.ts';
@@ -147,6 +153,9 @@ export * from './sourceRangeOps.ts';
 // «ספרו מה היה» (wave 7 story track): the contract is lead-built; story.ts and voiceActivity.ts are W1's
 export * from './storyContract.ts';
 export * from './story.ts';
+// «גדלים מול העיניים» (wave 8 growing track): the contract is lead-built; growing.ts is W1's
+export * from './growingContract.ts';
+export * from './growing.ts';
 export * from './voiceActivity.ts';
 // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit track): the contract and validation are lead-built; the op bodies,
 // musicGrid, impact and musicJoin are A's; musicSwap is B's
@@ -165,3 +174,15 @@ export * from './footageSearch.ts';
 // groundLocalAnswer / localPhrase are builder A's
 export * from './commandBar/understands.ts';
 export * from './commandBar/localIntent.ts';
+// «תא הבדיקה» (wave 8 booth track): the contract is lead-built; report.ts and scrub.ts bodies are builder W1's
+export * from './booth/contract.ts';
+export * from './booth/report.ts';
+export * from './booth/scrub.ts';
+export * from './booth/scene.ts';
+// a version for every audience «גרסה לכל קהל» (wave 8 audiences track): the contract, limits, validation and the three ops are
+// lead-built; audience.ts (rules, sound roles, change list) is W1's
+export * from './audienceLimits.ts';
+export * from './audienceContract.ts';
+export * from './audienceValidate.ts';
+export * from './audience.ts';
+export * from './audienceOps.ts';

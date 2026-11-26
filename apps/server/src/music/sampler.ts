@@ -5,6 +5,8 @@
  * ResolvedBank of decoded integer samples. LEAD: the types and signatures (final). BUILDER W1: the bodies.
  *
  * Contract (decisions §2 and plan §4.1 with C3, C9, C10, C13):
+ * - Edge notes (kit part `edge`): a note no region matches by key borrows the regions of the nearest matching key within `edge`
+ *   semitones (noteRegions), pitched from its own key; absent or 0 is selection as below, byte for byte.
  * - Region selection: key and velocity ranges, locc/hicc at the part's fixed CC values, sw_* by sw_default, trigger attack|first;
  *   round-robin is cut in v1 (seq_position 1 only; lorand/hirand: the region covering 0); every matching region sounds (layering);
  *   xfin/xfout give a constant linear gain at the fixed CC value.
@@ -63,7 +65,8 @@ export interface ResolvedInstrument { id: string; regions: readonly Region[]; zo
 /** What renderMusic gets for a recorded request: which pitched parts are sampled, with which instrument and settings. */
 export interface ResolvedBank {
   kitId: string; version: number; bank: string;
-  parts: Partial<Record<KitPartRole, { instrument: ResolvedInstrument; gainDb: number; vel: readonly [number, number]; attackMax?: number; releaseMax?: number }>>;
+  /** `edge` (core KitPart.edge, 0..12, absent = 0): how far a note no region matches by key may borrow the nearest matching key (noteRegions). */
+  parts: Partial<Record<KitPartRole, { instrument: ResolvedInstrument; gainDb: number; vel: readonly [number, number]; attackMax?: number; releaseMax?: number; edge?: number }>>;
 }
 /** How many frames of a zone the render needs (the loader decodes no more). */
 export interface ZoneNeed { instrument: string; zone: number; frames: number }
@@ -176,29 +179,56 @@ export function regionRatio(region: Pick<Region, 'keycenter' | 'keytrack' | 'tra
   return (zone.rate / SR) * pow2Cents(cents);
 }
 
+/**
+ * Whether a region can sound for a key at a MIDI velocity (`vel` null: any velocity). Every rule of selectRegions: key and velocity
+ * ranges, trigger attack|first, locc/hicc at the fixed CC values, sw_* (a keyswitch key is not a note; sw_default holds), seq_position 1,
+ * the random range covering 0, a crossfade gain above 0.
+ */
+function regionSounds(inst: ResolvedInstrument, r: Region, midi: number, vel: number | null): boolean {
+  if (midi < r.lokey || midi > r.hikey) return false;
+  if (vel !== null && (vel < r.lovel || vel > r.hivel)) return false;
+  if (r.trigger !== 'attack' && r.trigger !== 'first') return false;
+  for (const k of new Set([...Object.keys(r.locc), ...Object.keys(r.hicc)])) {
+    const n = Number(k), v = ccValue(inst.cc, n);
+    const lo = Object.hasOwn(r.locc, n) ? r.locc[n]! : 0, hi = Object.hasOwn(r.hicc, n) ? r.hicc[n]! : 127;
+    if (v < lo || v > hi) return false;
+  }
+  if (r.sw) {
+    if (midi >= r.sw.lokey && midi <= r.sw.hikey) return false; // a keyswitch key, not a note
+    if (r.sw.last !== null && r.sw.last !== r.sw.default) return false; // no key is ever switched: sw_default holds
+  }
+  if (r.seqPosition !== 1) return false; // round-robin cut in v1: position 1 only
+  if (!(r.lorand <= 0 && 0 < r.hirand)) return false; // the region covering 0 only
+  if (crossfadeGain(r, inst.cc) === 0) return false;
+  return true;
+}
 /** The regions that sound for one note (layering), in region order; an empty list when none matches. `vel` is the MIDI velocity. */
 export function selectRegions(inst: ResolvedInstrument, midi: number, vel: number): Region[] {
-  const out: Region[] = [];
-  for (const r of inst.regions) {
-    if (midi < r.lokey || midi > r.hikey || vel < r.lovel || vel > r.hivel) continue;
-    if (r.trigger !== 'attack' && r.trigger !== 'first') continue;
-    let ccOk = true;
-    for (const k of new Set([...Object.keys(r.locc), ...Object.keys(r.hicc)])) {
-      const n = Number(k), v = ccValue(inst.cc, n);
-      const lo = Object.hasOwn(r.locc, n) ? r.locc[n]! : 0, hi = Object.hasOwn(r.hicc, n) ? r.hicc[n]! : 127;
-      if (v < lo || v > hi) { ccOk = false; break; }
+  return inst.regions.filter((r) => regionSounds(inst, r, midi, vel));
+}
+/** A key some region names as a keyswitch (sw_lokey..sw_hikey): never a substitute key for an edge note. */
+const isKeyswitch = (inst: ResolvedInstrument, k: number): boolean => inst.regions.some((r) => r.sw !== null && k >= r.sw.lokey && k <= r.sw.hikey);
+/** Some region sounds at the key at any velocity (the key "matches"; velocity is matched afterwards, as for any note). */
+const keyMatches = (inst: ResolvedInstrument, k: number): boolean => inst.regions.some((r) => regionSounds(inst, r, k, null));
+/**
+ * Edge notes (kit part `edge`, ADR-0029): the key whose regions play a note, and those regions. A note that some region matches by key
+ * (every rule of selectRegions but velocity) is played by selectRegions at its own key, as without `edge`. Otherwise the nearest key
+ * at most `edge` semitones away that matches, lower first on a tie, never a keyswitch key, lends its regions: selectRegions at that
+ * key and the note's velocity. The playback ratio is always worked out from the note's own key (planRegion), so the note sounds at its
+ * own pitch, and INSTRUMENTS_LIMITS.maxRatio still applies. Beyond `edge` (or `edge` absent or 0): the note's own key, no region, out
+ * of range as before. planZones and renderSampled both call this, so what is decoded is what is played.
+ */
+export function noteRegions(inst: ResolvedInstrument, midi: number, vel: number, edge: number = 0): { key: number; regions: Region[] } {
+  const own = selectRegions(inst, midi, vel);
+  const reach = Number.isInteger(edge) ? Math.max(0, Math.min(12, edge)) : 0;
+  if (reach === 0 || own.length > 0 || keyMatches(inst, midi)) return { key: midi, regions: own };
+  for (let d = 1; d <= reach; d++) {
+    for (const k of [midi - d, midi + d]) {
+      if (k < 0 || k > 127 || isKeyswitch(inst, k) || !keyMatches(inst, k)) continue;
+      return { key: k, regions: selectRegions(inst, k, vel) };
     }
-    if (!ccOk) continue;
-    if (r.sw) {
-      if (midi >= r.sw.lokey && midi <= r.sw.hikey) continue; // a keyswitch key, not a note
-      if (r.sw.last !== null && r.sw.last !== r.sw.default) continue; // no key is ever switched: sw_default holds
-    }
-    if (r.seqPosition !== 1) continue; // round-robin cut in v1: position 1 only
-    if (!(r.lorand <= 0 && 0 < r.hirand)) continue; // the region covering 0 only
-    if (crossfadeGain(r, inst.cc) === 0) continue;
-    out.push(r);
   }
-  return out;
+  return { key: midi, regions: own };
 }
 
 type Part = NonNullable<ResolvedBank['parts'][KitPartRole]>;
@@ -210,6 +240,7 @@ interface RegionPlan {
   /** release starts here (frames from the note's start) */ gR: number; /** the note's frames */ n: number;
   att: number; hold: number; sus: number; dd: number; rd: number; fade: number; gainL: number; gainR: number;
   /** laps of the loop already played at gR (loop_sustain) */ kG: number;
+  /** the output frame at which the source runs out when nothing loops (zoneEnd), or -1 when a loop plays */ srcEnd: number;
 }
 const ceilDiv = (a: number, b: number): number => {
   if (a <= 0) return 0;
@@ -270,7 +301,7 @@ function planRegion(part: Part, inst: ResolvedInstrument, region: Region, midi: 
     while (kG > 0 && v - kG * loop.len < loop.s) kG--;
     while (v - kG * loop.len >= loop.e) kG++;
   }
-  return { zone, stepQ, table, p0, end, loop, mode, gR, n, att, hold, sus, dd, rd, fade, gainL, gainR, kG };
+  return { zone, stepQ, table, p0, end, loop, mode, gR, n, att, hold, sus, dd, rd, fade, gainL, gainR, kG, srcEnd: mode === 'none' || mode === 'one_shot' ? zoneEnd : -1 };
 }
 /** Frames of its zone the plan reads within the first `frames` output frames (never past its end). */
 function planNeed(p: RegionPlan, frames: number): number {
@@ -301,7 +332,7 @@ export function planZones(notes: readonly SampledNote[], bank: Pick<ResolvedBank
     if (!part) continue;
     const inst = part.instrument;
     const vel = midiVelocity(part, note.vel);
-    const regions = selectRegions(inst, note.midi, vel);
+    const { regions } = noteRegions(inst, note.midi, vel, part.edge);
     let ok = regions.length > 0;
     for (const region of regions) {
       const p = planRegion(part, inst, region, note.midi, vel, note.gate);
@@ -325,6 +356,31 @@ export function decodedBytesOf(needs: readonly ZoneNeed[], bank: Pick<ResolvedBa
   let bytes = 0;
   for (const n of needs) bytes += n.frames * (insts.get(n.instrument)?.zones[n.zone]?.channels ?? 2) * 4;
   return bytes;
+}
+
+/** One region of a note as planRegion plays it (noteReport). Frames are output frames at 48 kHz from the note's start. */
+export interface RegionReport {
+  zone: number; ratio: number; mode: 'none' | 'one_shot' | 'continuous' | 'sustain';
+  /** where the source runs out when nothing loops, or -1 when a loop plays */ srcEnd: number;
+  /** the frame the release starts at, and the release's length */ releaseAt: number; release: number;
+}
+/**
+ * kit:check and tests only (packages/evals/src/kit-check.ts, laptop check L4): how a note of a part would be played, read from the same
+ * noteRegions and planRegion that planZones and renderSampled use. `key` is the key whose regions play it (another key: an edge
+ * substitute); `regions` is empty, or `outOfRange` true, when the request would be refused (instruments_range). Reads no sample. Pure.
+ */
+export function noteReport(part: NonNullable<ResolvedBank['parts'][KitPartRole]>, midi: number, vel: number, gate: number): { key: number; outOfRange: boolean; regions: RegionReport[] } {
+  const inst = part.instrument;
+  const v = midiVelocity(part, vel);
+  const { key, regions } = noteRegions(inst, midi, v, part.edge);
+  const out: RegionReport[] = [];
+  let ok = regions.length > 0;
+  for (const region of regions) {
+    const p = planRegion(part, inst, region, midi, v, gate);
+    if (!p) { ok = false; continue; }
+    out.push({ zone: region.zone, ratio: p.stepQ / Q24, mode: p.mode, srcEnd: p.srcEnd, releaseAt: p.gR, release: p.n - p.gR });
+  }
+  return { key, outOfRange: !ok, regions: out };
 }
 
 /** Add one region's note into outL/outR[0..w). */
@@ -393,7 +449,7 @@ export function renderSampled(part: NonNullable<ResolvedBank['parts'][KitPartRol
   const inst = part.instrument;
   const v = midiVelocity(part, vel);
   const plans: RegionPlan[] = [];
-  for (const region of selectRegions(inst, midi, v)) {
+  for (const region of noteRegions(inst, midi, v, part.edge).regions) {
     const p = planRegion(part, inst, region, midi, v, gate);
     if (p) plans.push(p);
   }

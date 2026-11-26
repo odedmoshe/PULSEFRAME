@@ -12,6 +12,7 @@ import { Tooltip } from '../ds/index.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { RAIL_CATEGORIES, setPaletteView, setRail, setSettingsOpen, useChrome, type RailCategory } from './chromeState.ts';
 import { SettingsDialog, applyTheme, readTheme } from './SettingsDialog.tsx';
+import { BoothEntry } from './booth/BoothEntry.tsx';
 import { useEditorState } from './store.ts';
 import '../ds/chrome.css';
 
@@ -81,6 +82,8 @@ export function Rail() {
             <span className="pf-rail-ic" aria-hidden="true"><Keyboard /></span><span className="pf-rail-label">{S.shortcuts}</span>
           </button>
         </Tooltip>
+        {/* «תא הבדיקה» (wave 8 booth): the owner's own session only; renders nothing until builder W3 builds it */}
+        <BoothEntry />
         <button type="button" className="pf-rail-btn" data-testid="rail-settings" aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
           <span className="pf-rail-ic" aria-hidden="true"><Settings /></span><span className="pf-rail-label">{S.settings}</span>
         </button>

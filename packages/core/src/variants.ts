@@ -48,5 +48,8 @@ export function projectVariant(doc: ProjectDocument, variantId: string): Project
         if (text === undefined) continue;
         seg.text = text; seg.words = []; seg.timing = 'segment'; // the word timing described the master wording
       }
+  // «גרסה לכל קהל» (wave 8 audiences): the ONE place the audience rules apply, last, after every override above. W1 adds here, once
+  // audience.ts is built: `if (v.audience) applyAudience(out, v, report);` (report: an optional third parameter of projectVariant).
+  // applyAudience never throws (verifier C7). A size the version sets itself stays absolute; only inherited sizes scale (C3).
   return out;
 }

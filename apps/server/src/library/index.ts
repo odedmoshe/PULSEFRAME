@@ -80,6 +80,8 @@ export class LibraryService {
   /** The start-up check (it may start a build); idle() waits for it first. */
   private starting: Promise<void> = Promise.resolve();
   private startingNow = false;
+  /** Why the last build failed (cleared by the next one that is swapped in): the status names it, the previous index answering meanwhile. */
+  private lastBuildError: string | null = null;
 
   constructor(cfg: Config, opts: LibraryServiceOptions = {}) {
     this.cfg = cfg;
@@ -202,7 +204,11 @@ export class LibraryService {
     const prev = this.building?.done ?? Promise.resolve();
     const b = { cancel: false, progress: { rows: 0, entriesDone: 0, entriesTotal: 0 }, done: Promise.resolve() };
     this.building = b;
-    b.done = prev.then(() => this.build(b)).catch(() => { /* a failed build leaves the previous index; the status says why */ }).finally(() => { if (this.building === b) this.building = null; });
+    b.done = prev.then(() => this.build(b)).catch((e: unknown) => {
+      // a failed build leaves the previous index; the status says why
+      // the error's code, not its message: a message names paths in the data directory, and the status is every credential's
+      if (!this.closed) this.lastBuildError = String((e as { code?: unknown } | null)?.code ?? (e instanceof Error ? e.name : 'error')).slice(0, 40);
+    }).finally(() => { if (this.building === b) this.building = null; });
   }
   /** DELETE /library/reindex: stops a build; the previous index stays. True when one was running. */
   cancelBuild(): boolean {
@@ -222,7 +228,8 @@ export class LibraryService {
   private async build(b: { cancel: boolean; progress: { rows: number; entriesDone: number; entriesTotal: number } }): Promise<void> {
     if (b.cancel || this.closed) return;
     const rs = await this.rootState();
-    if (rs.state !== 'ok') return;
+    // a stopped service touches no file: its temp file name is the next start's (one data directory, one name)
+    if (rs.state !== 'ok' || b.cancel || this.closed) return;
     const rootReal = rs.rootReal!;
     const tmp = `${this.indexFile}.tmp`;
     for (const f of [tmp, `${tmp}-journal`, `${tmp}-wal`]) fs.rmSync(f, { force: true });
@@ -230,7 +237,11 @@ export class LibraryService {
     const db = new Database(tmp);
     let keep = false;
     try {
-      db.pragma('journal_mode = OFF');
+      // The rollback journal lives in memory: 'OFF' is refused by this SQLite build (the pragma answered 'delete'), and a journal FILE
+      // is created and deleted by NAME (<tmp>-journal). A build that was stopped while the next start's build already held that name
+      // deleted the new build's journal on its own rollback, the new build's COMMIT then failed (SQLITE_IOERR_DELETE_NOENT) and the
+      // previous index went on answering 'ready', one row short (lead, 2026-11-26). With no journal file, a build touches one name only.
+      if (db.pragma('journal_mode = MEMORY', { simple: true }) !== 'memory') throw new Error('the index build needs an in-memory journal');
       db.pragma('synchronous = OFF');
       db.exec(SCHEMA);
       const insItem = db.prepare('INSERT INTO items (key, kind, svg, credit, nc, bpm, dur, genre, mood, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -370,10 +381,14 @@ export class LibraryService {
       this.db = null;
       fs.renameSync(tmp, this.indexFile);
       keep = true;
+      this.lastBuildError = null;
       this.openIndex();
     } finally {
       if (db.open) db.close();
-      if (!keep) fs.rmSync(tmp, { force: true });
+      // A stopped service leaves its temp file as a process exit would (the next start sees a cut and rebuilds); it never removes
+      // the file by name, which may by now be the next start's build (2026-11-25: that build's rename failed, the stale index said
+      // 'ready', one row short).
+      if (!keep && !this.closed) fs.rmSync(tmp, { force: true });
     }
   }
 
@@ -398,6 +413,7 @@ export class LibraryService {
       state, ...(owner && root ? { root } : {}), counts, notListed: sum?.notListed ?? [], unusable,
       problems: [...('problems' in rs && rs.problems ? rs.problems : []), ...(sum?.problems ?? [])].slice(0, 20),
       ...(this.building ? { progress: { ...this.building.progress } } : {}),
+      ...(this.lastBuildError && rs.state === 'ok' ? { indexBuildFailed: { code: this.lastBuildError } } : {}),
       indexedAt: sum ? this.meta('builtAt') : null, verifiedAt: null, svgRasteriser,
     };
   }

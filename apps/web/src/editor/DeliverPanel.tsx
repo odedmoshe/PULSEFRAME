@@ -13,6 +13,7 @@ import { ArchiveFamilyOption } from './lifeline/ArchiveFamilyOption.tsx';
 import type { ArchiveLibraryMode } from '@pulseframe/core';
 import { ArchiveLibraryOption } from './library/ArchiveLibraryOption.tsx';
 import { CreditsPanel } from './library/CreditsPanel.tsx';
+import { AUDIENCE_UI_BUILT, AudiencePanel } from './audience/AudiencePanel.tsx';
 import { addVariantGuard, frameOps, isShortActive } from './shorts.view.ts';
 
 interface BatchJob { jobId: string; variantId: string; status: string; stage: string | null }
@@ -156,6 +157,8 @@ export function DeliverPanel() {
             })}
           </ul>
         )}
+        {/* «מה שונה בגרסה הזו» (wave 8 audiences): the viewed version for an audience, once W3 has built it */}
+        {AUDIENCE_UI_BUILT && viewed?.audience && <AudiencePanel key={`aud:${viewed.id}`} variant={viewed} />}
         {viewed && pictureSel && sel && (
           <div className="fields" data-testid="format-clip-overrides">
             <label className="check"><input type="checkbox" data-testid="format-hide-clip" checked={!!overrideOf?.hidden}

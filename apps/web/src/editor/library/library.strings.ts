@@ -33,6 +33,7 @@ export const LIBRARY_UI_HE = {
   noProject: 'קודם פותחים פרויקט, ואז אפשר להוסיף אליו',
   creditsCardRefused: 'כרטיס הקרדיטים לא נוסף: {reason}',
   archiveKeepOwnerOnly: 'ארכיון עם כל הקבצים אפשר להוריד רק מהחיבור של בעלי הפרויקט',
+  indexBuildFailed: 'הסריקה האחרונה נכשלה (קוד {code}). הרשימה שמוצגת היא מהסריקה הקודמת וייתכן שחסרים בה פריטים. לחצו «סריקה מחדש» כדי לנסות שוב',
 } as const;
 export const LIBRARY_UI_EN: Record<keyof typeof LIBRARY_UI_HE, string> = {
   audioTab: 'From the library', elementsBuiltin: 'Built-in', elementsLibrary: 'From the library',
@@ -60,6 +61,7 @@ export const LIBRARY_UI_EN: Record<keyof typeof LIBRARY_UI_HE, string> = {
   noProject: 'Open a project first, then you can add to it',
   creditsCardRefused: 'The credits card was not added: {reason}',
   archiveKeepOwnerOnly: 'Only the project owner can download an archive with every file. If you need one, ask them',
+  indexBuildFailed: 'The last scan failed (code {code}). The list shown is from the scan before it and may lack items. Press "Scan again" to retry',
 };
 export const LIBRARY_UI_STRINGS = { he: LIBRARY_UI_HE, en: LIBRARY_UI_EN } as const;
 export const fillLib = (s: string, vars: Record<string, string | number> = {}): string => s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));

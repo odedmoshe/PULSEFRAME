@@ -15,7 +15,7 @@
  */
 import type { Hono } from 'hono';
 import { z } from 'zod';
-import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema, SEND_API_REFUSALS } from '@pulseframe/core';
+import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema, SEND_API_REFUSALS, STILLS_REFUSALS } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { exportLicence, GENERIC_BLOCKER_HINT, renderDocFor, type Exporter, type Manifest } from './export.ts';
 import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
@@ -149,6 +149,8 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
     // without birth dates (the store answers so), and is refused altogether when a title shows an age: the film would silently
     // lack it (ADR-0021, people section; peoplePrivacy.ts rule 2b).
     assertMayTakeRendered(p, store.wholeProject(projectId).doc, 'export this project');
+    // «שמירת התמונה» (wave 8 cover): a saved picture is the server export's only (it is cropped and checked by ffmpeg there)
+    if (rawOptions.still !== undefined) { const r = STILLS_REFUSALS.stillBrowserRoute; throw new ApiError(r.status, r.code, r.message(), {}, r.hint); }
     const { doc: stored, revision } = store.getProject(projectId);
     const { manifest, blockers, warnings } = exporter.plan(stored, revision, rawOptions);
     // The tab renders the snapshot as it is, so the snapshot is the output's own document (export.ts renderDocFor, as the

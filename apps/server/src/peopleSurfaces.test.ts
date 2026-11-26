@@ -198,6 +198,8 @@ const PARAMS: Record<string, () => string> = {
   clipId: () => 'clp_none',
   // recorded instruments (wave 7): the one kit of this build (the heard route answers 403 to every agent before reading anything)
   kitId: () => 'kit.calm.vsco',
+  // «תא הבדיקה» (wave 8 booth): the routes answer 403 owner_required to every agent before reading the id
+  which: () => 'a', rowId: () => 'ffmpeg',
 };
 /** Queries and bodies that reach the part of a route that reads the project; any other POST gets a body its schema refuses. */
 const QUERY: Record<string, () => string> = {

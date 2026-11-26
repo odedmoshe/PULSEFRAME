@@ -24,6 +24,7 @@ export function LibraryStatusView({ status, lang }: { status: LibraryStatus; lan
         {stateText(lang, status.state)}
         {status.state === 'indexing' && status.progress && <> · {fillLib(L.indexing, { rows: status.progress.rows })}</>}
       </p>
+      {status.indexBuildFailed && <p role="alert" className="pf-lib-state is-err" data-testid={TID.settingsBuildFailed}>{fillLib(L.indexBuildFailed, { code: status.indexBuildFailed.code })}</p>}
       <div data-testid={TID.settingsCounts}>
         <ul className="pf-lib-counts">
           {kinds.map((k) => <li key={k}>{kindText(lang, k)}: <bdi className="num">{status.counts[k]}</bdi></li>)}
