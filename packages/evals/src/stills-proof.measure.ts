@@ -422,7 +422,7 @@ export async function runStillsMeasureChecks(opts: { forceBuilt?: boolean; log?:
 
     await check('M9', async () => {
       const pid = h.project('M9');
-      const a = await h.importFile(pid, ramp), b = await h.importFile(pid, motion), ph = await h.importFile(pid, photo);
+      const a = await h.importFile(pid, barMp4), b = await h.importFile(pid, motion), ph = await h.importFile(pid, photo); // 1200 frames: 601 lies inside the file
       const clipB = h.addClip(pid, b, 0, 30);
       const t = tokens.agent;
       const long = await h.rest('POST', `/projects/${pid}/stills`, { assetId: a, from: 0, to: 601 }, t);
