@@ -7,6 +7,7 @@ import type { LocalToolDescriptor } from '@pulseframe/providers';
 import type { Principal } from './auth.ts';
 import type { ModelStore } from './models.ts';
 import type { JobRow } from './store.ts';
+import type { OpenWarning } from './autonomy-mode.ts';
 
 /** What a run reads: a timeline clip (its exact source span) or a library asset, optionally a frame range of it. */
 export const RunSourceSchema = z.union([
@@ -28,7 +29,7 @@ export type SetupCode = 'ready' | 'provider_not_configured' | 'provider_unreacha
   | 'engine_unverified' | 'model_missing' | 'licence_blocked' | 'host_not_allowed' | 'disk_insufficient';
 /** Every setup code, in the order a person fixes them (for tests and UI tables). */
 export const SETUP_CODES: readonly SetupCode[] = ['ready', 'provider_not_configured', 'provider_unreachable', 'engine_not_configured', 'engine_not_working', 'engine_unverified', 'model_missing', 'licence_blocked', 'host_not_allowed', 'disk_insufficient'];
-export interface SetupState { code: SetupCode; detail: string; hosts?: string[]; missingBytes?: number; freeBytes?: number; device?: string | null; versions?: Record<string, string> }
+export interface SetupState { code: SetupCode; detail: string; hosts?: string[]; missingBytes?: number; freeBytes?: number; device?: string | null; versions?: Record<string, string>; /** open server mode: what would have refused and now goes ahead, told (autonomy-mode.ts openWarning) */ warnings?: OpenWarning[] }
 export interface JobProgress { unit: 'frames' | 'chunks' | 'phrases' | 'samples'; done: number; total: number; basis: 'measured' }
 export interface JobEta { seconds: number | null; basis: 'this-run' | 'measured-profile' | 'none' }
 export interface ChunkRecord { k: number; firstFrame: number; frames: number; sha256: string[]; seconds: number; requestId: string }

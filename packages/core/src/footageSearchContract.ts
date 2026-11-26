@@ -104,6 +104,8 @@ export const SearchSetupSchema = z.object({
   missingBytes: z.number().int().nonnegative().optional(),
   device: z.enum(['cuda', 'cpu']).nullable().optional(),
   versions: z.record(z.string(), z.string()).optional(),
+  /** Open server mode (ADR-0036, row H2): the picture model's licence, quoted, when it is not in the build's list; search runs. */
+  warnings: z.array(z.object({ code: z.string(), he: z.string(), en: z.string() }).passthrough()).optional(),
 }).strict();
 export type SearchSetup = z.infer<typeof SearchSetupSchema>;
 

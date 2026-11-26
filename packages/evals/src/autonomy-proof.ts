@@ -14,7 +14,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
-import { FLOOR_SITES } from '@pulseframe/server/autonomy.ts';
+import { FLOOR_SITES, OPEN_GATES } from '@pulseframe/server/autonomy.ts';
 import * as T from '@pulseframe/time';
 
 const root = path.resolve(import.meta.dirname, '../../..');
@@ -28,7 +28,8 @@ async function main() {
   fs.rmSync(art, { recursive: true, force: true });
   fs.mkdirSync(art, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4') });
-  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), mode: 'open', modeFromEnv: true, backupDir: null, libraryDir: null });
+  // maxUploadBytes 4096 with no owner setting: open mode lifts the cap (row I9), guarded refuses the same upload (413) as today
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), mode: 'open', modeFromEnv: true, backupDir: null, libraryDir: null, maxUploadBytes: 4096, maxUploadBytesSet: false });
   const PORT = Number(new URL(s.url).port);
   const origin = s.url;
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
@@ -71,6 +72,7 @@ async function main() {
     let assetId: string | undefined = upBody.assetId;
     if (!assetId && upBody.jobId) { const j = await waitJob(upBody.jobId); assetId = j?.output?.assetId; }
     check('the agent made a project and imported a synthetic clip (REST upload, its own credential)', pr.status === 201 && !!assetId, { status: up.status, assetId });
+    check('I9: the clip is larger than the 4096-byte cap of guarded mode; open took it and the answer says uploads have no cap', up.status === 201 && upBody.warnings?.[0]?.code === 'upload_uncapped' && fs.statSync(fixture.file).size > 4096, { status: up.status, warning: upBody.warnings?.[0]?.code });
     const ed = await call('apply_transaction', { projectId: pid, label: 'agent cut', ops: [{ op: 'add_clip', args: { assetId, start: T.frameTime(0, R) } }, { op: 'add_person', args: { name: 'Noa', birthDate: '2019-03-04' } }] });
     check('the agent edits (add_clip) and writes a person with a birth date, as registered ops through Store.commit', !ed.isError, ed.isError ? ed.data : { revision: ed.data?.revision });
     const full = await rest(`/projects/${pid}`, undefined, agent);
@@ -87,6 +89,11 @@ async function main() {
     const ver = await call('save_version', { projectId: pid, name: 'agent' });
     const ren = !ver.isError ? await call('rename_version', { projectId: pid, versionId: ver.data.version.id, name: 'agent, renamed' }) : ver;
     check('the agent saves and renames a version over MCP (rename was owner-only, A14)', !ren.isError, ren.isError ? ren.data : undefined);
+    const script = Array.from({ length: 61 }, (_, i) => `Sentence number ${i + 1}.`).join(' ');
+    const nar = await call('narrate_script', { projectId: pid, text: script, start: T.frameTime(0, R) });
+    check('I11: a 61-sentence script is not refused for its length (no voice model here: voice_not_ready, an honest setup state)', nar.code !== 'script_too_long' && nar.code === 'voice_not_ready', { code: nar.code });
+    const ctl = await call('get_controls', { projectId: pid });
+    check('get_controls: serverMode open, and the standing warnings in Hebrew and English (uploads have no cap)', ctl.data?.serverMode === 'open' && ctl.data?.openWarnings?.some((w: any) => w.code === 'upload_uncapped' && /[֐-׿]/.test(w.he) && w.en), { openWarnings: ctl.data?.openWarnings?.map((w: any) => w.code) });
     const approvals = await rest(`/projects/${pid}/approvals`);
     const proposals = await rest(`/projects/${pid}/proposals`);
     check('nothing asked the owner: no approval and no proposal was created', approvals.body?.approvals?.length === 0 && proposals.body?.proposals?.length === 0, { approvals: approvals.body?.approvals?.length, proposals: proposals.body?.proposals?.length });
@@ -127,6 +134,10 @@ async function main() {
     check('guarded: renaming a version is refused (owner_required), as today', ren2.isError && ren2.code === 'owner_required', { code: ren2.code });
     const dl2 = await call2('start_model_download', { projectId: pid, kind: 'capability', id: 'image.upscale', confirmBytes: 1 });
     check('guarded: starting a model download is refused (human_approval_required), as today', dl2.isError && dl2.code === 'human_approval_required', { code: dl2.code });
+    const up2 = await fetch(`${origin}/api/v1/projects/${pid}/assets`, { method: 'POST', headers: { ...agent, 'x-filename': 'fixture2.mp4', connection: 'close' }, body: fs.readFileSync(fixture.file) });
+    check('guarded: the same upload above 4096 bytes is refused 413 upload_too_large, as today', up2.status === 413, { status: up2.status });
+    const nar2 = await call2('narrate_script', { projectId: pid, text: Array.from({ length: 61 }, (_, i) => `Sentence number ${i + 1}.`).join(' '), start: T.frameTime(0, R) });
+    check('guarded: the 61-sentence script is refused script_too_long, as today', nar2.isError && nar2.code === 'script_too_long', { code: nar2.code });
     const ex2 = await call2('export_project', { projectId: pid, range: { startFrame: 0, endFrame: 15 }, quality: 'standard' });
     check('guarded: an ordinary export still starts, as today (the people refusal applies only to titles that show an age)', !ex2.isError, ex2.isError ? ex2.data : undefined);
     await mcp2.close().catch(() => {});
@@ -147,6 +158,9 @@ async function main() {
     const src = path.join(root, 'apps/server/src');
     const bad = FLOOR_SITES.filter((f) => { const line = fs.readFileSync(path.join(src, f.file), 'utf8').split('\n').find((l) => l.includes(f.needle)); return !line || !line.includes('isOwnerFloor(') || /actsAsOwner|ownerKeeps/.test(line); });
     check(`source walk: the ${FLOOR_SITES.length} floor sites read isOwnerFloor and never actsAsOwner`, bad.length === 0, bad.length ? bad : undefined);
+    const wRows = OPEN_GATES.filter((g) => g.reads === 'mode');
+    const badW = wRows.filter((g) => { const line = fs.readFileSync(path.join(src, g.file), 'utf8').split('\n').find((l) => l.includes(g.needle)); return !line || !line.includes('warnsOpen(') || line.includes('isOwnerFloor('); });
+    check(`source walk: the ${wRows.length} warn-and-continue sites (D1 D5 D6 D8 H1 H2 I9 I11) read the server mode (warnsOpen), never the floor`, badW.length === 0 && new Set(wRows.map((g) => g.id)).size === 8, badW.length ? badW : undefined);
   } finally {
     await s.close();
     const failed = checks.filter((c) => !c.ok);

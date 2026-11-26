@@ -18,7 +18,7 @@ import { z } from 'zod';
 import type { Principal, Scope } from './auth.ts';
 import type { Config } from './config.ts';
 import type { Governance } from './governance.ts';
-import { assertMayHandleImportJob, decodeUploadHeader, type DropDoor, type ImportQueue } from './importContracts.ts';
+import { assertMayHandleImportJob, decodeUploadHeader, uploadCapFor, type DropDoor, type ImportQueue } from './importContracts.ts';
 import { ApiError, type Store } from './store.ts';
 import { isOwnerFloor } from './autonomy.ts';
 
@@ -54,7 +54,7 @@ export function registerImportRoutes(app: Hono<Env>, deps: { cfg: Config; store:
     const lastModified = declaredLastModified(c.req.header('x-pf-last-modified'));
     const job = await imports.receive({
       projectId, actor: p.actor, body: Readable.fromWeb(c.req.raw.body as any), name, via, declaredBytes: declaredLength(c.req.header('content-length')),
-      maxBytes: cfg.maxUploadBytes, commitKind: 'background', signal: c.req.raw.signal,
+      maxBytes: uploadCapFor(cfg), commitKind: 'background', signal: c.req.raw.signal,
       ...(relativePath ? { relativePath } : {}), ...(batchId ? { batchId } : {}), ...(lastModified ? { declaredLastModified: lastModified } : {}),
     });
     return c.json({ job: imports.view(job) }, 202);

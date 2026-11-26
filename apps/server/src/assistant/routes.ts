@@ -60,7 +60,7 @@ const owner = (p: Principal) => {
 };
 
 export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHandlers & AssistantJobControls {
-  const rt: AssistantRuntime = { ...ctx, files: new AssistantFiles(ctx.cfg.dataDir, ctx.cfg.assistantHosts) };
+  const rt: AssistantRuntime = { ...ctx, files: new AssistantFiles(ctx.cfg.dataDir, ctx.cfg.assistantHosts, ctx.cfg) };
   const jobs = new AssistantJobs(rt);
   /** The last local check, in memory only (a restart forgets it; the owner checks again). */
   let lastCheck: AssistantLocalCheck | null = null;
@@ -81,6 +81,7 @@ export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHa
       adapters: [...ctx.deps.adapters.keys()],
       // wave 7: the local settings and the last check, when the local adapter is chosen (owner only: assistantStatusFor)
       ...(s.local ? { local: c.local ? { port: c.local.port, timeoutSeconds: c.local.timeoutSeconds, lastCheck: lastCheck ? { ...lastCheck } : null } : null } : {}),
+      ...(s.warnings ? { warnings: s.warnings } : {}), // D6, open mode: the unlisted host in use, named
     };
   };
   return {

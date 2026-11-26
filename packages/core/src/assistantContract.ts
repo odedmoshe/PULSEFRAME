@@ -132,6 +132,8 @@ export interface AssistantStatus {
   adapters: string[];
   /** The local assistant's settings and its last check (wave 7); absent or null when the local adapter is not chosen. Owner only (visibility.ts). */
   local?: AssistantLocalStatus | null;
+  /** Open server mode (ADR-0036, row D6): the chosen host that PF_ASSISTANT_HOSTS does not list is used; this names it (he, en). */
+  warnings?: { code: string; he: string; en: string; host?: string }[];
 }
 /**
  * One held amount (budget_ledger state 'unknown'): the request's job, what stays counted, when the request was made, and how the

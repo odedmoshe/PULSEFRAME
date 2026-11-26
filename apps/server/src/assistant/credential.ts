@@ -16,6 +16,7 @@ import path from 'node:path';
 import { ASSISTANT_TOGGLES_DEFAULT, AssistantConfigBodySchema, type AssistantConfigBody, type AssistantKeyState } from '@pulseframe/core';
 import { CHAT_HOST_PATTERN } from '@pulseframe/providers';
 import { ApiError } from '../store.ts';
+import { warnsOpen, type ServerMode } from '../autonomy-mode.ts';
 import { ASSISTANT_CONFIG_FILE, ASSISTANT_FILE_MODE, ASSISTANT_KEY_FILE } from './contract.ts';
 
 /** The configuration before the owner has set anything: nothing chosen, no prices, no limits, both switches off. */
@@ -45,9 +46,10 @@ export function redact(key: string | null): (text: string) => string {
 
 /**
  * The host as stored: a plain lowercase host name. `https://host` (with nothing after it but an optional '/') is accepted
- * and reduced to `host`; http, a port, a path or an address literal are refused, and so is a host PF_ASSISTANT_HOSTS does not list.
+ * and reduced to `host`; http, a port, a path or an address literal are refused, and so is a host PF_ASSISTANT_HOSTS does not list
+ * (unless `anyListed`: open server mode, row D6, where the host is kept and named in a warning by the setup state).
  */
-export function normalizeHost(input: string | null, allowedHosts: readonly string[]): string | null {
+export function normalizeHost(input: string | null, allowedHosts: readonly string[], anyListed = false): string | null {
   if (input === null) return null;
   let h = input.trim().toLowerCase();
   if (/^[a-z][a-z0-9+.-]*:\/\//.test(h)) {
@@ -55,14 +57,15 @@ export function normalizeHost(input: string | null, allowedHosts: readonly strin
     h = h.slice('https://'.length).replace(/\/$/, '');
   }
   if (!CHAT_HOST_PATTERN.test(h)) throw new ApiError(400, 'invalid_request', `"${input}" is not a host name`, { host: input }, 'Give the host name only (no port, path or address), for example api.example.com.');
-  if (!allowedHosts.includes(h)) throw new ApiError(409, 'host_not_allowed', `the host ${h} is not listed in PF_ASSISTANT_HOSTS`, { host: h, allowed: [...allowedHosts] }, 'Add exactly this host to PF_ASSISTANT_HOSTS and restart the server, then save again.');
+  if (!allowedHosts.includes(h) && !anyListed) throw new ApiError(409, 'host_not_allowed', `the host ${h} is not listed in PF_ASSISTANT_HOSTS`, { host: h, allowed: [...allowedHosts] }, 'Add exactly this host to PF_ASSISTANT_HOSTS and restart the server, then save again.');
   return h;
 }
 
 export class AssistantFiles {
   readonly configFile: string;
   readonly keyFile: string;
-  constructor(dataDir: string, private allowedHosts: readonly string[]) {
+  /** `modeCfg`: the server mode to read (config.ts mode/liveMode); absent = guarded behaviour (the host must be listed). */
+  constructor(dataDir: string, private allowedHosts: readonly string[], private modeCfg?: { mode: ServerMode; liveMode?: () => ServerMode }) {
     this.configFile = path.join(dataDir, ASSISTANT_CONFIG_FILE);
     this.keyFile = path.join(dataDir, ASSISTANT_KEY_FILE);
   }
@@ -78,7 +81,7 @@ export class AssistantFiles {
   }
   /** Validate (host) and store the owner's config. The body never holds a key (its schema is strict). */
   writeConfig(body: AssistantConfigBody): AssistantConfigBody {
-    const config: AssistantConfigBody = AssistantConfigBodySchema.parse({ ...body, host: normalizeHost(body.host, this.allowedHosts) });
+    const config: AssistantConfigBody = AssistantConfigBodySchema.parse({ ...body, host: normalizeHost(body.host, this.allowedHosts, !!this.modeCfg && warnsOpen(this.modeCfg)) }); // D6: open mode keeps an unlisted host
     writePrivateFile(this.configFile, `${JSON.stringify(config, null, 2)}\n`);
     return config;
   }

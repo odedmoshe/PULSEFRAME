@@ -62,6 +62,7 @@ import type { Principal } from './auth.ts';
 import type { Config } from './config.ts';
 import type { Governance } from './governance.ts';
 import { ApiError, type JobRow } from './store.ts';
+import { openWarning, warnsOpen, type OpenWarning } from './autonomy-mode.ts';
 import { actsAsOwner, ownerKeeps } from './autonomy.ts';
 
 export type { ImportJobError, ImportJobOutput, ImportJobProgressOutput } from '@pulseframe/core';
@@ -286,6 +287,15 @@ export const DROP_DEFAULTS: DropLimits = {
   maxFilenameHeaderBytes: MAX_NAME_HEADER_BYTES, maxHelloBytes: 512,
 };
 /** The limits of a code on this server: the defaults with the configured lifetime, code budget and per-file cap. */
+/**
+ * The per-file upload cap (ADR-0036 row I9). Guarded: PF_MAX_UPLOAD_BYTES or its 2 GiB default, as before. Open: the owner's
+ * PF_MAX_UPLOAD_BYTES when it is set; otherwise none (Infinity), and what decides is what already decided below the cap: the
+ * storage ceiling (when the owner set one) and the free-disk room (importQueue.ts; an upload of unknown size is cut at that room).
+ * The phone drop door keeps its own limit (a door for another device: dropLimitsFrom reads maxUploadBytes as before).
+ */
+export const uploadCapFor = (cfg: Pick<Config, 'maxUploadBytes' | 'maxUploadBytesSet' | 'mode' | 'liveMode'>): number => (cfg.maxUploadBytesSet || !warnsOpen(cfg) ? cfg.maxUploadBytes : Number.POSITIVE_INFINITY);
+/** I9: the standing warning while uploads have no per-file cap (get_controls), or none. */
+export const uploadCapWarnings = (cfg: Pick<Config, 'maxUploadBytes' | 'maxUploadBytesSet' | 'mode' | 'liveMode'>): OpenWarning[] => (Number.isFinite(uploadCapFor(cfg)) ? [] : [openWarning('upload_uncapped', {})]);
 export function dropLimitsFrom(cfg: Pick<Config, 'dropTtlMinutes' | 'dropCodeBytes' | 'maxUploadBytes'>): DropLimits {
   return { ...DROP_DEFAULTS, ttlMs: cfg.dropTtlMinutes * 60_000, idleMs: cfg.dropTtlMinutes * 60_000, maxCodeBytes: cfg.dropCodeBytes, maxFileBytes: cfg.maxUploadBytes };
 }

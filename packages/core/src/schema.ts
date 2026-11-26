@@ -357,6 +357,11 @@ export const AssetSchema = z
             models: z.array(z.object({ path: z.string(), sha256: z.string().regex(/^[0-9a-f]{64}$/) }).strict()).max(16).optional(),
             /** sha256:<hex> logic digest (graphDigest or codeDigest) the job ran. graphDigest keeps its meaning for ComfyUI. */
             logicDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/).optional(),
+            /**
+             * ADR-0036 row H1 (open server mode): the models whose licence was warned about when the job was admitted, as the
+             * descriptor records them. Any entry makes the export show the non-commercial warning (server export.ts).
+             */
+            modelLicences: z.array(z.object({ path: z.string(), licence: z.string().nullable(), commercialUse: z.enum(['allowed', 'conditional', 'prohibited', 'unknown']) }).strict()).max(16).optional(),
           })
           .strict()
           .optional(),

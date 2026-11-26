@@ -32,6 +32,8 @@ import type { Config } from './config.ts';
 import { describeMedia } from './ingest.ts';
 import { ModelStore } from './models.ts';
 import { assertStorageRoom } from './storage.ts';
+import { openWarning, warnsOpen } from './autonomy-mode.ts';
+import { openAdmission, splitBlockers } from './openBlockers.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { PYTHON_WORKER_FLAGS } from './pythonArgs.ts';
 
@@ -320,8 +322,14 @@ export class LocalTools implements LocalToolRunner {
 
   /** Honest setup state, in the order a person fixes things. Read-only; probes are cached for a minute once they succeed. */
   async setup(d: LocalToolDescriptor): Promise<SetupState> {
-    const lic = licenceBlockers(d, this.cfg.distributionProfile);
-    if (lic.length) return { code: 'licence_blocked', detail: `not allowed in the ${this.cfg.distributionProfile} profile: ${lic.map((b) => b.message).join('; ')}` };
+    const lic = this.split(d, licenceBlockers(d, this.cfg.distributionProfile));
+    if (lic.blockers.length) return { code: 'licence_blocked', detail: `not allowed in the ${this.cfg.distributionProfile} profile: ${lic.blockers.map((b) => b.message).join('; ')}` };
+    const s = await this.setupAfterLicence(d);
+    return lic.warnings.length ? { ...s, warnings: [...lic.warnings, ...(s.warnings ?? [])] } : s; // H1, open mode: the licence told
+  }
+  /** D8/H1: in open mode the egress and licence blockers become warnings (openBlockers.ts); guarded = unchanged. One read of the mode. */
+  private split<B extends Blocker>(d: LocalToolDescriptor, b: B[]) { return splitBlockers(d, this.cfg.distributionProfile, b, warnsOpen(this.cfg)); }
+  private async setupAfterLicence(d: LocalToolDescriptor): Promise<SetupState> {
     if (installedCodeDigest(d) !== d.codeDigest) return { code: 'engine_not_working', detail: 'the installed tool code differs from the reviewed digest (code_digest_mismatch); reinstall this build' };
     const engine = await this.engineState(d);
     if (engine.code !== 'ready') return engine;
@@ -330,10 +338,12 @@ export class LocalTools implements LocalToolRunner {
     const missingBytes = status.reduce((n, s) => n + (s.state === 'ready' ? 0 : s.missingBytes), 0);
     if (missing.length) {
       const hosts = [...new Set(missing.map((m) => (m.source ? new URL(m.source).hostname : '(no source)')))].filter((h) => !this.cfg.modelHosts.some((a) => (a.startsWith('.') ? h.endsWith(a) : h === a)));
-      if (hosts.length) return { code: 'host_not_allowed', detail: `the model files come from ${hosts.join(', ')}, which PF_MODEL_HOSTS does not allow`, hosts, missingBytes };
+      // D1, open mode: a host outside the list is used and named in a warning; a model with no source at all stays refused (a fact)
+      if (hosts.length && (!warnsOpen(this.cfg) || hosts.includes('(no source)'))) return { code: 'host_not_allowed', detail: `the model files come from ${hosts.join(', ')}, which PF_MODEL_HOSTS does not allow`, hosts, missingBytes };
+      const told = hosts.length ? { warnings: hosts.map((host) => openWarning('host_not_listed', { host })) } : {};
       const free = freeBytes(this.cfg.toolsModelsDir);
-      if (free !== null && free < missingBytes + DISK_MARGIN) return { code: 'disk_insufficient', detail: `the download needs ${missingBytes} bytes plus ${DISK_MARGIN} spare; ${free} are free`, missingBytes, freeBytes: free };
-      return { code: 'model_missing', detail: `${missing.length} model file(s) are not present and verified: ${missingBytes} bytes to download (owner approval)`, missingBytes };
+      if (free !== null && free < missingBytes + DISK_MARGIN) return { code: 'disk_insufficient', detail: `the download needs ${missingBytes} bytes plus ${DISK_MARGIN} spare; ${free} are free`, missingBytes, freeBytes: free, ...told };
+      return { code: 'model_missing', detail: `${missing.length} model file(s) are not present and verified: ${missingBytes} bytes to download (owner approval)`, missingBytes, ...told };
     }
     return { ...engine, missingBytes: 0 };
   }
@@ -395,7 +405,8 @@ export class LocalTools implements LocalToolRunner {
 
   prepare(d: LocalToolDescriptor, req: RunRequest): Record<string, unknown> {
     if (d.state !== 'published') throw new ApiError(409, 'capability_is_draft', 'drafts cannot be executed');
-    const blockers = runBlockers(d, this.cfg.distributionProfile, installedCodeDigest(d));
+    const split = this.split(d, runBlockers(d, this.cfg.distributionProfile, installedCodeDigest(d)));
+    const blockers = split.blockers;
     if (blockers.length) throw new ApiError(409, 'capability_blocked', `capability ${d.id} is not eligible to run in the ${this.cfg.distributionProfile} profile`, { blockers });
     let params: Record<string, number | string | boolean>;
     try { params = resolveParams(d, req.params ?? {}).resolved; } catch (e) {
@@ -454,7 +465,7 @@ export class LocalTools implements LocalToolRunner {
       if (baseVariantId && !own(doc.variants, baseVariantId)) throw new ApiError(404, 'not_found', `format ${baseVariantId} not found`, { baseVariantId });
       const name = typeof params.name === 'string' && params.name.trim() ? params.name.trim() : variantId ? own(doc.variants, variantId)!.name : DEFAULT_NAME[to] ?? `${to} (machine translation)`;
       const input: LocalJobInput = { ...base, apply: 'library', preconditions: [], translate: { from, to, source, variantId, baseVariantId, name } };
-      return { local: input };
+      return { ...openAdmission(split), local: input };
     }
     // sound tools: an exact sample range on the source asset's own clock, rounded outward so the result covers the clip
     if (!req.source) throw new ApiError(422, 'source_required', 'say which sound to process: a clip, or a library asset with an optional frame range');
@@ -492,7 +503,7 @@ export class LocalTools implements LocalToolRunner {
     // Stale-result protection (SPEC §20): the clip and anything else the caller says the placement depends on.
     const preconditions = [...new Set([...(clipId ? [clipId] : []), ...(req.dependsOn ?? [])])].map((entityId) => ({ entityId, version: this.store.entityVersion(req.projectId, entityId)?.revision ?? 0 }));
     const input: LocalJobInput = { ...base, apply, preconditions, audio: { assetId: asset.id, clipId, startSample, endSample, sampleRate: SAMPLE_RATE, channels: d.task === 'voice-clean' ? 1 : 2 } };
-    return { local: input };
+    return { ...openAdmission(split), local: input };
   }
 
   // ------------------------------------------------------------ drive
@@ -753,6 +764,7 @@ export class LocalTools implements LocalToolRunner {
         sourceAssetIds: [src.id], outputName: d.outputs[0]!.name, outputRole: d.outputs[0]!.role, encoding: d.outputs[0]!.encoding,
         provider: { id: 'local', engine, device: 'cpu' }, audio: 'processed', sourceRangeStart: T.normalize(T.rt(a.startSample, SAMPLE_RATE)),
         ...(d.models.length ? { models: d.models.map((m) => ({ path: m.path, sha256: m.sha256! })) } : {}),
+        ...(job.input.openLicences ? { modelLicences: job.input.openLicences } : {}), // H1: a licence warning stood at admission
       } },
     };
     const imp = this.store.commit({ projectId: job.projectId, actor: job.actor, allowInternal: true, label: `Result of ${d.title.en}`, ops: [{ op: 'import_asset', args: { asset } }] });
