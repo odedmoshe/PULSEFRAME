@@ -95,7 +95,13 @@ export type SoundRoleReason = (typeof SOUND_ROLE_ORDER)[number];
 export interface SoundRoleReading { trackId: string; role: SoundRole; why: SoundRoleReason }
 
 // ---------- the list of changes (GET …/variants/:variantId/audience, MCP get_audience_changes) ----------
-/** One application of a rule. The same code builds the projected document and this list (audience.ts), so they cannot disagree. */
+/**
+ * One application of a rule. The same code builds the projected document and this list (audience.ts), so they cannot disagree.
+ * Granularity (one definition for the list, the panel and proof check 9): ONE ROW PER CHANGED FIELD OF ONE TARGET — per effect
+ * instance (effect: enabled; modulator: modulate), per clip (transition: type; text_loop: loop; title_size: sizeFrac), per caption
+ * track and style field (caption_look: sizeFrac, maxCharsPerLine, background, preset — up to four rows for one track), per sound track
+ * (music_level: gain; ducking: reductionDb). A modulator on an effect that ends up off moves nothing and has no row.
+ */
 export interface AudienceChange {
   /** stable within one revision: `${rule}:${clipId ?? trackId}:${detail}` */
   key: string;

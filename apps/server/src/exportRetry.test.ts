@@ -9,31 +9,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-
-/*
- * LABELLED STAND-IN (test only) until W1's audience rules are merged: audience.ts says it is built (so add_audience_version runs), and
- * projectVariant applies ONE grandparents rule at its end — every title's size × 4/3, capped at 0.5 — the rule that must apply exactly
- * once (it is not idempotent). Once core's AUDIENCE_PROJECTION_BUILT is true, both modules are the real ones and this test runs W1's code.
- */
-const realRules = vi.hoisted(() => ({ built: false }));
-vi.mock('../../../packages/core/src/audience.ts', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../../../packages/core/src/audience.ts')>();
-  realRules.built = real.AUDIENCE_PROJECTION_BUILT;
-  return real.AUDIENCE_PROJECTION_BUILT ? real : { ...real, AUDIENCE_PROJECTION_BUILT: true };
-});
-vi.mock('../../../packages/core/src/variants.ts', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../../../packages/core/src/variants.ts')>();
-  const projectVariant: typeof real.projectVariant = (...args) => {
-    const out = real.projectVariant(...args);
-    const [doc, variantId] = args;
-    if (!realRules.built && doc.variants[variantId]?.audience?.profile === 'grandparents')
-      for (const seq of Object.values(out.sequences)) for (const t of seq.tracks) for (const c of t.clips) if (c.type === 'text') c.style = { ...c.style, sizeFrac: Math.min(0.5, (c.style.sizeFrac * 4) / 3) };
-    return out;
-  };
-  return { ...real, projectVariant };
-});
-
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import type { ProjectDocument, TextClip } from '@pulseframe/core';
 import { Exporter, renderDocFor } from './export.ts';

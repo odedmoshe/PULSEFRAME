@@ -278,7 +278,12 @@ function appliedByDiff(master: ProjectDocument, p: ProjectDocument): Record<stri
   for (const t of master.sequences[master.mainSequenceId]!.tracks) {
     const q = p.sequences[p.mainSequenceId]!.tracks.find((x) => x.id === t.id);
     if (!q) continue;
-    if (t.caption && canonical(t.caption.style) !== canonical(q.caption?.style)) n.caption_look!++;
+    // one change per changed FIELD of a caption track's style (AudienceChange: one row per changed field of one target), so a track
+    // whose size, line length, box and look all change counts four, as the list words them one per row
+    if (t.caption) {
+      const sm = t.caption.style as unknown as Record<string, unknown>, sp = (q.caption?.style ?? {}) as unknown as Record<string, unknown>;
+      for (const k of new Set([...Object.keys(sm), ...Object.keys(sp)])) if (canonical(sm[k] ?? null) !== canonical(sp[k] ?? null)) n.caption_look!++;
+    }
     if ((t.audio?.gain ?? 1) !== (q.audio?.gain ?? 1)) n.music_level!++;
     if ((t.audio?.duck?.reductionDb ?? null) !== (q.audio?.duck?.reductionDb ?? null)) n.ducking!++;
   }

@@ -4,33 +4,11 @@
  * GET …/variants/:variantId/audience and MCP get_audience_changes give the same answer to the owner and to every reader with observe
  * (ids, frames, registry ids, sizes and dB: no words), and the get_summary variants row carries `audience` and counts only real format
  * overrides (verifier C14). W2.
- *
- * LABELLED STAND-IN: until W1's audience.ts is merged (AUDIENCE_PROJECTION_BUILT false in core), the module is replaced below by a
- * stand-in that says it is built and answers audienceChanges with a small list derived from the document (one row per title, kept per
- * its VariantOverride.keep), so the server wiring can be tested. Once the real module is built it is used unchanged and these tests
- * run against W1's code. The stand-in is in this test only; the product never has it.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-
-vi.mock('../../../packages/core/src/audience.ts', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../../../packages/core/src/audience.ts')>();
-  if (real.AUDIENCE_PROJECTION_BUILT) return real; // W1 merged: the real rules
-  const c = await import('../../../packages/core/src/audienceContract.ts');
-  const standInChanges: typeof real.audienceChanges = (doc, variantId, revision) => {
-    const v = doc.variants[variantId]!;
-    const a = v.audience!;
-    const changes = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((t) => t.clips.filter((x) => x.type === 'text').map((x) => {
-      const kept = !!v.overrides[x.id]?.keep?.includes('title_size');
-      const start = Number(x.start.value) * 30 / x.start.timescale, end = start + Number(x.duration.value) * 30 / x.duration.timescale;
-      return { key: `title_size:${x.id}:size`, rule: 'title_size' as const, clipId: x.id, trackId: t.id, startFrame: start, endFrame: end, before: 0.08, after: kept ? 0.08 : 0.08 * 4 / 3, keepable: true, kept };
-    }));
-    return { projectId: doc.id, variantId, revision, profile: a.profile, rules: 1, musicDb: c.audienceMusicDb(a), changes, fastCuts: [], soundRoles: [], notHandled: c.AUDIENCE_NOT_HANDLED, method: `STAND-IN for W1's audienceChanges (test only): ${c.AUDIENCE_CHANGES_METHOD}` };
-  };
-  return { ...real, AUDIENCE_PROJECTION_BUILT: true, audienceChanges: standInChanges };
-});
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import * as T from '@pulseframe/time';
 import { AUDIENCE_API_REFUSALS, AUDIENCE_NOT_HANDLED, type AudienceChanges, type ProjectDocument } from '@pulseframe/core';
@@ -109,7 +87,7 @@ describe('the change-list route: refusals in order', () => {
     const vid = commit(pid, [{ op: 'add_variant', args: { profileId: 'square-1x1' } }]).results[0]!.output!.variantId as string;
     const e = caught(() => audienceChangesFor(store, pid, vid));
     expect([e.status, e.code, e.message]).toEqual([409, AUDIENCE_API_REFUSALS.notAudience.code, AUDIENCE_API_REFUSALS.notAudience.message(vid)]);
-    // the 501 (not built) is tested without the stand-in in audiences/routes.test.ts
+    // the 501 (not built) is tested in audiences/routes.test.ts
   });
 });
 
