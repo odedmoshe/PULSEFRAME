@@ -195,7 +195,7 @@ export function TranscriptPanel() {
   return (
     <div className="transcript pf-ds pf-cap" data-testid="transcript-panel" data-state="ready" data-asset-id={assetId ?? undefined}>
       {/* one heading on this page: the inspector's «תמלול»; here the count and the one-line hint (design review D6) */}
-      <header className="pf-cap-head"><span className="pf-cap-count" data-testid="transcript-count">{CAP_STRINGS[state.lang].phrasesCount(transcript.segments.length)}</span><span className="pf-cap-hint">{CAP_STRINGS[state.lang].wordsHintGo} · <kbd>Shift</kbd>{CAP_STRINGS[state.lang].wordsHintPick}</span></header>
+      <header className="pf-cap-head"><span className="pf-cap-count" data-testid="transcript-count">{CAP_STRINGS[state.lang].phrasesCount(transcript.segments.length)}</span><span className="pf-cap-hint"><span>{CAP_STRINGS[state.lang].wordsHintGo}</span> <span><kbd>Shift</kbd> {CAP_STRINGS[state.lang].wordsHintPick}</span></span></header>
       <ShowAsCaptions where="speech" />
       <TranslationReview />
       <div className="row">
