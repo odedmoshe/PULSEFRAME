@@ -233,21 +233,22 @@ export async function runStillChecks(opts: { dataRoot?: string; log?: (line: str
     await guard('P8', 'over 8192 on a side still_too_large with its Hebrew; over 24 MP labelled untried; a frame outside the file out_of_bounds', async () => {
       const pid = await newProject('P8');
       const wide = F('wide-8193x100.png');
-      ff(['-f', 'lavfi', '-i', 'color=c=0x336699:s=8193x100', '-frames:v', '1', wide]);
+      // from raw pixels: lavfi `color` rounds an odd width down (8193 gave 8192 here)
+      rawPng(wide, 8193, 100, Buffer.alloc(8193 * 100 * 3, 0x66));
       const aw = (await owner.upload(pid, wide, 'wide.png')).assetId;
       const tooBig = await owner.call(`/projects/${pid}/exports`, { format: 'png', still: { assetId: aw, sourceFrame: 0 } });
       const blocker = tooBig.body.error?.details?.blockers?.[0];
       const he = blocker ? translateRefusal('he', blocker.message) : undefined;
       const flat = F('flat-6000x4100.png');
       ff(['-f', 'lavfi', '-i', 'color=c=0x808080:s=6000x4100', '-frames:v', '1', flat]);
-      const af = (await owner.upload(pid, flat, 'flat.png')).assetId;
+      const upFlat = await owner.upload(pid, flat, 'flat.png'), af = upFlat.assetId;
       let untried: unknown = null, untriedMs = 0, untriedError: string | null = null;
       try { const r = await save(pid, { format: 'png', still: { assetId: af, sourceFrame: 0, crop: { x: 100, y: 100, w: 64, h: 64 } } }); untried = r.job.output.still.untriedSize; untriedMs = r.ms; } catch (e: any) { untriedError = String(e?.message ?? e).slice(0, 600); }
       const outside = vid ? await owner.call(`/projects/${(vid as { pid: string }).pid}/exports`, { format: 'png', still: { assetId: (vid as { assetId: string }).assetId, sourceFrame: 60 } }) : null;
       const outsideCode = outside?.body.error?.details?.blockers?.[0]?.code;
       check('P8', 'over 8192 on a side still_too_large with its Hebrew; over 24 MP labelled untried; a frame outside the file out_of_bounds',
         tooBig.status === 422 && blocker?.code === 'still_too_large' && blocker?.message === STILLS_REFUSALS.stillTooLarge.message(8193, 100) && !!he?.includes('8192') && untried === true && outsideCode === 'out_of_bounds',
-        { tooBig: [tooBig.status, blocker?.code], hebrew: he, over24mp: { untriedSize: untried, oneSampleMs: untriedMs, error: untriedError, pixels: 6000 * 4100 }, outside: [outside?.status, outsideCode] });
+        { wideAsset: (await owner.call(`/projects/${pid}`)).body?.project?.assets?.[aw]?.image ?? null, flatAsset: upFlat.asset?.image, tooBig: [tooBig.status, blocker?.code], hebrew: he, over24mp: { untriedSize: untried, oneSampleMs: untriedMs, error: untriedError, pixels: 6000 * 4100 }, outside: [outside?.status, outsideCode] });
     });
 
     // ---------- P9: conformed files ----------
