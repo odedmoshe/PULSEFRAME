@@ -22,8 +22,8 @@ export const LIBRARY_UI_HE = {
   creditsCard: 'כרטיס קרדיטים', creditsCardNote: 'הכרטיס מתעדכן בכל לחיצה, ושינויים ידניים בו יוחלפו',
   missingOnScreen: 'קרדיט שחייב להופיע בסרטון לא מופיע בו',
   pasteNote: 'הדביקו את הטקסט בתיאור בזמן ההעלאה. תביעת זכויות על המוזיקה משתחררת רק כשהקרדיט כתוב בתיאור; את זה אי אפשר לבדוק מכאן',
-  archiveTitle: 'קבצים מהספרייה בארכיון', archiveStrip: 'ארכיון לשיתוף', archiveStripNote: 'בלי קבצים שאסור להעביר לאחרים',
-  archiveKeep: 'ארכיון לעצמי', archiveKeepNote: 'למחשבים שלך בלבד — כולל קבצים שאסור להעביר לאחרים',
+  archiveTitle: 'קבצים שסומנו «לא לשיתוף» לפי הרישיון או התנאים שלהם', archiveStrip: 'ארכיון לשיתוף', archiveStripNote: 'בלי קבצים שאסור להעביר לאחרים',
+  archiveKeep: 'ארכיון לעצמי', archiveKeepNote: 'למחשבים שלכם בלבד — כולל קבצים שאסור להעביר לאחרים',
   nonCommercialLine: 'לשימוש לא מסחרי בלבד: {titles}',
   // integration (wave 7 library track)
   cancelReindex: 'עצירת הסריקה', reindexStopped: 'הסריקה נעצרה. הרשימה הקודמת נשארת בשימוש',
@@ -50,7 +50,7 @@ export const LIBRARY_UI_EN: Record<keyof typeof LIBRARY_UI_HE, string> = {
   creditsCard: 'Credits card', creditsCardNote: 'The card is remade each time; hand edits to it are replaced',
   missingOnScreen: 'A credit that must appear in the video does not',
   pasteNote: 'Paste the text into the description when you upload. A music claim is released only when the credit is in the description; that cannot be checked from here',
-  archiveTitle: 'Library files in the archive', archiveStrip: 'Archive to share', archiveStripNote: 'Without files that may not be passed on',
+  archiveTitle: 'Files marked not for sharing by their licence or terms', archiveStrip: 'Archive to share', archiveStripNote: 'Without files that may not be passed on',
   archiveKeep: 'Archive for yourself', archiveKeepNote: 'For your own computers only — holds files that may not be passed on',
   nonCommercialLine: 'Non-commercial use only: {titles}',
   // integration (wave 7 library track)

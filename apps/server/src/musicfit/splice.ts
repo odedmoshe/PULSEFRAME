@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as T from '@pulseframe/time';
 import {
-  FIT_GRID_METHOD, FIT_METHOD, fitLicenceProblem, fitLicenceRefusal, fittedGrid, fittedLibraryRecord, MUSICFIT, ownBeats,
+  FIT_GRID_METHOD, FIT_METHOD, fitLicenceProblem, fitLicenceRefusal, fittedGrid, fittedLibraryRecord, fittedSourceRecord, MUSICFIT, ownBeats,
   type Asset, type FittedGrid, type JoinCandidate, type JoinRemoval, type ProjectDocument,
 } from '@pulseframe/core';
 import { describeMedia } from '../ingest.ts';
@@ -125,13 +125,14 @@ export async function makeFittedSong(store: Store, doc: ProjectDocument, assetId
     store.putBlob(contentHash, tmp, bytes.length, meta.mimeType);
     const importedAt = new Date().toISOString();
     const library = fittedLibraryRecord(doc, assetId);
+    const fetchedRecord = fittedSourceRecord(doc, assetId); // wave 8 sources (C4): a fetched song's copy carries its record
     const inside = (t: T.RationalTime) => T.lt(t, duration);
     const beats = g.beats.filter(inside), downbeats = g.downbeats.filter(inside);
     const base = source.name.replace(/\.[^.]+$/, '');
     const asset: Omit<Asset, 'id'> = {
       ...meta, duration, name: (opts.name ?? `${base} (shortened).wav`).slice(0, 200), contentHash, byteSize: bytes.length,
       provenance: {
-        origin: 'derived', importedAt, importedBy: actor, ...(library ? { library } : {}),
+        origin: 'derived', importedAt, importedBy: actor, ...(library ? { library } : {}), ...(fetchedRecord ? { source: fetchedRecord } : {}),
         fitted: { sourceAssetId: assetId, method: FIT_METHOD, startAt, removed: { from: removal.from, to: removal.to }, crossfade: T.rt(spec.crossfade, SONG_RATE), joinAt: g.joinAt, measured },
       },
     };

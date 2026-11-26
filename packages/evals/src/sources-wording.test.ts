@@ -5,9 +5,11 @@
  * languages, nothing is called safe, allowed or verified, and the not-built refusal is provoked through the real op. W3 owns this
  * file after the pre-pass.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, OpError, SOURCE_JOB_FAILURES, SOURCE_OP_REFUSALS, SOURCE_WARNING_CODES, SOURCES_API } from '@pulseframe/core';
+import { applyTransaction, createProject, OpError, SOURCE_JOB_FAILURES, SOURCE_TERMS, SOURCE_OP_REFUSALS, SOURCE_WARNING_CODES, SOURCES_API } from '@pulseframe/core';
 import { HE_SOURCES, SOURCES_EN, SOURCES_HE, SOURCES_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
 
 const SAMPLES: Record<string, string> = {
@@ -46,12 +48,20 @@ describe('sources wording', () => {
     expect(SOURCES_HE['sources.warn.licence_no_derivatives']).toContain('בלשונו');
     expect(SOURCES_HE['sources.searchHint']).toContain('נשלחות');
   });
-  it('provoked for real: use_source_item refuses with the not-built row until W1 builds it', () => {
+  it('every sources.* key the interface names exists in both languages; each deed row of a licence finding is marked as a translation in Hebrew', () => {
+    const dir = path.resolve(import.meta.dirname, '../../../apps/web/src/editor/sources');
+    const used = new Set<string>();
+    for (const f of fs.readdirSync(dir).filter((n) => /\.(tsx?|ts)$/.test(n) && !/test|testids/.test(n))) for (const m of fs.readFileSync(path.join(dir, f), 'utf8').matchAll(/'(sources\.[a-zA-Z_.]+[a-zA-Z_])'/g)) used.add(m[1]!);
+    for (const k of used) { if (k.endsWith('.')) continue; expect(Object.keys(SOURCES_HE), k).toContain(k); expect(Object.keys(SOURCES_EN), k).toContain(k); }
+    for (const id of ['cc.nd', 'cc.sa']) expect(SOURCE_TERMS[id]!.he, id).toContain('(תרגום');
+    expect(SOURCES_HE['sources.quoteTranslation']).toBe('(תרגום)');
+  });
+  it('provoked for real: use_source_item without a record refuses with its row, worded in Hebrew with a next step', () => {
     const doc = createProject({ id: 'p', name: 'p', frameRate: { num: 30, den: 1 } });
     let err: unknown;
     try { applyTransaction(doc, [{ op: 'use_source_item', args: { asset: { duration: T.ZERO } } }], { idSeed: 's_', actor: 'test', allowInternal: true }); } catch (e) { err = e; }
     expect(err).toBeInstanceOf(OpError);
-    expect((err as OpError).details.why).toBe('sources_not_built');
-    expect(translateRefusal('he', (err as OpError).message)).toContain('עדכנו');
+    expect((err as OpError).details.why).toBe('source_no_record');
+    expect(translateRefusal('he', (err as OpError).message)).toMatch(IMPERATIVE);
   });
 });

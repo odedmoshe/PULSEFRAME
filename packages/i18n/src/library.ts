@@ -34,7 +34,7 @@ export const LIBRARY_HE = {
   // export and archive
   'library.export.nonCommercial': 'בסרטון יש חומר לשימוש לא מסחרי בלבד', 'library.export.creditsForDescription': 'יש קרדיטים שצריך להדביק בתיאור הסרטון',
   'library.export.creditNotOnScreen': 'קרדיט שחייב להופיע בסרטון לא מופיע בו', 'library.export.stockPeople': 'בסרטון יש צילומי מלאי שמופיעים בהם אנשים',
-  'library.archive.strip': 'ארכיון לשיתוף', 'library.archive.keep': 'ארכיון לעצמי', 'library.archive.keepNote': 'למחשבים שלך בלבד — כולל קבצים שאסור להעביר לאחרים',
+  'library.archive.strip': 'ארכיון לשיתוף', 'library.archive.keep': 'ארכיון לעצמי', 'library.archive.keepNote': 'למחשבים שלכם בלבד — כולל קבצים שאסור להעביר לאחרים',
   'library.archive.omittedNote': 'קבצים מהספרייה לא נכללו בארכיון, כי אסור להעביר אותם. אפשר להוסיף אותם מחדש מהספרייה במחשב שבו היא נמצאת',
 } as const;
 export const LIBRARY_EN: Record<keyof typeof LIBRARY_HE, string> = {

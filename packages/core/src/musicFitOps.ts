@@ -19,7 +19,7 @@ import * as T from '@pulseframe/time';
 import { defineOp, getOp, OpError } from './ops.ts';
 import { analysisEntityId } from './entities.ts';
 import { ownBeats } from './lineage.ts';
-import { AddFittedMusicArgsSchema, fitLicenceProblem, fitLicenceRefusal, fittedLibraryRecord, MarkJoinHeardArgsSchema, musicFitRefusal, type AddFittedMusicOutput, type FittedGrid } from './musicFitContract.ts';
+import { AddFittedMusicArgsSchema, fitLicenceProblem, fitLicenceRefusal, fittedLibraryRecord, fittedSourceRecord, MarkJoinHeardArgsSchema, musicFitRefusal, type AddFittedMusicOutput, type FittedGrid } from './musicFitContract.ts';
 import type { ProjectDocument } from './schema.ts';
 
 /** True once builder A has built the four bodies (impactOps.ts and this file); turns their fuzz rows on. */
@@ -62,6 +62,9 @@ defineOp({
     if (problem) throw fitLicenceRefusal(problem, src);
     const record = fittedLibraryRecord(d, src);
     if (!sameJson(made.provenance.library ?? null, record)) throw musicFitRefusal('licenceUnknown', { assetId: src, licenceId: made.provenance.library?.licence.id ?? record?.licence.id ?? null, reason: 'the made file does not carry the record of the song it came from' }, made.provenance.library?.licence.id ?? record?.licence.id ?? '');
+    // wave 8 sources (C4): a song fetched from a stock source or a link gives its copy its one source record, exactly
+    const srcRecord = fittedSourceRecord(d, src);
+    if (!sameJson(made.provenance.source ?? null, srcRecord)) throw musicFitRefusal('licenceUnknown', { assetId: src, licenceId: made.provenance.source?.licence.id ?? srcRecord?.licence.id ?? null, reason: 'the made file does not carry the source record of the song it came from' }, made.provenance.source?.licence.id ?? srcRecord?.licence.id ?? '');
     const g = a.grid;
     const inside = (t: T.RationalTime) => !T.isNegative(t) && T.lt(t, made.duration);
     if (!ascending(g.beats) || !ascending(g.downbeats) || !g.downbeats.every((b) => g.beats.some((x) => T.eq(x, b))) || ![...g.beats, ...g.downbeats].every(inside)) throw musicFitRefusal('fittedGrid', { beats: g.beats.length, downbeats: g.downbeats.length, duration: made.duration });

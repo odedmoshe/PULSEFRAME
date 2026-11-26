@@ -123,4 +123,6 @@ export const PREFLIGHT_CODES_ENGLISH_ONLY_BEFORE_QC = [
   'redact_track_loss', 'multicam_out_of_sync', 'stabilise_limited', 'stabilise_unmeasured', 'field_no_data', 'field_sunset_undecided',
   'capture_estimated', 'stamp_no_date',
 ] as const;
-export const PREFLIGHT_SHOWN_CODES = [...PREFLIGHT_CODES_WITH_HEBREW_BEFORE_QC, ...PREFLIGHT_CODES_ENGLISH_ONLY_BEFORE_QC, ...QC_CODES] as const;
+/** The licence findings of fetched files (wave 8 sources; apps/server export.ts SOURCE_EXPORT_CODES): warnings whose detail is the server's message (it quotes the licence verbatim). */
+export const PREFLIGHT_CODES_SOURCES = ['licence_no_derivatives', 'licence_share_alike', 'licence_unknown', 'licence_unconfirmed', 'source_terms'] as const;
+export const PREFLIGHT_SHOWN_CODES = [...PREFLIGHT_CODES_WITH_HEBREW_BEFORE_QC, ...PREFLIGHT_CODES_ENGLISH_ONLY_BEFORE_QC, ...QC_CODES, ...PREFLIGHT_CODES_SOURCES] as const;

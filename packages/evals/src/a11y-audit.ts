@@ -57,6 +57,7 @@ import { storyA11yScenarios } from './a11y-story.ts';
 import { growingA11yScenarios } from './a11y-growing.ts';
 import { eyesA11yScenarios } from './a11y-eyes.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
+import { sourcesA11yScenarios } from './a11y-sources.ts';
 import { audiencesA11yScenarios } from './a11y-audiences.ts';
 import { agentA11yScenarios } from './a11y-agent.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
@@ -917,6 +918,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «מאגר» and Settings › «חיבורים» (wave 8 sources): the tab, a result with its licence badge and quoted deed (an audit fixture), the connections section (a11y-sources.ts)
+      for (const sc of sourcesA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // «גרסה לכל קהל» (wave 8 audiences): the panel «מה שונה בגרסה הזו» open on a calm version, on a scratch project (a11y-audiences.ts)
       for (const sc of audiencesA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -1308,6 +1315,12 @@ async function main() {
       }
       // «חיפוש בצילומים» (wave 7 search) in the light theme: the same scenarios as the dark pass, each on its own scratch project (a11y-search.ts)
       for (const sc of searchA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «מאגר» and Settings › «חיבורים» (wave 8 sources): the tab, a result with its licence badge and quoted deed (an audit fixture), the connections section (a11y-sources.ts)
+      for (const sc of sourcesA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });

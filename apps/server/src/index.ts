@@ -48,6 +48,8 @@ import { createMadeRunner, type MadeRuntime } from './made/runner.ts';
 
 import { actsAsOwner, AutonomySettings, stampOpen } from './autonomy.ts';
 import { AssistantFiles } from './assistant/credential.ts';
+import type { SourcesDeps } from './sources/contract.ts';
+import { createSourcesRuntime, type SourcesRuntimeImpl, type SourcesRuntimeOptions } from './sources/runtime.ts';
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
   url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; backup: BackupScheduler;
@@ -55,6 +57,7 @@ export interface RunningServer {
   imports: ImportQueue; door: DropDoor; renderCache: RenderCacheService;
   /** «קליפ מקוד» (wave 8 motioncode): the made browser and the runner, for proofs that look inside (proof check 12: no context left open) */
   made: { host: MadeHost; runner: MadeRuntime };
+  /** «מאגר» (wave 8 sources): the stock-source runtime, for proofs and tests that look inside */ sources: SourcesRuntimeImpl;
   close(): Promise<void>;
 }
 
@@ -62,7 +65,7 @@ export interface RunningServer {
  * `deps.assistant`: the command bar assistant's installed adapters (ADR-0027). Wave 1 ships none, so the CLI passes nothing and
  * the setup state is honest (provider_not_configured); tests and pnpm proof:command-bar install the labelled MOCK adapter here.
  */
-export async function startServer(overrides: Partial<Config> = {}, deps: { /** the in-editor agent (wave 8): its providers (W2's createAgentProviders at integration) and, for tests and proof:agent, the labelled MOCK adapters per family */ agent?: { providers?: AgentProviders; adapters?: AgentAdapters }; providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 8 picmodels proof): the labelled fake worker, its digest, a synthetic registry and library root; never from the environment */ picmodelsTest?: PictureModelsTestSeams; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[] } = {}): Promise<RunningServer> {
+export async function startServer(overrides: Partial<Config> = {}, deps: { /** the in-editor agent (wave 8): its providers (W2's createAgentProviders at integration) and, for tests and proof:agent, the labelled MOCK adapters per family */ agent?: { providers?: AgentProviders; adapters?: AgentAdapters }; providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 8 picmodels proof): the labelled fake worker, its digest, a synthetic registry and library root; never from the environment */ picmodelsTest?: PictureModelsTestSeams; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[]; /** TEST and PROOF only (wave 8 sources): the labelled doubles' base URLs and the address policy that lets the downloader reach them; never from the environment */ sourcesTest?: SourcesDeps['test']; /** TEST only (wave 8 sources): labelled free-space and timeout stand-ins */ sourcesOptions?: SourcesRuntimeOptions } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
   if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
@@ -131,7 +134,9 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   // open mode: standing warnings outside Capabilities for get_controls (D6 the assistant's unlisted host, I9 no upload cap)
   const assistantFiles = new AssistantFiles(cfg.dataDir, cfg.assistantHosts, cfg);
   const standingWarnings = () => [...assistantHostWarnings(cfg, assistantFiles.readConfig().config), ...uploadCapWarnings(cfg)];
-  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search, standingWarnings });
+  // «מאגר» / «ייבוא מקישור» (wave 8 sources; sources/runtime.ts): the services, the safe downloader and the source_fetch job
+  const sources = createSourcesRuntime({ cfg, store, gov: governance, imports, ...(deps.sourcesTest ? { test: deps.sourcesTest } : {}) }, deps.sourcesOptions ?? {});
+  const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search, standingWarnings, sources });
   // the in-editor agent «סוכן» (wave 8 autonomy Part 2): its loop calls MCP in process through serveAs (C9)
   const agentService = createAgentService({ store, gov: governance, mcp, providers: deps.agent?.providers ?? createAgentProviders(cfg.dataDir, ...(deps.agent?.adapters ? [deps.agent.adapters] : [])), ...(deps.agent?.adapters ? { adapters: deps.agent.adapters } : {}),
     // Part 1 (autonomy.ts): the run's principal is stamped like any agent's, every step; the owner-or-open predicate; a switch to guarded stops open runs (C4); the owner-wide budget
@@ -142,7 +147,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   const made = createMadeRunner(store, new MadeJobs({ store, lane, host: madeHost }));
   // the generic cancel (REST /jobs/:id/cancel and MCP cancel_job) dispatches a made render to made.cancel (http.ts, mcp.ts bindMade)
   // ---- end made clips ----
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}), made });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}), made, sources });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const bound = (server.address() as AddressInfo).port;
@@ -157,6 +162,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   }
   await capabilities.recover();
   imports.recover(); // after the capability jobs: an interrupted conversion takes the lane only once they are back in line
+  sources.recover(); // after the imports (which removed src_* files of finished downloads): open downloads continue from their .part
   recoverAnalysisJobs(store);
   recoverTrackingJobs(store, { derivatives });
   recoverStabiliseJobs(store, { derivatives }); // stabilisation (wave 7): run again from the start
@@ -173,7 +179,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
   made.recover(); // «קליפ מקוד»: a render cut off by the restart ends failed (made_restarted); it never resumes
   backup.start();
   return {
-    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache, made: { host: madeHost, runner: made },
+    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache, made: { host: madeHost, runner: made }, sources,
     async close() {
       (app as any).browserExport?.stop();
       await agentService.stop(); // the agent's steps in flight finish their write; its runs stay running for recover
@@ -189,6 +195,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { /** t
       await stopStillsJobs(store); // likewise (wave 8 cover)
       await stopMomentsJobs(store); // likewise: measured again after a restart (cached files make it cheap)
       await door.stop(); // the code closes ('shutdown') and the second listener with it; uploads in flight are aborted
+      await sources.stop(); // downloads stop; their rows stay running and continue from the .part after a restart (wave 8 sources)
       await imports.stop(); // the running ffmpeg is killed; the rows stay running for recover()
       await derivatives.stop();
       // Stop accepting, then drop connections that are still open (event streams of pages that were not closed, idle keep-alives):

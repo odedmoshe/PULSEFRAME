@@ -46,7 +46,7 @@ function aBuilt(): boolean {
 
 // ---------- fixtures written by the proof ----------
 /** A 48 kHz stereo 16-bit WAV of `seconds`: a chord of three sine tones per bar (four bars cycle), a 10 ms click on every beat. */
-function songWav(seconds: number, bpm: number, seed: number): Buffer {
+export function songWav(seconds: number, bpm: number, seed: number): Buffer {
   const n = Math.round(seconds * SR), spb = (SR * 60) / bpm, data = Buffer.alloc(n * 4);
   const roots = [220, 246.94, 196, 174.61].map((x) => x * (1 + seed * 0.01));
   for (let i = 0; i < n; i++) {

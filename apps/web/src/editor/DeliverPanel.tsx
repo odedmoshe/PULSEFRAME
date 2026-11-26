@@ -6,7 +6,7 @@ import { useEditorState } from './store.ts';
 import { openExportSheet, useRecentExports } from './ExportSheet.tsx';
 import { SEND_STRINGS } from './send/send.strings.ts';
 import { findingCount, sayMb } from './send/send.logic.ts';
-import { EXPORT_STRINGS } from './exportSheet.strings.ts';
+import { EXPORT_STRINGS, ISSUE_DETAIL_IS_MESSAGE } from './exportSheet.strings.ts';
 import { formatFileSize } from './exportSheet.logic.ts';
 import './deliverPanel.css';
 import { ArchiveFamilyOption } from './lifeline/ArchiveFamilyOption.tsx';
@@ -185,7 +185,7 @@ export function DeliverPanel() {
                 {report.r.issues.map((i, n) => (
                   <li key={`${i.code}:${n}`} data-testid="preflight-issue" data-code={i.code} data-severity={i.severity} className={`sev-${i.severity}`}>
                     <button type="button" className="ghost small issue-main" onClick={() => clickIssue(i.ids, i.range?.startFrame)}>
-                      <span className="sev">{sevLabel(i.severity)}</span> <span dir="auto"><b>{XS.issue[i.code]?.[0] ?? i.message}</b>{XS.issue[i.code]?.[1] && <small>{XS.issue[i.code]![1]}</small>}</span>
+                      <span className="sev">{sevLabel(i.severity)}</span> <span dir="auto"><b>{XS.issue[i.code]?.[0] ?? i.message}</b>{(XS.issue[i.code]?.[1] || (XS.issue[i.code] && ISSUE_DETAIL_IS_MESSAGE.has(i.code) ? i.message : '')) && <small>{XS.issue[i.code]?.[1] || i.message}</small>}</span>
                     </button>
                     {i.fix && <button type="button" className="primary small" data-testid="preflight-fix" disabled={stale} onClick={() => void applyFix(i.fix!.ops)}>{XS.issue[i.code]?.[2] || i.fix.label}</button>}
                   </li>

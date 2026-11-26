@@ -9,6 +9,7 @@ import { applyTransaction, createProject, MUSICFIT_FORBIDDEN_WORDS, MUSICFIT_FOR
 import { dictionaries } from '@pulseframe/i18n';
 import { ApiFailure } from '../../api.ts';
 import { EXTRA, musicFitT } from './musicFit.strings.ts';
+import { FIT_SOURCE_NOTE_CODES } from '@pulseframe/core';
 import { afterSyncText, chipFor, endingText, fitFailure, impactView, isFittableMusicClip, joinState, makeText, momentAtPlayhead, nextRemoval, noteText, realignOps, refusalLine, swapRequest, swapRows, whatChanges, fitRequest } from './musicFit.logic.ts';
 import { tickPositions } from './ImpactTick.tsx';
 import { MUSICFIT_COMMANDS } from './musicFit.commands.ts';
@@ -155,6 +156,18 @@ describe('failures and plans in words', () => {
     expect(noteText('he', he, { code: 'composed_again', message: 'm', details: { he: 'עברית מהשרת' } })).toBe('עברית מהשרת');
     expect(noteText('he', he, { code: 'music_keys_dropped', message: 'm', details: { count: 2 } })).toBe('2 נקודות עוצמה של קליפ המוזיקה לא יחולו על המוזיקה החדשה');
     expect(noteText('en', en, { code: 'weird' as never, message: 'keep me', details: {} })).toBe('keep me');
+  });
+  it('a fetched song\'s licence notes (wave 8 sources, C4) have a sentence in both languages that names the licence and carries the server\'s quote verbatim', () => {
+    const quote = '"Long song": the licence "CC BY-SA 4.0" says in its own words: "If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original."';
+    for (const code of FIT_SOURCE_NOTE_CODES) {
+      const n = { code, message: quote, details: { licenceName: 'CC BY-SA 4.0', licenceId: 'CC-BY-SA-4.0', termIds: [] } };
+      for (const [lang, t] of [['he', he], ['en', en]] as const) {
+        const text = noteText(lang, t, n);
+        expect(text, `${lang} ${code}`).not.toBe(quote);
+        if (code !== 'non_commercial_content') expect(text, `${lang} ${code}`).toContain(quote);
+        if (code !== 'licence_unknown' && code !== 'source_terms') expect(text, `${lang} ${code}`).toContain('CC BY-SA 4.0');
+      }
+    }
   });
   it('the "what changes" table lists exactly what the plan says, and says nothing changes when it says nothing', () => {
     expect(whatChanges(en, plan()).map((r) => r.key)).toEqual(['nothing']);

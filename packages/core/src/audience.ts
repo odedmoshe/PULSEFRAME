@@ -210,7 +210,8 @@ const assetOf = (doc: ProjectDocument, id: string): Asset | undefined => own(doc
 function isMusicAsset(asset: Asset | undefined): boolean {
   const p = asset?.provenance;
   if (!p) return false;
-  return p.library?.kind === 'music' || p.library?.kind === 'loop' || isBuiltinMusic(asset) || !!p.fitted;
+  // wave 8 sources (C4): a song fetched from a stock source or a link is music too
+  return p.library?.kind === 'music' || p.library?.kind === 'loop' || p.source?.kind === 'music' || isBuiltinMusic(asset) || !!p.fitted;
 }
 /** Clip ids a recipe run placed as its narration (the story recipe's 'narration' slot): a recorded narration. */
 function narrationClipIds(doc: ProjectDocument): Set<string> {
@@ -221,7 +222,7 @@ function narrationClipIds(doc: ProjectDocument): Set<string> {
 
 /**
  * The music-track rule of verifier C13, for one sound track of `doc` (the projected document): the owner's correction first, then
- * SOUND_ROLE_ORDER — music only when EVERY clip plays library music or a loop (provenance.library.kind 'music' | 'loop'), built-in
+ * SOUND_ROLE_ORDER — music only when EVERY clip plays library music or a loop (provenance.library.kind 'music' | 'loop'), source music (provenance.source.kind 'music'), built-in
  * music (provenance.procedural music style, packOps MUSIC_STYLE_ID) or fitted music (provenance.fitted); speech for a duck source or
  * when every clip is narration (provenance.voice, or the narration slot of a recipe run); 'mixed', 'empty' or 'unknown' → other.
  * Pure; reads assets through Object.hasOwn. HEURISTIC: the owner corrects a wrong guess per track (update_audience_version.sound).

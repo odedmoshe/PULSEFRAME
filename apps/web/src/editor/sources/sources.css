@@ -1,0 +1,29 @@
+/* «מאגר» and «חיבורים» (wave 8 sources): redesign tokens only; logical properties, so the panels mirror with the page direction. */
+.pf-src { display: grid; gap: var(--pf-sp-4); color: var(--pf-text); font: var(--pf-fw-regular) var(--pf-fs-sm) / var(--pf-lh-sm) var(--pf-font); min-inline-size: 0; }
+.pf-src p, .pf-src ul { margin: 0; }
+.pf-src-muted { color: var(--pf-text-2); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
+.pf-src-err { color: var(--pf-danger); }
+.pf-src-row, .pf-src-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-2); }
+.pf-src-input { flex: 1; min-inline-size: 0; padding: var(--pf-sp-3) var(--pf-sp-4); background: var(--pf-surface-2); color: var(--pf-text); border: 0; border-radius: var(--pf-r-sm); box-shadow: inset 0 0 0 1px var(--pf-line-strong); font: inherit; }
+.pf-src-link, .pf-src-search { display: grid; gap: var(--pf-sp-3); }
+.pf-src-chip-state { color: var(--pf-warn, var(--pf-text-2)); font-size: var(--pf-fs-xs); margin-inline-start: var(--pf-sp-2); }
+.pf-src-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--pf-sp-3); }
+.pf-src-grid:focus-visible { outline: 2px solid var(--pf-accent); outline-offset: 2px; }
+.pf-src-card { display: grid; gap: var(--pf-sp-2); padding: var(--pf-sp-3); background: var(--pf-surface-2); border-radius: var(--pf-r-md); box-shadow: var(--pf-e1), var(--pf-hilite); min-inline-size: 0; cursor: pointer; }
+.pf-src-card.is-active { outline: 2px solid var(--pf-accent); }
+.pf-src-thumb { inline-size: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #0b0d11; border-radius: var(--pf-r-sm); }
+.pf-src-title { font-weight: var(--pf-fw-semibold); overflow-wrap: anywhere; }
+.pf-src-badge { justify-self: start; padding: 0 var(--pf-sp-3); border-radius: var(--pf-r-xs); font-size: var(--pf-fs-xs); box-shadow: inset 0 0 0 1px var(--pf-line-strong); overflow-wrap: anywhere; }
+.pf-src-badge.is-nc { color: var(--pf-danger); }
+.pf-src-warn { display: grid; gap: var(--pf-sp-2); font-size: var(--pf-fs-xs); color: var(--pf-text-2); }
+.pf-src-terms { list-style: none; padding: 0; display: grid; gap: var(--pf-sp-2); }
+.pf-src-quote { display: block; font-style: normal; overflow-wrap: anywhere; }
+.pf-src-translation { display: block; }
+.pf-src-preview { inline-size: 100%; max-block-size: 220px; border-radius: var(--pf-r-sm); background: #0b0d11; }
+.pf-src-downloads { list-style: none; padding: 0; display: grid; gap: var(--pf-sp-3); }
+.pf-src-download { display: grid; gap: var(--pf-sp-2); padding: var(--pf-sp-3); background: var(--pf-surface-2); border-radius: var(--pf-r-md); justify-items: start; }
+.pf-src-progress { inline-size: 100%; }
+.pf-src-conn { display: grid; gap: var(--pf-sp-3); }
+.pf-src-card-conn { display: grid; gap: var(--pf-sp-3); padding: var(--pf-sp-4); background: var(--pf-surface-2); border-radius: var(--pf-r-md); }
+.pf-src-asset { display: grid; gap: var(--pf-sp-2); font-size: var(--pf-fs-xs); }
+.pf-src-field { display: grid; gap: var(--pf-sp-2); }

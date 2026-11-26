@@ -24,7 +24,7 @@ import { translateRefusal, dictionaries, jobStageLabel } from '@pulseframe/i18n'
 import * as T from '@pulseframe/time';
 import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../api.ts';
 import { useEditorState, type Editor } from './store.ts';
-import { EXPORT_STRINGS, type ExportStrings } from './exportSheet.strings.ts';
+import { EXPORT_STRINGS, ISSUE_DETAIL_IS_MESSAGE, type ExportStrings } from './exportSheet.strings.ts';
 import {
   alsoSuggestion, DEFAULT_CHOICES, variantPick, DESTINATIONS, describeExport, destinationPick, jobsOnOpen, mergeJobViews, destinationKey, exportOptions, exportTargets, formatFileSize, formatLength, fourKReachable, isActiveJob, jobFraction, overallFraction,
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
@@ -401,7 +401,7 @@ function Checks({ editor, S, lead, chosen }: { editor: Editor; S: ExportStrings;
   const loudBad = lufs != null && target !== -14 && Math.abs(lufs + 14) > 2;
   const fmt = (v: number) => v.toFixed(1).replace('-', '−');
   const issues = rep?.issues.filter((i) => i.code !== 'no_loudness_target') ?? [];
-  const words = (i: PreflightIssue): [string, string, string] => S.issue[i.code] ?? [i.message, '', ''];
+  const words = (i: PreflightIssue): [string, string, string] => { const w = S.issue[i.code]; return w ? [w[0], w[1] || (ISSUE_DETAIL_IS_MESSAGE.has(i.code) ? i.message : ''), w[2]] : [i.message, '', '']; };
   return (
     <section aria-labelledby="xs-pre" data-testid="export-preflight">
       <h3 id="xs-pre">{S.preflight}</h3>

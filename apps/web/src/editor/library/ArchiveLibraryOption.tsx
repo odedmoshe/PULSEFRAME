@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { useEditorState } from '../store.ts';
 import { LIBRARY_TESTIDS as TID } from './library.testids.ts';
 import { libText, LIBRARY_UI_STRINGS } from './library.strings.ts';
-import { archiveModes } from './library.logic.ts';
+import { archiveModes, archiveRestrictedCount } from './library.logic.ts';
 
 export function ArchiveChoiceView({ lang, count, owner, mode, onChange }: { lang: Lang; count: number; owner: boolean; mode: ArchiveLibraryMode; onChange: (m: ArchiveLibraryMode) => void }): ReactElement {
   const L = LIBRARY_UI_STRINGS[lang];
@@ -34,8 +34,7 @@ export function ArchiveChoiceView({ lang, count, owner, mode, onChange }: { lang
 
 export function ArchiveLibraryOption({ projectId, onMode }: { projectId: string; onMode: (mode: ArchiveLibraryMode | null) => void }): ReactElement | null {
   const { state } = useEditorState();
-  const assets = state.doc?.id === projectId ? state.doc.assets : {};
-  const count = Object.values(assets).filter((a) => a.provenance?.library?.flags.diskOnly).length;
+  const count = state.doc?.id === projectId ? archiveRestrictedCount(state.doc) : 0; // the server's rule (library and fetched files)
   const owner = state.actor === 'user:local';
   const [mode, setMode] = useState<ArchiveLibraryMode>('strip');
   useEffect(() => { onMode(count > 0 ? mode : null); }, [count, mode]); // eslint-disable-line react-hooks/exhaustive-deps
