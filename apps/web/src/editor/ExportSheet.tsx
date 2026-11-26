@@ -158,10 +158,10 @@ function Sheet({ editor }: { editor: Editor }) {
 
 // ---------------------------------------------------------------- settings
 /** The choices live above the footer and the body so the primary button can read them. */
-interface Pick { keys: string[]; choices: ExportChoices; dest: Destination['id'] | null; /** what the server's plan says about the target size (the Preview's request fills it) */ fit: FitView; /** a destination openExportSheet was asked to choose, applied by Settings (destinationPick) */ want?: Destination['id'] | null }
+interface Pick { /** the counts of the preflight checks, for the line beside the export button (null until they are counted) */ pre: { blockers: number; warnings: number; notes: number } | null; keys: string[]; choices: ExportChoices; dest: Destination['id'] | null; /** what the server's plan says about the target size (the Preview's request fills it) */ fit: FitView; /** a destination openExportSheet was asked to choose, applied by Settings (destinationPick) */ want?: Destination['id'] | null }
 // a destination is chosen from the start (saving a file on this computer: the original shape, full quality), so the sheet never opens on nothing
 const FIRST = DESTINATIONS.find((d) => d.id === 'computer')!;
-let pick: Pick = { fit: { kind: 'none' }, keys: ['master'], choices: { ...DEFAULT_CHOICES, ...FIRST.choices }, dest: FIRST.id };
+let pick: Pick = { pre: null, fit: { kind: 'none' }, keys: ['master'], choices: { ...DEFAULT_CHOICES, ...FIRST.choices }, dest: FIRST.id };
 const pickListeners = new Set<() => void>();
 const setPick = (p: Partial<Pick>) => { pick = { ...pick, ...p }; for (const l of pickListeners) l(); };
 const usePick = () => useSyncExternalStore((l) => { pickListeners.add(l); return () => { pickListeners.delete(l); }; }, () => pick);
@@ -397,6 +397,10 @@ function Checks({ editor, S, lead, chosen }: { editor: Editor; S: ExportStrings;
   const loudBad = lufs != null && target !== -14 && Math.abs(lufs + 14) > 2;
   const fmt = (v: number) => v.toFixed(1).replace('-', '−');
   const issues = rep?.issues.filter((i) => i.code !== 'no_loudness_target') ?? [];
+  useEffect(() => {
+    setPick({ pre: rep && !failed ? { blockers: issues.filter((i) => i.severity === 'blocker').length, warnings: issues.filter((i) => i.severity === 'warning').length, notes: issues.filter((i) => i.severity === 'note').length } : null });
+    return () => setPick({ pre: null });
+  }, [rep, failed]); // eslint-disable-line react-hooks/exhaustive-deps
   const words = (i: PreflightIssue): [string, string, string] => S.issue[i.code] ?? [i.message, '', ''];
   return (
     <section aria-labelledby="xs-pre" data-testid="export-preflight">
@@ -473,6 +477,7 @@ function SettingsFooter({ editor, S }: { editor: Editor; S: ExportStrings }) {
   return (
     <>
       <span className="pf-xs-ambient">{S.ambient}</span>
+      {p.pre && <span className="pf-xs-pre" role="status" data-testid="export-pre-summary" data-blockers={p.pre.blockers}>{S.preSummary(p.pre.blockers, p.pre.warnings, p.pre.notes)}</span>}
       <Button variant="ghost" size="lg" onClick={closeExportSheet}>{S.cancel}</Button>
       <Button variant="primary" size="lg" icon={<Upload size={18} strokeWidth={1.75} aria-hidden="true" />} busy={s.starting} disabledReason={reason} onClick={() => void start()} data-testid="export-start" keys={['Enter']}>{S.exportN(chosen.length)}</Button>
       {s.error && <span className="pf-xs-err" role="alert">{s.error}{s.blockers.length > 0 && <> · {s.blockers.map((b) => b.message).join('; ')}</>}</span>}

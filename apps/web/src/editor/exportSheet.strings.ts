@@ -21,6 +21,11 @@ export const EXPORT_STRINGS = {
     cancel: 'ביטול', pick: 'בחרו לפחות פורמט אחד', noClips: 'אין עדיין מה לייצא', starting: 'מתחילים…',
     ambient: 'הייצוא ממשיך ברקע; אפשר להמשיך לערוך',
     checking: 'בודקים…', allClear: 'לא נמצאו בעיות', recheck: 'בדיקה מחדש',
+    // the one line next to the export button (design review I9): the counts of the checks, so nothing has to be scrolled to
+    preSummary: (b: number, w: number, n: number) => {
+      const parts = [b ? (b === 1 ? 'דבר אחד חוסם ייצוא' : `${b} דברים חוסמים ייצוא`) : '', w ? (w === 1 ? 'אזהרה אחת' : `${w} אזהרות`) : '', n ? (n === 1 ? 'הערה אחת' : `${n} הערות`) : ''].filter(Boolean);
+      return parts.length ? `בדיקה לפני ייצוא: ${parts.join(' · ')}. הפרטים בהמשך הדף.` : 'בדיקה לפני ייצוא: לא נמצאו בעיות.';
+    },
     preflightFail: 'הבדיקה לא הושלמה', retry: 'ניסיון חוזר',
     flashRow: 'בדיקת הבהובים', flashPending: 'תרוץ בסוף הייצוא ותוצג כאן, עם קפיצה לקטע אם יימצא',
     loud: 'עוצמת שמע', loudMeasuring: 'מודדים…', loudOk: (v: string) => `${v} LUFS · מתאים לרשתות`, loudLow: (v: string) => `${v} LUFS · שקט מדי לרשתות`, loudHigh: (v: string) => `${v} LUFS · חזק מדי לרשתות`, loudSet: 'יישור ל־14−', loudNone: 'אין שמע בסרטון', loudLeadOnly: 'נמדד רק הראשון מבין הפורמטים שנבחרו:',
@@ -87,6 +92,10 @@ export const EXPORT_STRINGS = {
     cancel: 'Cancel', pick: 'Pick at least one format', noClips: 'There is nothing to export yet', starting: 'Starting…',
     ambient: 'Export keeps going in the background; you can keep editing',
     checking: 'Checking…', allClear: 'No problems found', recheck: 'Check again',
+    preSummary: (b: number, w: number, n: number) => {
+      const parts = [b ? (b === 1 ? '1 thing blocks export' : `${b} things block export`) : '', w ? (w === 1 ? '1 warning' : `${w} warnings`) : '', n ? (n === 1 ? '1 note' : `${n} notes`) : ''].filter(Boolean);
+      return parts.length ? `Checks before export: ${parts.join(' · ')}. Details further down.` : 'Checks before export: no problems found.';
+    },
     preflightFail: 'The check did not finish', retry: 'Try again',
     flashRow: 'Flash check', flashPending: 'Runs at the end of the export and shows here, with a jump to the stretch if one is found',
     loud: 'Sound level', loudMeasuring: 'Measuring…', loudOk: (v: string) => `${v} LUFS · fits social networks`, loudLow: (v: string) => `${v} LUFS · too quiet for social networks`, loudHigh: (v: string) => `${v} LUFS · too loud for social networks`, loudSet: 'Set to −14', loudNone: 'The video has no sound', loudLeadOnly: 'Only the first of the chosen formats is measured:',
