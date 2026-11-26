@@ -156,6 +156,32 @@ The model is published under Apache 2.0 (its card). The publisher's own README d
 
 **Not established.** Quality in Hebrew; the relevance floor `PICTURE_MIN_RELEVANCE` (0.001, provisional: it can show too little or too much until measured); scan time; whether the install list resolves on the laptop. `pnpm proof:search` uses a labelled test double of the model and proves the plumbing, never the quality; `pnpm proof:search-real` runs the real model once steps 1 and 2 are done.
 
+## Eye suggestions «הצעת עיניים» (optional, owner only — wave 8 picmodels track)
+Marking the eyes by hand in «גדלים מול העיניים» needs none of this and works as it is. «הציעו עיניים» asks a small local face-detection model (YuNet, 2023 March file, MIT licence) where the eyes are in the one picture you are marking, and draws its suggestion for you to accept or correct. It runs on the CPU of this computer only, in a new process for each request that ends when it answers; the picture goes to it in memory, and only two points per face come back: no box, no score, no other landmark, no identity. It finds where eyes are and does not recognise who is in the picture. Nothing about the request or the answer is stored (no job, event, file or log line); what you accept is sent once with the growing plan, as hand marks are. With more than eight faces it proposes nothing and says so. The setup line beside the button says which step is missing.
+
+**Honest state.** Written and tested in a Linux container that has onnxruntime 1.29.0 but not the YuNet file: the worker's session code ran there against a hand-made stand-in graph of constants, never against YuNet. The worker `apps/server/tools/pf_picture.py` reads YuNet's twelve output heads (`cls_8 … kps_32`), the colour order (BGR) and the range (0–255) as OpenCV's `FaceDetectorYN` uses that file, which is **not verified** until checks PM4 and PM5 below have run on the laptop. The score floor 0.9 and the overlap limit 0.3 are OpenCV's defaults: heuristic numbers, provisional. Until the lead has read the worker and pinned its SHA-256, the setup line is «engine_unverified». Quality on children's faces (profiles, glasses, small faces in a group picture at 640 px) and the time of one request have not been measured.
+
+**1. Packages, on top of the picture-search environment.** First do step 1 of «חיפוש בתמונה» above (the same `PF_TOOLS_PYTHON`). Then:
+```bat
+"%PF_TOOLS_PYTHON%" -m pip install --require-hashes --only-binary=:all: --no-deps -r apps\server\tools\requirements-picture-win-cpu.txt
+"%PF_TOOLS_PYTHON%" -m pip check
+```
+`requirements-picture-win-cpu.txt` pins onnxruntime 1.29.0 (the CPU package, MIT), flatbuffers 25.12.19 and protobuf 7.36.2 by the SHA-256 of their wheels; numpy and packaging come from the search list, which is not changed. `--no-deps` is deliberate: `pip check` is the test that nothing is missing, and it must print `No broken requirements found.` **Never install `onnxruntime-gpu` in this environment**: it is a separate package with the same import name. The worker asks for the CPU only, with 2 threads, so an export running at the same time keeps the other cores.
+
+**2. The model file, from the library folder only.** The item `yunet` of `tools/library/manifests/models-01.json` holds the file (232,589 bytes, pinned by SHA-256 at revision `3cc26e7f…`) and its licence. Fetch it with the library's own fetcher, `node fetch.mjs --root <library> --manifest models-01.json --only yunet` (see `tools/library/README.md`), into `<library>/models/face_detection/yunet/`. The editor finds it only through the library's ledger, checks its size and SHA-256 before it is loaded, never downloads it and never puts it in a backup or an archive. Keep the `LICENSE` file beside it.
+
+**3. The laptop checks, in order** (Windows, repository root; each figure is one sample; anything else printed is a stop, the button stays off and the finding goes to BLOCKERS):
+| Check | Command | Must print |
+|---|---|---|
+| PM1 | the two commands of step 1 | the three packages installed with no hash error; `No broken requirements found.` |
+| PM2 | `"%PF_TOOLS_PYTHON%" -I -X utf8 apps\server\tools\pf_picture.py probe` | one JSON line with `"ok":true`, numpy 2.5.4, onnxruntime 1.29.0, `"missing":null` |
+| PM3 | `pnpm proof:picmodels-real -- --setup` | `yunet ready (232589 B verified, cpu)`; the depth and matte rows `not_built`; never a path |
+| PM4 | `"%PF_TOOLS_PYTHON%" -I -X utf8 apps\server\tools\pf_picture.py inspect --model yunet --file model=<library>\models\face_detection\yunet\face_detection_yunet_2023mar.onnx` | the input name and its shape `[1, 3, h, w]` (named or numbers), and exactly the twelve outputs `cls_8 cls_16 cls_32 obj_* bbox_* kps_*`, each `[1, cells, 1 \| 4 \| 10]`. Any other list is a STOP: the decode is corrected first |
+| PM5 | `pnpm proof:picmodels-real -- --eyes <one consented picture of an adult>` | `faces: N`, each pair in shown pixels, the seconds of the request, `data dir unchanged`, `PASS PM5`; then you look whether the rings sit on the eyes (nobody else can) |
+| PM12 | `pf_picture.py inspect --model yunet --file model=<a damaged copy>`, then `dir %LOCALAPPDATA%\CrashDumps` and `dir C:\ProgramData\Microsoft\Windows\WER\ReportArchive` | an error line with a code and no traceback; no new dump or report naming python.exe |
+
+A damaged copy has another size or SHA-256, so the worker refuses it with `model_mismatch` before the file is opened; that is the expected line. PM5 imports the picture into a new temporary data folder that is deleted at the end, and writes no evidence file: an eye position of a person is never stored.
+
 ## Running on the owner's GPU laptop (RTX 3050, 4 GB) — untested guidance
 Nothing below has been run; it is the intended procedure, to be corrected by the first real run.
 1. Install Node 22, pnpm, FFmpeg and Python 3.11–3.13; clone, `pnpm install && pnpm build`.
