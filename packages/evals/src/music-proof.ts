@@ -71,7 +71,7 @@ async function main() {
 
   check('every style still carries review \'unheard\' (the owner has not listened)', MUSIC_STYLES.every((s) => s.review === 'unheard'), MUSIC_STYLES.map((s) => [s.id, s.review]));
 
-  const s = await startServer({ port: 8883, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

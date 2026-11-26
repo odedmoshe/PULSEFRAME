@@ -18,7 +18,6 @@ import { startServer } from '@pulseframe/server';
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/g0');
 const COMFY = process.env.PF_COMFYUI_URL ?? 'http://127.0.0.1:8188';
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8798);
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail)}` : ''}`); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -38,7 +37,7 @@ async function main() {
   }
   await waitIdle();
   let n = 0;
-  const boot = async (cfg: Record<string, unknown>, adapter?: ProviderAdapter) => startServer({ port: PORT, dataDir: path.join(art, `data${n++}`), ...cfg }, { providerAdapter: adapter });
+  const boot = async (cfg: Record<string, unknown>, adapter?: ProviderAdapter) => startServer({ port: 0, dataDir: path.join(art, `data${n++}`), ...cfg }, { providerAdapter: adapter });
   const api = (s: { url: string; auth: any }, token = s.auth.tokens.agent) => async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { authorization: `Bearer ${token}`, connection: 'close', ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
     return { status: r.status, body: r.headers.get('content-type')?.includes('json') ? await r.json() : await r.arrayBuffer() } as { status: number; body: any };
@@ -203,7 +202,7 @@ async function main() {
   const dataDir = s.cfg.dataDir;
   await s.close(); // server dies while its job is queued at the provider
   await real.cancel(b.providerJobId);
-  s = await startServer({ port: PORT, dataDir, comfyuiUrl: COMFY });
+  s = await startServer({ port: 0, dataDir, comfyuiUrl: COMFY });
   call = api(s);
   const rec = await waitJob(call, c2.body.jobId);
   await waitIdle();

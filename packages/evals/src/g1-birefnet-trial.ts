@@ -29,7 +29,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   const ready = await new ComfyUIAdapter(COMFY).probe();
   if (!ready.reachable) { console.error(`BLOCKED: ComfyUI not reachable at ${COMFY}`); process.exit(2); }
-  const s = await startServer({ port: 8796, dataDir: path.join(art, 'data'), comfyuiUrl: COMFY, comfyuiModelsDir: MODELS });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), comfyuiUrl: COMFY, comfyuiModelsDir: MODELS });
   const origin = s.url;
   const agent = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   // The owner's own session, as the local browser UI obtains it.

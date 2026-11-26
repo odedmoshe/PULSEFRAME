@@ -118,7 +118,7 @@ async function main() {
     { file: 'vector.svg', what: 'SVG containing a script', refuse: true },
   ];
   const cases = all.filter((c) => have.has(c.file));
-  const s = await startServer({ port: 8823, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

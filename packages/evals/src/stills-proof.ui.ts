@@ -11,7 +11,6 @@
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright';
@@ -23,7 +22,6 @@ export interface StillsProofPart { built: boolean; checks: Record<string, () => 
 
 const art = fs.mkdtempSync(path.join(os.tmpdir(), `pf-stills-ui-${process.pid}-`));
 process.once('exit', () => { try { fs.rmSync(art, { recursive: true, force: true }); } catch { /* best effort */ } });
-const freePort = async () => { const x = net.createServer(); await new Promise<void>((r) => x.listen(0, '127.0.0.1', r)); const p = (x.address() as net.AddressInfo).port; await new Promise((r) => x.close(r)); return p; };
 const rt = (n: number) => ({ value: String(n), timescale: 30 });
 
 let server: RunningServer | null = null, browser: Browser | null = null;
@@ -241,7 +239,7 @@ async function u5(): Promise<true | string> {
 
 export async function startUi(): Promise<void> {
   if (server) return;
-  server = await startServer({ port: await freePort(), host: '127.0.0.1', dataDir: path.join(art, 'data'), backupDir: null, libraryDir: null });
+  server = await startServer({ port: 0, host: '127.0.0.1', dataDir: path.join(art, 'data'), backupDir: null, libraryDir: null });
   browser = await chromium.launch();
 }
 export async function stopUi(): Promise<void> { await browser?.close().catch(() => {}); await server?.close().catch(() => {}); browser = null; server = null; }

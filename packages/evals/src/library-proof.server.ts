@@ -26,7 +26,6 @@ import { FIX_COUNTS, FIX_KEYS, FIX_SVG_COUNTS, makeLibraryFixture, type LibraryF
 import type { LibraryProofPart } from './library-proof.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const PORT = 18000 + Math.floor(Math.random() * 1000);
 const sha = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const evidence: Record<string, unknown> = {};
@@ -52,7 +51,7 @@ let worldP: Promise<World> | null = null;
 const world = () => (worldP ??= makeWorld());
 
 async function boot(dataDir: string) {
-  return startServer({ port: PORT, dataDir, libraryDir: null, speechPython: null, voicePython: null, backupDir: null });
+  return startServer({ port: 0, dataDir, libraryDir: null, speechPython: null, voicePython: null, backupDir: null });
 }
 async function makeWorld(): Promise<World> {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-library-proof-'));

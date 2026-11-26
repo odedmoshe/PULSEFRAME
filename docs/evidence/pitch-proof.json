@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T20:58:39.923Z",
+  "ranAt": "2026-11-26T05:48:54.910Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "gpu": "none"
   },
   "scope": "One synthetic 4-second fixture (frame barcode with a 100 ms, 1 kHz beep each second) at half and double speed with the pitch kept. Beep times and frequencies are measured from the exported sound; in the preview only beep onsets are measured (not the frequency). A continuous ramp 0.5× → 2× on the same fixture: every exported frame against the ramp formula, beep times and pitch. No speech, no music, no listening test: this shows timing and pitch are right, not that it sounds good.",

@@ -68,7 +68,6 @@ const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/family-film-proof');
 const shots = path.join(root, '.artifacts/shots');
 const evidenceFile = path.join(root, 'docs/evidence/family-film-proof.json');
-const PORT = 8871;
 const W = 640, H = 360, FPS = 30;
 const R = { num: 30, den: 1 };
 /** Typed from the fixture, on Israel's wall clock (UTC + 2 h): b 10:00, d 10:04, a 10:09, f 10:13, c 10:20, the still 10:23, e 10:26. */
@@ -136,7 +135,7 @@ async function main() {
   measurements.fixtures = { clips: truth.clips.map((c) => ({ name: c.name, frames: c.frames, truth: c.truth, offset: c.startOffsetFrames })), generateSeconds: r2((Date.now() - tGen) / 1000) };
   const clipOf = (name: string) => truth.clips.find((c) => c.name === name)!;
 
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist'), homeZone: 'Asia/Jerusalem' });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist'), homeZone: 'Asia/Jerusalem' });
   const origin = s.url;
   const ownerCookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   type Who = Record<string, string>;

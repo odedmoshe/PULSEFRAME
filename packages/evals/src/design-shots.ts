@@ -23,7 +23,7 @@ async function main() {
   if (!fs.existsSync(a)) ff(['-f', 'lavfi', '-t', '6', '-i', 'mandelbrot=s=1080x1920:r=30:start_scale=2.2:end_scale=0.6', '-f', 'lavfi', '-t', '6', '-i', 'sine=f=220', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-c:a', 'aac', a]);
   if (!fs.existsSync(b)) ff(['-f', 'lavfi', '-t', '5', '-i', 'gradients=s=1080x1920:r=30:c0=0x2a1a5e:c1=0xf5b84b:c2=0x3de0c8:speed=0.02', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', b]);
   if (!fs.existsSync(m)) ff(['-f', 'lavfi', '-t', '12', '-i', 'sine=f=110', '-af', 'tremolo=f=2:d=0.9', '-ac', '2', m]);
-  const s = await startServer({ port: 8831, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => { const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); return (await r.json()) as any; };
   const txs = async (pid: string, ops: unknown[]) => call(`/projects/${pid}/transactions`, { ops });

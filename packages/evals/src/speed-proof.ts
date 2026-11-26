@@ -46,7 +46,7 @@ async function main() {
   const toneFile = path.join(art, 'tone440.wav');
   ff(['-y', '-f', 'lavfi', '-t', '4', '-i', `sine=f=440:r=${SR}`, '-af', 'volume=0.5', '-ac', '2', '-c:a', 'pcm_s16le', toneFile]);
 
-  const s = await startServer({ port: 8812, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

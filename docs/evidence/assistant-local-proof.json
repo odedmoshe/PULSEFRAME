@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-26T01:18:28.381Z",
+  "ranAt": "2026-11-26T07:48:44.808Z",
   "result": "PASS",
   "counts": {
     "pass": 15,
@@ -11,13 +11,13 @@
       "id": "L1",
       "name": "with the local adapter chosen and no port saved the owner's status is provider_not_configured; with a port it is ready; seven non-owner credentials read only connected, setup and detail (no port, no model name, no last check)",
       "status": "pass",
-      "ms": 172
+      "ms": 152
     },
     {
       "id": "L2",
       "name": "PUT /assistant/config refuses a local block holding a host, a URL or a path with 400 and stores nothing; every URL the adapter dialled during the whole proof starts with http://127.0.0.1:",
       "status": "pass",
-      "ms": 5810
+      "ms": 5791
     },
     {
       "id": "L3",
@@ -83,7 +83,7 @@
       "id": "L13",
       "name": "in Chromium from the keyboard, Hebrew and English, RTL: an unknown request shows «לשאול את העוזר המקומי»; Enter, then «הכנס לשורה» puts the phrase in the input with the badge; the grammar preview shows; Enter commits exactly one transaction labelled Command bar: gain_change at the shown revision; intent none shows its sentence and no button",
       "status": "pass",
-      "ms": 7919
+      "ms": 8199
     },
     {
       "id": "L14",

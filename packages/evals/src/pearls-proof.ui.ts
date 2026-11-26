@@ -28,7 +28,6 @@ import { shortBody } from '../../../apps/web/src/editor/pearls/pearls.logic.ts';
 import { openInspectorPage } from './editor-ui.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const PORT = 18900 + Math.floor(Math.random() * 90);
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const evidence: Record<string, unknown> = {};
@@ -55,7 +54,7 @@ async function makeWorld(): Promise<World> {
   const c = (await generateBarcodeFixture({ out: path.join(fx, 'c30.mp4'), frames: 290, fps: { num: 30, den: 1 } })).file;
   const webDist = path.join(ROOT, 'apps/web/dist');
   const web = fs.existsSync(path.join(webDist, 'index.html')) && fs.existsSync(path.join(webDist, 'selftest.html'));
-  const s = await startServer({ port: PORT, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
+  const s = await startServer({ port: 0, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
   const origin = s.url;
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   const browser = web ? await chromium.launch() : null;

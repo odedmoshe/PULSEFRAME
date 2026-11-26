@@ -146,7 +146,7 @@ async function main() {
   const black169 = pic('black-1280x720', 'color=c=black', 1280, 720), black916 = pic('black-720x1280', 'color=c=black', 720, 1280);
   const black360 = pic('black-640x360', 'color=c=black', 640, 360), colour360 = pic('testsrc-640x360', 'testsrc2', 640, 360);
 
-  const s = await startServer({ port: 8877, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const auth = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...auth, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

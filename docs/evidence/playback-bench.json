@@ -3511,5 +3511,2254 @@
     ]
    }
   ]
+ },
+ "tree": {
+  "ranAt": "2026-11-26T10:52:39.624Z",
+  "cpus": 4,
+  "chromium": "153.0.8010.12",
+  "framesPerCell": 20,
+  "how": "lab.html?bench=playback: evaluate + drawGraph (draft) on an off-screen { alpha: false } canvas, one copy to the visible canvas, a one-pixel read-back; pictures at the proxy size, a new I420 VideoFrame per frame and layer (video) or an ImageBitmap (bitmap); the first 3 frames of a cell are not counted",
+  "profile": [
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 8.2
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 29.7
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 10.2
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 24.3
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 8.1
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 18.1
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 4.9
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 84.5
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 12.5
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 65.4
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 21.9
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 17.7
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 13.8
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 14.5
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 2.3
+   },
+   {
+    "from": "960x540",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 18.1
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 3.6
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 23.8
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 6.7
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 11.5
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 7.6
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 15.2
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 3
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 22.9
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 8.4
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 18.8
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 5.7
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 12.1
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 3.3
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 10.9
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 1.4
+   },
+   {
+    "from": "960x540",
+    "to": "1280x720",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 3.5
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 2
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 15
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 7.5
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 6.9
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 5.1
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 8.4
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 2
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 5.3
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 0.3
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 0.9
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 0.3
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 1.4
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 0.4
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 0.9
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 0.5
+   },
+   {
+    "from": "960x540",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 1.2
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 2.3
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 6.7
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 2
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 5.8
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 1.8
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 5.8
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 0.8
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 3.4
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 3.5
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 11.1
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 2
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 6.7
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 1.5
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 4.4
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 0.7
+   },
+   {
+    "from": "304x540",
+    "to": "540x960",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 1.9
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 0.7
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 4.3
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 0.7
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 2.9
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 0.5
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 2
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 0.7
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 2.4
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 0.2
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 0.6
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 0.2
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 0.5
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 0.2
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 0.5
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 0.3
+   },
+   {
+    "from": "304x540",
+    "to": "304x540",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 0.5
+   },
+   {
+    "from": "1920x1080",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 17.4
+   },
+   {
+    "from": "1920x1080",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 64.8
+   },
+   {
+    "from": "1920x1080",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 18.4
+   },
+   {
+    "from": "1920x1080",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 91.9
+   },
+   {
+    "from": "1920x1080",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 13.3
+   },
+   {
+    "from": "1920x1080",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 124.3
+   },
+   {
+    "from": "1920x1080",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 18.2
+   },
+   {
+    "from": "1920x1080",
+    "to": "1707x960",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 54.8
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 18.9
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 64.6
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 18.2
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 30.8
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 8
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 94.1
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 23.7
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "video",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 33.6
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 4.4
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 14.5
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 5.6
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 19.3
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 2.4
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 18.7
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 1.2
+   },
+   {
+    "from": "1920x1080",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 2.7
+   },
+   {
+    "from": "4000x3000",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 16.1
+   },
+   {
+    "from": "4000x3000",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 184.1
+   },
+   {
+    "from": "4000x3000",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 14.4
+   },
+   {
+    "from": "4000x3000",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 153.6
+   },
+   {
+    "from": "4000x3000",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 11.1
+   },
+   {
+    "from": "4000x3000",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 26.3
+   },
+   {
+    "from": "4000x3000",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 16.7
+   },
+   {
+    "from": "4000x3000",
+    "to": "1707x960",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 10.8
+   },
+   {
+    "from": "4000x3000",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 1,
+    "medianMs": 5.7
+   },
+   {
+    "from": "4000x3000",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "high",
+    "layers": 3,
+    "medianMs": 25.1
+   },
+   {
+    "from": "4000x3000",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 1,
+    "medianMs": 4.1
+   },
+   {
+    "from": "4000x3000",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "medium",
+    "layers": 3,
+    "medianMs": 46
+   },
+   {
+    "from": "4000x3000",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 1,
+    "medianMs": 4.7
+   },
+   {
+    "from": "4000x3000",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "low",
+    "layers": 3,
+    "medianMs": 22.4
+   },
+   {
+    "from": "4000x3000",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 1,
+    "medianMs": 1.4
+   },
+   {
+    "from": "4000x3000",
+    "to": "960x540",
+    "source": "bitmap",
+    "smoothing": "off",
+    "layers": 3,
+    "medianMs": 4.6
+   }
+  ],
+  "samples": [
+   {
+    "loadBefore": "26.15 25.03 26.29",
+    "loadAfter": "26.77 25.32 26.34",
+    "cells": [
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 63.4,
+      "minMs": 23,
+      "maxMs": 235.9
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 49.1,
+      "minMs": 12.3,
+      "maxMs": 136.5
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 11.6,
+      "minMs": 4.6,
+      "maxMs": 42.2
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 43.8,
+      "minMs": 17.9,
+      "maxMs": 256.9
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 22.5,
+      "minMs": 9.3,
+      "maxMs": 163.3
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 7.9,
+      "minMs": 3.7,
+      "maxMs": 32.8
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 53.9,
+      "minMs": 37.1,
+      "maxMs": 402.9
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 74.4,
+      "minMs": 32.2,
+      "maxMs": 275.4
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 24.8,
+      "minMs": 9.8,
+      "maxMs": 103.1
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 179.2,
+      "minMs": 35.7,
+      "maxMs": 265.3
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 21,
+      "minMs": 19.1,
+      "maxMs": 51.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 1.6,
+      "minMs": 1.4,
+      "maxMs": 5.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 37.9,
+      "minMs": 26.1,
+      "maxMs": 142.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 16.7,
+      "minMs": 14.7,
+      "maxMs": 48.1
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 2.9,
+      "minMs": 1.5,
+      "maxMs": 45.5
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 103.2,
+      "minMs": 48.9,
+      "maxMs": 572.2
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 77.3,
+      "minMs": 23.6,
+      "maxMs": 274.4
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 26.2,
+      "minMs": 5.8,
+      "maxMs": 55.5
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 10.8,
+      "minMs": 5,
+      "maxMs": 146
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 10.5,
+      "minMs": 5.3,
+      "maxMs": 40.3
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 6.5,
+      "minMs": 2.9,
+      "maxMs": 41.1
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 8.6,
+      "minMs": 4.5,
+      "maxMs": 67.8
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 11.6,
+      "minMs": 4.7,
+      "maxMs": 23.7
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 2.9,
+      "minMs": 2.1,
+      "maxMs": 57.7
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 17.6,
+      "minMs": 9.2,
+      "maxMs": 116.3
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 38.6,
+      "minMs": 9.3,
+      "maxMs": 167.9
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 9.1,
+      "minMs": 3.5,
+      "maxMs": 52.7
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 14,
+      "minMs": 11.2,
+      "maxMs": 18.4
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 11.5,
+      "minMs": 11.1,
+      "maxMs": 16.8
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 3,
+      "minMs": 2.1,
+      "maxMs": 3.9
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 10.4,
+      "minMs": 8,
+      "maxMs": 12.6
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 10.8,
+      "minMs": 8.4,
+      "maxMs": 20
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 1.9,
+      "minMs": 1.7,
+      "maxMs": 2.7
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 14.5,
+      "minMs": 13.9,
+      "maxMs": 36.8
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 15,
+      "minMs": 13.9,
+      "maxMs": 56.4
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 2.8,
+      "minMs": 2.4,
+      "maxMs": 12.8
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 13.6,
+      "minMs": 8.5,
+      "maxMs": 24.6
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 11.6,
+      "minMs": 7.5,
+      "maxMs": 80.4
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 20.1,
+      "minMs": 12.8,
+      "maxMs": 237
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 3.6,
+      "minMs": 2.2,
+      "maxMs": 8.3
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 3,
+      "minMs": 2.7,
+      "maxMs": 3.7
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 8.6,
+      "minMs": 6.4,
+      "maxMs": 28.5
+     }
+    ]
+   },
+   {
+    "loadBefore": "26.77 25.32 26.34",
+    "loadAfter": "27.65 25.72 26.43",
+    "cells": [
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 48.4,
+      "minMs": 21,
+      "maxMs": 126
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 23.5,
+      "minMs": 13.9,
+      "maxMs": 119.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 9.5,
+      "minMs": 4.4,
+      "maxMs": 17.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 17.1,
+      "minMs": 15.6,
+      "maxMs": 39.5
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 18.7,
+      "minMs": 15.1,
+      "maxMs": 24.3
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 8.1,
+      "minMs": 4.6,
+      "maxMs": 20.2
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 155.4,
+      "minMs": 44.6,
+      "maxMs": 483.5
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 50.4,
+      "minMs": 21.5,
+      "maxMs": 175.4
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 12.6,
+      "minMs": 8.5,
+      "maxMs": 145.2
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 42.1,
+      "minMs": 37.7,
+      "maxMs": 179.7
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 23.2,
+      "minMs": 20.2,
+      "maxMs": 68.2
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 3.5,
+      "minMs": 2.1,
+      "maxMs": 4.9
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 43.6,
+      "minMs": 25.4,
+      "maxMs": 185.7
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 17,
+      "minMs": 13.9,
+      "maxMs": 148.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 7.2,
+      "minMs": 2.6,
+      "maxMs": 27.2
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 123,
+      "minMs": 53.6,
+      "maxMs": 343.1
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 38.9,
+      "minMs": 26.4,
+      "maxMs": 67.7
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 7.6,
+      "minMs": 6.5,
+      "maxMs": 27
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 11.5,
+      "minMs": 5.4,
+      "maxMs": 48.7
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 12.3,
+      "minMs": 6.3,
+      "maxMs": 39.2
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 7.6,
+      "minMs": 3.1,
+      "maxMs": 20.4
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 9.1,
+      "minMs": 4.8,
+      "maxMs": 23.4
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 6.9,
+      "minMs": 5,
+      "maxMs": 22.4
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 3.5,
+      "minMs": 2.6,
+      "maxMs": 45.7
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 22.4,
+      "minMs": 11.3,
+      "maxMs": 217.5
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 23,
+      "minMs": 9.4,
+      "maxMs": 145
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 11.1,
+      "minMs": 3.5,
+      "maxMs": 432
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 12.3,
+      "minMs": 11.1,
+      "maxMs": 37.6
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 21.7,
+      "minMs": 17.1,
+      "maxMs": 150.2
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 4.6,
+      "minMs": 2.1,
+      "maxMs": 70
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 13.9,
+      "minMs": 8.6,
+      "maxMs": 53.3
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 13.1,
+      "minMs": 11.2,
+      "maxMs": 31.1
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 2.9,
+      "minMs": 2.3,
+      "maxMs": 3.6
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 16.7,
+      "minMs": 15,
+      "maxMs": 32
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 19.7,
+      "minMs": 14.4,
+      "maxMs": 38.1
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 3,
+      "minMs": 2.6,
+      "maxMs": 5.1
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 19.5,
+      "minMs": 8.7,
+      "maxMs": 119.7
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 9.1,
+      "minMs": 6.2,
+      "maxMs": 28.3
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 26.8,
+      "minMs": 13.9,
+      "maxMs": 88.1
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 2.9,
+      "minMs": 2.1,
+      "maxMs": 86.4
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 3.4,
+      "minMs": 2.5,
+      "maxMs": 5.2
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 9.2,
+      "minMs": 7.3,
+      "maxMs": 23.2
+     }
+    ]
+   },
+   {
+    "loadBefore": "27.65 25.72 26.43",
+    "loadAfter": "24.25 25.10 26.20",
+    "cells": [
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 101.4,
+      "minMs": 25,
+      "maxMs": 211
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 24.2,
+      "minMs": 12.9,
+      "maxMs": 265.7
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 8.2,
+      "minMs": 4.7,
+      "maxMs": 22.2
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 29.1,
+      "minMs": 17.5,
+      "maxMs": 52.1
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 12.6,
+      "minMs": 10.2,
+      "maxMs": 35.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 6.2,
+      "minMs": 4.9,
+      "maxMs": 14.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 51.6,
+      "minMs": 33.5,
+      "maxMs": 168.9
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 61.6,
+      "minMs": 34.9,
+      "maxMs": 335.9
+     },
+     {
+      "project": "1920x1080",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 10.9,
+      "minMs": 9.3,
+      "maxMs": 17
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 74.2,
+      "minMs": 37.3,
+      "maxMs": 175.2
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 58.1,
+      "minMs": 29.8,
+      "maxMs": 199.7
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 2.7,
+      "minMs": 1.5,
+      "maxMs": 25.4
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 53,
+      "minMs": 28.2,
+      "maxMs": 238.8
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 24.3,
+      "minMs": 14.7,
+      "maxMs": 163.8
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 2.7,
+      "minMs": 2.2,
+      "maxMs": 8.8
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "1707x960",
+      "medianMs": 164.8,
+      "minMs": 59,
+      "maxMs": 310.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "alternative (height 720)",
+      "size": "1280x720",
+      "medianMs": 31.7,
+      "minMs": 25.2,
+      "maxMs": 145.6
+     },
+     {
+      "project": "1920x1080",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "960x540",
+      "medianMs": 27.7,
+      "minMs": 11.2,
+      "maxMs": 74.8
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 43.9,
+      "minMs": 8.5,
+      "maxMs": 100.3
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 21.7,
+      "minMs": 6.3,
+      "maxMs": 58.2
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 4.4,
+      "minMs": 2.8,
+      "maxMs": 10.6
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 8.2,
+      "minMs": 5.2,
+      "maxMs": 83.9
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 8.6,
+      "minMs": 6.1,
+      "maxMs": 12.8
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 2.8,
+      "minMs": 2,
+      "maxMs": 10.7
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 12.9,
+      "minMs": 9.1,
+      "maxMs": 148.6
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 18.9,
+      "minMs": 9.7,
+      "maxMs": 225.4
+     },
+     {
+      "project": "1080x1920",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 7.4,
+      "minMs": 3.9,
+      "maxMs": 33.3
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 12.6,
+      "minMs": 10.9,
+      "maxMs": 18.8
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 21.7,
+      "minMs": 16.9,
+      "maxMs": 49.4
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 3.5,
+      "minMs": 2.2,
+      "maxMs": 3.9
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 9.1,
+      "minMs": 8.1,
+      "maxMs": 10.9
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 16.1,
+      "minMs": 7.9,
+      "maxMs": 35.9
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 1.9,
+      "minMs": 1.7,
+      "maxMs": 6.8
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "sharper (height 960, the rule before)",
+      "size": "540x960",
+      "medianMs": 14,
+      "minMs": 13.5,
+      "maxMs": 21.6
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 17.4,
+      "minMs": 13.6,
+      "maxMs": 31.6
+     },
+     {
+      "project": "1080x1920",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "alternative (the proxy's own 304x540)",
+      "size": "304x540",
+      "medianMs": 3.7,
+      "minMs": 2.6,
+      "maxMs": 4.6
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 14.8,
+      "minMs": 8.3,
+      "maxMs": 38
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 7.2,
+      "minMs": 6.1,
+      "maxMs": 19.6
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "video",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 22,
+      "minMs": 10.8,
+      "maxMs": 36.5
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "three opaque clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 2.7,
+      "minMs": 1.9,
+      "maxMs": 32
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "one faded clip over one opaque",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 4.8,
+      "minMs": 3.2,
+      "maxMs": 6.2
+     },
+     {
+      "project": "1080x1920 if proxies were 540x960",
+      "source": "bitmap",
+      "scene": "three faded clips",
+      "at": "rule",
+      "size": "540x960",
+      "medianMs": 14.5,
+      "minMs": 6.6,
+      "maxMs": 37.5
+     }
+    ]
+   }
+  ]
  }
 }

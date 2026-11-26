@@ -41,8 +41,11 @@ import { makeBaselineFixtures } from './phone-drop-baseline.ts';
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/phone-drop');
 const evidenceFile = path.join(root, 'docs/evidence/phone-drop-proof.json');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8951);
-const DROP_PORT = PORT + 1;
+/** The door's port for the child server. A door binds only while a code is live, and P2 / P3c / P13 / P20 assert that its port refuses when none is: the proof must know the number before any code exists, so it asks the system for one free port (freePort) and hands it to the child as dropPort. Everything else listens on port 0. */
+let DROP_PORT = 0;
+const freePort = async () => { const x = net.createServer(); await new Promise<void>((r) => x.listen(0, '127.0.0.1', r)); const p = (x.address() as net.AddressInfo).port; await new Promise((r) => x.close(r)); return p; };
+/** The port the child server was given by the system (read from the url it printed). */
+const childPort = () => Number(new URL(child!.url).port);
 const DOOR = '127.0.0.1';
 const SECOND_DEVICE = '127.0.0.3';
 const MiB = 1024 ** 2;
@@ -73,7 +76,7 @@ let child: Child | null = null;
 let agent: Api, owner: Api;
 const dataDir = path.join(art, 'data');
 async function startChild(extra: string[] = []): Promise<Child> {
-  const proc = spawn(process.execPath, ['--import', 'tsx', path.join(root, 'packages/evals/src/phone-drop-server.ts'), '--data', dataDir, '--port', String(PORT), '--drop-port', String(DROP_PORT), '--admit', DOOR, ...extra], { cwd: root, stdio: ['ignore', 'pipe', 'inherit'] });
+  const proc = spawn(process.execPath, ['--import', 'tsx', path.join(root, 'packages/evals/src/phone-drop-server.ts'), '--data', dataDir, '--port', '0', '--drop-port', String(DROP_PORT), '--admit', DOOR, ...extra], { cwd: root, stdio: ['ignore', 'pipe', 'inherit'] });
   const line = await new Promise<string>((resolve, reject) => {
     let buf = '';
     const t = setTimeout(() => reject(new Error('the server child did not start in 90 s')), 90_000);
@@ -201,12 +204,13 @@ async function main() {
   check('F0', 'the EXIF fixture is what it says, read by an independent reader (ffprobe -show_frames): DateTimeOriginal 2023:12:31 21:45:10, Orientation 6', cRead.dateTimeOriginal === '2023:12:31 21:45:10' && cRead.orientation === '6', cRead);
 
   // ---- P1, P2: the main server stays on loopback; no code, no door
+  DROP_PORT = await freePort();
   await startChild();
   const lan = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address ?? null;
-  const lanRefused = lan ? await refused(lan, PORT) : null;
+  const lanRefused = lan ? await refused(lan, childPort()) : null;
   // fetch cannot set Host (undici writes its own): a raw request carries the spoofed one
   const spoof = await new Promise<{ status: number; body: any }>((resolve) => {
-    const rq = http.request({ host: '127.0.0.1', port: PORT, path: '/api/v1/whoami', headers: { host: `evil.example:${PORT}`, authorization: `Bearer ${child!.agent}`, connection: 'close' }, agent: false }, (res) => { let t = ''; res.on('data', (d) => (t += d)); res.on('end', () => { let b: any = null; try { b = JSON.parse(t); } catch { /* not JSON */ } resolve({ status: res.statusCode ?? 0, body: b }); }); });
+    const rq = http.request({ host: '127.0.0.1', port: childPort(), path: '/api/v1/whoami', headers: { host: `evil.example:${childPort()}`, authorization: `Bearer ${child!.agent}`, connection: 'close' }, agent: false }, (res) => { let t = ''; res.on('data', (d) => (t += d)); res.on('end', () => { let b: any = null; try { b = JSON.parse(t); } catch { /* not JSON */ } resolve({ status: res.statusCode ?? 0, body: b }); }); });
     rq.on('error', () => resolve({ status: 0, body: null }));
     rq.end();
   });
@@ -228,7 +232,7 @@ async function main() {
   // ---- P3b (and P8b): the real address rule, and the lifetime, on a second server in this process without the override
   {
     const dir = path.join(art, 'data-noadmit');
-    const s2 = await startServer({ port: PORT + 2, dataDir: dir, dropPort: PORT + 3 });
+    const s2 = await startServer({ port: 0, dataDir: dir, dropPort: 0 });
     const o2 = await ownerApi(s2.url, s2.auth.tokens.owner);
     const p2 = (await o2.call('/projects', { name: 'no admit' })).body.project.id;
     const r = await o2.call(`/projects/${p2}/drop`, { address: DOOR });
@@ -236,14 +240,14 @@ async function main() {
     await s2.close();
     check('P3b', 'without the override this machine has no private address: GET /drop/addresses is empty and POST …/drop answers 409 no_private_network', r.status === 409 && r.body?.error?.code === 'no_private_network' && Array.isArray(addr) && addr.length === 0, { status: r.status, code: r.body?.error?.code, addresses: addr });
     // P8b: a code with the shortest lifetime the configuration allows (1 minute) is gone after it, unclaimed
-    const s3 = await startServer({ port: PORT + 4, dataDir: path.join(art, 'data-ttl'), dropPort: PORT + 5, dropAdmitAddresses: [DOOR], dropTtlMinutes: 1 });
+    const s3 = await startServer({ port: 0, dataDir: path.join(art, 'data-ttl'), dropPort: 0, dropAdmitAddresses: [DOOR], dropTtlMinutes: 1 });
     const o3 = await ownerApi(s3.url, s3.auth.tokens.owner);
     const p3 = (await o3.call('/projects', { name: 'ttl' })).body.project.id;
     const c3 = (await o3.call(`/projects/${p3}/drop`, { address: DOOR })).body.drop;
-    const openAtStart = !(await refused(DOOR, PORT + 5));
+    const openAtStart = !(await refused(DOOR, c3.port));
     await sleep(61_500);
     const after = (await o3.call(`/projects/${p3}/drop`)).body.drop;
-    const portGone = await refused(DOOR, PORT + 5);
+    const portGone = await refused(DOOR, c3.port);
     await s3.close();
     check('P8b', 'an unclaimed code with a 1-minute lifetime (PF_DROP_TTL_MINUTES=1, the shortest allowed) is gone 61.5 s after it was issued, and its port refuses (the 10-minute default is held by drop.test.ts with a fake clock)', openAtStart && after === null && portGone && (Date.parse(c3.expiresAt) - Date.parse(c3.issuedAt)) === 60_000, { openAtStart, after, portGone });
   }
@@ -472,12 +476,12 @@ async function main() {
     check('P11c', 'a junk upload that was accepted and then refused as unsupported leaves the blobs directory at its earlier size, with no clean-up run', blobs3 === blobs0, { before: blobs0, after: blobs3, job: readJobs().find((j) => j.input.name === 'junk-20m.mp4')?.error?.code });
     await stopChild();
     // the code budget, on its own server in this process (PF_DROP_CODE_BYTES 10 MiB): a declared 12 MiB file is refused 413 code_budget
-    const s4 = await startServer({ port: PORT + 7, dataDir: path.join(art, 'data-budget'), dropPort: PORT + 8, dropAdmitAddresses: [DOOR], dropCodeBytes: 10 * MiB });
+    const s4 = await startServer({ port: 0, dataDir: path.join(art, 'data-budget'), dropPort: 0, dropAdmitAddresses: [DOOR], dropCodeBytes: 10 * MiB });
     const o4 = await ownerApi(s4.url, s4.auth.tokens.owner);
     const p4 = (await o4.call('/projects', { name: 'budget' })).body.project.id;
     const c4 = (await o4.call(`/projects/${p4}/drop`, { address: DOOR })).body.drop;
-    const h4 = await door('POST', '/hello', { port: PORT + 8, headers: { 'content-type': 'application/json' }, body: Buffer.from(JSON.stringify({ token: tokenOf(c4.url) })) });
-    const budget = await door('POST', '/upload', { port: PORT + 8, headers: { authorization: `Bearer ${h4.json?.session}`, 'x-filename': 'b.bin' }, body: 12 * MiB });
+    const h4 = await door('POST', '/hello', { port: c4.port, headers: { 'content-type': 'application/json' }, body: Buffer.from(JSON.stringify({ token: tokenOf(c4.url) })) });
+    const budget = await door('POST', '/upload', { port: c4.port, headers: { authorization: `Bearer ${h4.json?.session}`, 'x-filename': 'b.bin' }, body: 12 * MiB });
     await s4.close();
     check('P12b', 'the code budget (10 MiB): a declared 12 MiB file is refused 413 code_budget while it is still being sent', budget.status === 413 && budget.json?.error?.code === 'code_budget', { status: budget.status, code: budget.json?.error?.code, error: budget.error });
     await startChild();
@@ -530,7 +534,7 @@ async function main() {
   // ---- P18: the queue gives the same asset as the synchronous route did before it (the step-0 baseline)
   {
     await stopChild();
-    const r = spawnSync('pnpm', ['proof:phone-drop-baseline', '--check'], { cwd: root, encoding: 'utf8', env: { ...process.env, PF_PROOF_PORT: String(PORT + 6) }, timeout: 900_000 });
+    const r = spawnSync('pnpm', ['proof:phone-drop-baseline', '--check'], { cwd: root, encoding: 'utf8', env: process.env, timeout: 900_000 });
     const lines = `${r.stdout}`.split('\n').filter((l) => /^[A-E]: /.test(l));
     check('P18', 'the same assets as before the queue: A–E uploaded in a fresh data directory through today\'s POST …/assets (the queue) equal the step-0 record (docs/evidence/phone-drop-baseline.json, recorded before ingest.ts changed), conformed bytes included', r.status === 0 && lines.length === 5 && lines.every((l) => l.includes('same asset')), { exit: r.status, lines, stderr: r.stderr.slice(-600) });
     notes.p18Frames = 'barcode frames at three positions between preview, server still and export: not run in this proof (the parity suite and proof:phase4 hold the shared compositor)';

@@ -57,7 +57,7 @@ const integration: Record<string, unknown> = {};
 async function p6Export(): Promise<true | string> {
   if (!fs.existsSync(path.join(WEB, 'render.html'))) return 'BLOCKED: the web bundle is missing (`pnpm build`), so the P6 film could not be exported';
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pearls-p6x-'));
-  const s = await startServer({ port: 18400 + Math.floor(Math.random() * 90), dataDir: path.join(base, 'data'), webDist: WEB, speechPython: null, voicePython: null, backupDir: null });
+  const s = await startServer({ port: 0, dataDir: path.join(base, 'data'), webDist: WEB, speechPython: null, voicePython: null, backupDir: null });
   try {
     const { film, files } = await p6Film(path.join(base, 'media'));
     const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
@@ -113,7 +113,7 @@ async function p15Browser(): Promise<true | string> {
   const docs = pearlsDeterminismDocs();
   const node = pearlsDigest(docs);
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pearls-p15-'));
-  const s = await startServer({ port: 18500 + Math.floor(Math.random() * 90), dataDir: path.join(base, 'data'), webDist: WEB, speechPython: null, voicePython: null, backupDir: null });
+  const s = await startServer({ port: 0, dataDir: path.join(base, 'data'), webDist: WEB, speechPython: null, voicePython: null, backupDir: null });
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();

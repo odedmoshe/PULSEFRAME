@@ -52,7 +52,7 @@ async function main() {
   const fx = await makeFxFixtures(path.join(art, 'fixtures'));
   const speech30 = path.join(art, 'fixtures', 'speech30.wav');
   execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', '-stream_loop', '2', '-i', fx.speechLike, '-t', '30', '-c:a', 'pcm_f32le', speech30]);
-  const s = await startServer({ port: 8857, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

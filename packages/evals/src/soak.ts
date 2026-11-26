@@ -30,7 +30,8 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4'), frames: 240 });
   const dataDir = path.join(art, 'data');
-  let s = await startServer({ port: 8804, dataDir });
+  let s = await startServer({ port: 0, dataDir });
+  const boundPort = Number(new URL(s.url).port); // the restart below must come back on this port: the cookie and its origin were issued for it
   const cookie = (await fetch(`${s.url}/api/v1/session`, { headers: { origin: s.url, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   const creds = [{ authorization: `Bearer ${s.auth.tokens.agent}` }, { cookie, origin: s.url }] as Record<string, string>[];
   const call = async (p: string, body?: unknown, cred = creds[0]!) => {
@@ -104,7 +105,7 @@ async function main() {
     check('replaying the whole operation log from an empty project reproduces the live document exactly; an earlier revision can be reconstructed and is valid', JSON.stringify(replayed.project) === JSON.stringify(live.project) && half.revision === Math.floor(live.revision / 2) && validateProject(half.project).length === 0, measurements.replay);
     await s.close();
     const t2 = performance.now();
-    s = await startServer({ port: 8804, dataDir });
+    s = await startServer({ port: boundPort, dataDir });
     const reopened = (await call(`/projects/${pid}`)).body;
     measurements.restart = { reopenMs: Math.round(performance.now() - t2) };
     const afterRestart = await call(`/projects/${pid}/transactions`, { ops: [{ op: 'rename_project', args: { name: 'after restart' } }] });
@@ -113,7 +114,7 @@ async function main() {
     // Move the project to another machine: download its archive over HTTP and import it into a second server with an empty data directory.
     const t3 = performance.now();
     const arc = Buffer.from(await (await fetch(`${s.url}/api/v1/projects/${pid}/archive`, { headers: { connection: 'close', ...creds[0]! } })).arrayBuffer());
-    const s2 = await startServer({ port: 8806, dataDir: path.join(art, 'data-restored') });
+    const s2 = await startServer({ port: 0, dataDir: path.join(art, 'data-restored') });
     try {
       const h2 = { authorization: `Bearer ${s2.auth.tokens.agent}`, connection: 'close' };
       const imp = await fetch(`${s2.url}/api/v1/projects/import`, { method: 'POST', headers: { ...h2, 'content-type': 'application/x-tar' }, body: arc });

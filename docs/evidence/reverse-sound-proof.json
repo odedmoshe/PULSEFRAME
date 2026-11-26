@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T20:58:05.049Z",
+  "ranAt": "2026-11-26T05:48:18.239Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "gpu": "none"
   },
   "scope": "One synthetic 4-second fixture (frame barcode + 1 kHz beeps), reversed as a linked picture+sound pair, on the server export, the browser export and the editor preview. Not covered: long clips, speed combined with reverse in the browser routes, crossfades.",

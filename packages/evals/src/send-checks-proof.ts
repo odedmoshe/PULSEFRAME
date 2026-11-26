@@ -39,7 +39,6 @@ import { evidenceRows } from './send-evidence.ts';
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/send-checks');
 const dataDir = path.join(art, 'data');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8952);
 const R = { num: 30, den: 1 };
 
 // ---- expected numbers, typed here ----
@@ -98,7 +97,7 @@ async function main() {
   // 0.5 s of a full-scale square wave
   ff(['-f', 'lavfi', '-i', 'aevalsrc=if(lt(mod(t*200\\,1)\\,0.5)\\,0.999\\,-0.999):s=48000:d=0.5', '-ac', '2', '-c:a', 'pcm_s16le', loudWav]);
 
-  const s = await startServer({ port: PORT, dataDir });
+  const s = await startServer({ port: 0, dataDir });
   const api = makeApi(s.url, s.auth.tokens.agent);
   try {
     // ---- F3 ----

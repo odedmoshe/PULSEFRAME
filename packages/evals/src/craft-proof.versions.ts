@@ -25,7 +25,6 @@ import { deleteProject } from '../../../apps/server/src/storage.ts';
 import type { CraftProofPart } from './craft-proof.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const PORT = 19000 + Math.floor(Math.random() * 800);
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const BIRTH = '2014-11-04';
@@ -49,7 +48,7 @@ let ctx: Promise<Ctx> | null = null;
 function setup(): Promise<Ctx> {
   ctx ??= (async () => {
     const art = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-craft-versions-'));
-    const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+    const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
     // observe (not replace) the commit path's privacy purge, for V10
     const purges: Ctx['purges'] = [];
     const purge = s.store.onPrivacyChange;
@@ -219,7 +218,7 @@ async function V9(): Promise<true | string> {
   const c = await setup();
   const dest = path.join(c.art, 'backup');
   await backupDataDir(c.s.cfg.dataDir, dest);
-  const b = await startServer({ port: PORT + 1, dataDir: dest });
+  const b = await startServer({ port: 0, dataDir: dest });
   try {
     const cookie = b.auth.issueSession(new Request(`${b.url}/api/v1/session`, { headers: { origin: b.url, 'x-pf-owner-key': b.auth.tokens.owner } })).split(';')[0]!;
     const r = await fetch(`${b.url}/api/v1/projects/${c.pid}/versions`, { headers: { host: new URL(b.url).host, origin: b.url, cookie, connection: 'close' } });

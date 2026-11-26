@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T21:03:09.905Z",
+  "ranAt": "2026-11-26T05:53:28.364Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "cores": 4,
     "gpu": "none"
   },
@@ -61,11 +61,11 @@
           {
             "op": "clean_voice",
             "args": {
-              "clipId": "clp_58079839b80",
+              "clipId": "clp_bccec669420",
               "includeLinked": false,
               "strength": 0.6,
               "profile": "KtKlLDL6M1NiOZO3PRPiPkPjPdPYPPPEPAO_PDPOPhP5QWQ3",
-              "source": "ast_cd1309557b0",
+              "source": "ast_d701c80cec0",
               "mainsHz": "50"
             }
           }
@@ -231,11 +231,11 @@
         ],
         "weakestNormalisedCorrelation": 0.981,
         "cleanVoice": {
-          "clipId": "clp_73e051b0c00",
+          "clipId": "clp_39d96468120",
           "includeLinked": false,
           "strength": 0.6,
           "profile": "F9F8GiLyMyNkOQO1PPPiPqPpPkPYPNPFO_O-PEPOPhP5QWQ4",
-          "source": "ast_5664b8ab220",
+          "source": "ast_1660ff13f60",
           "mainsHz": "50"
         }
       }
@@ -246,11 +246,11 @@
       "detail": [
         {
           "effects": "cleanup.dehum",
-          "realtime": 137
+          "realtime": 224
         },
         {
           "effects": "cleanup.denoise",
-          "realtime": 78
+          "realtime": 57
         },
         {
           "effects": "cleanup.speech",
@@ -258,7 +258,7 @@
         },
         {
           "effects": "cleanup.dehum + cleanup.denoise + cleanup.speech",
-          "realtime": 33
+          "realtime": 42
         }
       ]
     },
@@ -334,22 +334,22 @@
         "machineLoad": {
           "cores": 4,
           "loadAverageBefore": [
-            1.18,
-            2.34,
-            3.79
+            1.06,
+            1.75,
+            2.12
           ],
           "loadAverageAfter": [
-            1.53,
-            2.3,
-            3.71
+            1.85,
+            1.84,
+            2.13
           ]
         },
         "comparedRun": {
           "fxVoices": 4,
-          "fxPrimeMs": 149,
+          "fxPrimeMs": 103,
           "fxLateStarts": 0,
           "fxLateSkips": 0,
-          "firstWindowAtSeconds": -0.12
+          "firstWindowAtSeconds": -0.112
         },
         "scheduledSamples": {
           "captured": true,
@@ -363,74 +363,74 @@
         "windows": 229,
         "worstWindowDb": 0.02,
         "worstWindow": {
-          "t": 1.03,
-          "previewDb": -31.63,
-          "exportDb": -31.65
+          "t": 7.238,
+          "previewDb": -34.7,
+          "exportDb": -34.72
         },
         "sample": [
           {
-            "t": 0.58,
-            "previewDb": -33.03,
-            "exportDb": -33.04
+            "t": 0.588,
+            "previewDb": -25.83,
+            "exportDb": -25.83
           },
           {
-            "t": 1.58,
-            "previewDb": -18.49,
-            "exportDb": -18.49
+            "t": 1.588,
+            "previewDb": -18.34,
+            "exportDb": -18.34
           },
           {
-            "t": 2.58,
-            "previewDb": -19.16,
-            "exportDb": -19.16
+            "t": 2.588,
+            "previewDb": -15.66,
+            "exportDb": -15.66
           },
           {
-            "t": 3.58,
+            "t": 3.588,
             "previewDb": -16.06,
             "exportDb": -16.06
           },
           {
-            "t": 4.58,
+            "t": 4.588,
             "previewDb": -10.77,
             "exportDb": -10.77
           },
           {
-            "t": 5.58,
+            "t": 5.588,
             "previewDb": -11.5,
             "exportDb": -11.5
           },
           {
-            "t": 6.58,
+            "t": 6.588,
             "previewDb": -11.72,
             "exportDb": -11.72
           },
           {
-            "t": 7.58,
-            "previewDb": -10.87,
-            "exportDb": -10.87
+            "t": 7.588,
+            "previewDb": -12.28,
+            "exportDb": -12.29
           },
           {
-            "t": 8.58,
+            "t": 8.588,
             "previewDb": -13.85,
             "exportDb": -13.85
           },
           {
-            "t": 9.58,
+            "t": 9.588,
             "previewDb": -10.61,
             "exportDb": -10.61
           },
           {
-            "t": 10.58,
+            "t": 10.588,
             "previewDb": -12.46,
             "exportDb": -12.46
           },
           {
-            "t": 11.58,
-            "previewDb": -16.13,
-            "exportDb": -16.13
+            "t": 11.588,
+            "previewDb": -13.61,
+            "exportDb": -13.61
           }
         ],
         "prime": {
-          "fxPrimeMs": 306,
+          "fxPrimeMs": 274,
           "fxPrimeTimedOut": false,
           "fxLateStarts": 0
         },
@@ -551,11 +551,11 @@
         {
           "op": "clean_voice",
           "args": {
-            "clipId": "clp_58079839b80",
+            "clipId": "clp_bccec669420",
             "includeLinked": false,
             "strength": 0.6,
             "profile": "KtKlLDL6M1NiOZO3PRPiPkPjPdPYPPPEPAO_PDPOPhP5QWQ3",
-            "source": "ast_cd1309557b0",
+            "source": "ast_d701c80cec0",
             "mainsHz": "50"
           }
         }
@@ -709,22 +709,22 @@
       ],
       "weakestNormalisedCorrelation": 0.981,
       "cleanVoice": {
-        "clipId": "clp_73e051b0c00",
+        "clipId": "clp_39d96468120",
         "includeLinked": false,
         "strength": 0.6,
         "profile": "F9F8GiLyMyNkOQO1PPPiPqPpPkPYPNPFO_O-PEPOPhP5QWQ4",
-        "source": "ast_5664b8ab220",
+        "source": "ast_1660ff13f60",
         "mainsHz": "50"
       }
     },
     "C6": [
       {
         "effects": "cleanup.dehum",
-        "realtime": 137
+        "realtime": 224
       },
       {
         "effects": "cleanup.denoise",
-        "realtime": 78
+        "realtime": 57
       },
       {
         "effects": "cleanup.speech",
@@ -732,7 +732,7 @@
       },
       {
         "effects": "cleanup.dehum + cleanup.denoise + cleanup.speech",
-        "realtime": 33
+        "realtime": 42
       }
     ],
     "C8": {
@@ -792,22 +792,22 @@
       "machineLoad": {
         "cores": 4,
         "loadAverageBefore": [
-          1.18,
-          2.34,
-          3.79
+          1.06,
+          1.75,
+          2.12
         ],
         "loadAverageAfter": [
-          1.53,
-          2.3,
-          3.71
+          1.85,
+          1.84,
+          2.13
         ]
       },
       "comparedRun": {
         "fxVoices": 4,
-        "fxPrimeMs": 149,
+        "fxPrimeMs": 103,
         "fxLateStarts": 0,
         "fxLateSkips": 0,
-        "firstWindowAtSeconds": -0.12
+        "firstWindowAtSeconds": -0.112
       },
       "scheduledSamples": {
         "captured": true,
@@ -821,74 +821,74 @@
       "windows": 229,
       "worstWindowDb": 0.02,
       "worstWindow": {
-        "t": 1.03,
-        "previewDb": -31.63,
-        "exportDb": -31.65
+        "t": 7.238,
+        "previewDb": -34.7,
+        "exportDb": -34.72
       },
       "sample": [
         {
-          "t": 0.58,
-          "previewDb": -33.03,
-          "exportDb": -33.04
+          "t": 0.588,
+          "previewDb": -25.83,
+          "exportDb": -25.83
         },
         {
-          "t": 1.58,
-          "previewDb": -18.49,
-          "exportDb": -18.49
+          "t": 1.588,
+          "previewDb": -18.34,
+          "exportDb": -18.34
         },
         {
-          "t": 2.58,
-          "previewDb": -19.16,
-          "exportDb": -19.16
+          "t": 2.588,
+          "previewDb": -15.66,
+          "exportDb": -15.66
         },
         {
-          "t": 3.58,
+          "t": 3.588,
           "previewDb": -16.06,
           "exportDb": -16.06
         },
         {
-          "t": 4.58,
+          "t": 4.588,
           "previewDb": -10.77,
           "exportDb": -10.77
         },
         {
-          "t": 5.58,
+          "t": 5.588,
           "previewDb": -11.5,
           "exportDb": -11.5
         },
         {
-          "t": 6.58,
+          "t": 6.588,
           "previewDb": -11.72,
           "exportDb": -11.72
         },
         {
-          "t": 7.58,
-          "previewDb": -10.87,
-          "exportDb": -10.87
+          "t": 7.588,
+          "previewDb": -12.28,
+          "exportDb": -12.29
         },
         {
-          "t": 8.58,
+          "t": 8.588,
           "previewDb": -13.85,
           "exportDb": -13.85
         },
         {
-          "t": 9.58,
+          "t": 9.588,
           "previewDb": -10.61,
           "exportDb": -10.61
         },
         {
-          "t": 10.58,
+          "t": 10.588,
           "previewDb": -12.46,
           "exportDb": -12.46
         },
         {
-          "t": 11.58,
-          "previewDb": -16.13,
-          "exportDb": -16.13
+          "t": 11.588,
+          "previewDb": -13.61,
+          "exportDb": -13.61
         }
       ],
       "prime": {
-        "fxPrimeMs": 306,
+        "fxPrimeMs": 274,
         "fxPrimeTimedOut": false,
         "fxLateStarts": 0
       },
@@ -913,42 +913,42 @@
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 16.6
+        "chromiumMs": 15.2
       },
       {
         "type": "cleanup.dehum",
         "params": "{\"mainsHz\":\"60\",\"harmonics\":8,\"width\":1}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 33.8
+        "chromiumMs": 15.4
       },
       {
         "type": "cleanup.denoise",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 65.6
+        "chromiumMs": 41.8
       },
       {
         "type": "cleanup.denoise",
         "params": "{\"reductionDb\":30,\"sensitivityDb\":10,\"profile\":\"MgMgMgMgMgMgMgMgMgMgMgMgMgMgMgMg",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 51
+        "chromiumMs": 29.6
       },
       {
         "type": "cleanup.speech",
         "params": "{}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 34.8
+        "chromiumMs": 44.6
       },
       {
         "type": "cleanup.speech",
         "params": "{\"lowCutHz\":150,\"presence\":1,\"levelDb\":15,\"targetDb\":-12,\"ceilingDb\":-6}",
         "maxAbsDiff": 0,
         "bitEqual": true,
-        "chromiumMs": 24.7
+        "chromiumMs": 28.2
       }
     ]
   }

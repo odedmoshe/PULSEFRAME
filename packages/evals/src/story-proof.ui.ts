@@ -20,7 +20,6 @@ import type { StoryProofPart } from './story-proof.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/story-proof-ui');
-const PORT = Number(process.env.PF_STORY_PROOF_UI_PORT ?? 8991);
 const W = 640, H = 360;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ff = (args: string[]) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', ...args], { maxBuffer: 2 ** 28 });
@@ -48,7 +47,7 @@ async function makeEnv(): Promise<Env> {
   ff(['-y', '-f', 'lavfi', '-i', `color=c=0xfafafa:s=${W}x${H}`, '-frames:v', '1', more.s6]);
   ff(['-y', '-f', 'lavfi', '-i', 'sine=f=3000:d=30:sample_rate=48000', '-ac', '1', '-c:a', 'pcm_s16le', more.music3k]);
   ff(['-y', '-f', 'lavfi', '-i', 'sine=f=2000:d=30:sample_rate=48000', '-ac', '1', '-c:a', 'pcm_s16le', more.music2k]);
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist'), homeZone: 'Asia/Jerusalem' });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), webDist: path.join(root, 'apps/web/dist'), homeZone: 'Asia/Jerusalem' });
   server = s;
   process.once('beforeExit', () => { void s.close(); });
   const call: Env['call'] = async (p, body, method) => {

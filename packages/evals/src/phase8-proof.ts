@@ -47,7 +47,7 @@ async function main() {
   const musicFile = path.join(art, 'music.wav'), voiceFile = path.join(art, 'voice.wav');
   ff(['-y', '-f', 'lavfi', '-i', `aevalsrc=0.5*sin(2*PI*440*t)|0.5*sin(2*PI*440*t):s=${SR}:d=8`, '-c:a', 'pcm_s16le', musicFile]);
   ff(['-y', '-f', 'lavfi', '-i', `aevalsrc=0.25*sin(2*PI*880*t)*between(t\\,2\\,4)|0.25*sin(2*PI*880*t)*between(t\\,2\\,4):s=${SR}:d=8`, '-c:a', 'pcm_s16le', voiceFile]);
-  const s = await startServer({ port: 8799, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

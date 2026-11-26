@@ -28,7 +28,6 @@ import { PEARLS_SERVER_REFUSALS } from '../../../apps/server/src/pearls.ts';
 import { assistantSummary } from '../../../apps/server/src/assistant/summary.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const PORT = 19000 + Math.floor(Math.random() * 1000);
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const evidence: Record<string, unknown> = {};
@@ -65,7 +64,7 @@ async function makeWorld(): Promise<World> {
   ff(['-i', a, '-vf', 'reverse', '-af', 'areverse', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'aac', rev]);
   const webDist = path.join(ROOT, 'apps/web/dist');
   const web = fs.existsSync(path.join(webDist, 'render.html'));
-  const s = await startServer({ port: PORT, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
+  const s = await startServer({ port: 0, dataDir: path.join(base, 'data'), ...(web ? { webDist } : {}), speechPython: null, voicePython: null, backupDir: null });
   const origin = s.url;
   const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;
   const owner: Who = { origin, cookie, connection: 'close' };

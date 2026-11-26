@@ -42,7 +42,7 @@ async function main() {
   fs.rmSync(art, { recursive: true, force: true });
   fs.mkdirSync(art, { recursive: true });
   const python = process.env.PF_SPEECH_PYTHON ? path.resolve(process.env.PF_SPEECH_PYTHON) : null;
-  const s = await startServer({ port: 8843, dataDir: path.join(art, 'data'), speechPython: python, ...(python ? { speechModelsDir: path.join(root, '.artifacts/speech/models') } : {}) });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), speechPython: python, ...(python ? { speechModelsDir: path.join(root, '.artifacts/speech/models') } : {}) });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

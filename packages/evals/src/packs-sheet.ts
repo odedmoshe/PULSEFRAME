@@ -49,7 +49,7 @@ async function stills(): Promise<string> {
   if (!fs.existsSync(path.join(root, 'apps/web/dist/render.html'))) return 'skipped: the web bundle is missing (run `pnpm build` first); no template still was made';
   const { startServer } = await import('@pulseframe/server');
   const dataDir = path.join(tmp, 'data');
-  const s = await startServer({ port: 8885, dataDir });
+  const s = await startServer({ port: 0, dataDir });
   try {
     const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
     const call = async (p: string, body?: unknown) => {

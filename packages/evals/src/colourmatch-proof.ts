@@ -103,7 +103,7 @@ async function main() {
   const measurements: Record<string, unknown> = {};
   const timing: { check: string; targets: number; seconds: number; secondsPerTarget: number }[] = [];
   delete process.env.PF_RENDER_GPU; // the render host finds a launch mode that gives a graphics device
-  const s = await startServer({ port: 8885, dataDir });
+  const s = await startServer({ port: 0, dataDir });
   {
     const b = await chromium.launch({ args: ['--enable-unsafe-webgpu'] });
     const p = await b.newPage();
@@ -382,7 +382,7 @@ async function main() {
 
   // ---------- M8 no adapter in the render worker ----------
   process.env.PF_RENDER_GPU = 'off';
-  const s2 = await startServer({ port: 8886, dataDir });
+  const s2 = await startServer({ port: 0, dataDir });
   try {
     const B = api(s2);
     const videoClips = (d: { project: any }) => d.project.sequences[d.project.mainSequenceId].tracks.find((x: any) => x.kind === 'video').clips.map((c: any) => c.id) as string[];

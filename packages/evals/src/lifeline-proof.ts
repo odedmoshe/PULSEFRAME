@@ -4,7 +4,7 @@
  * preflight, and the calendar inside headless Chromium (through window.__pfLife on the self-test page).
  * Evidence: docs/evidence/lifeline-proof.json.
  *
- *   pnpm build && pnpm proof:lifeline          needs ffmpeg/ffprobe and Playwright's Chromium; ports 8887 and 8888 free
+ *   pnpm build && pnpm proof:lifeline          needs ffmpeg/ffprobe and Playwright's Chromium; no fixed ports (the servers listen on free ports the system picks)
  *   exit 0 = every check passed · 1 = a check failed · 2 = blocked (the web bundle is not built)
  *
  * Thirteen checks, with the numbers of plan §8:
@@ -59,7 +59,7 @@
  *
  * Seventeen lines are printed for these thirteen checks: 1, 9 and 10 have two lines each (1, 1b; 9a, 9b; 10a, 10b) and
  * 4 has its determinism line (4a). The result is PASSED only when all seventeen hold. Checks 10 and 11 need the people
- * operations and wording (core W1: add_person, documentPeople, ageWords) and a second free port, 8888.
+ * operations and wording (core W1: add_person, documentPeople, ageWords) and a second server on a free port.
  * What a check must be able to fail for is why the expected words are typed in this file, why 4 and 5 measure against
  * BOTH stills, and why the "no data" fixture of 9 has a dated picture on the same track.
  * Synthetic files only; nobody looked at the pictures. The one time-zone conversion is the import's (Asia/Jerusalem here).
@@ -81,7 +81,6 @@ import { PEOPLE_REST_SURFACES } from '../../../apps/server/src/peopleSurfaces.ts
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/lifeline-proof');
-const PORT = 8887;
 const W = 640, H = 360;
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
@@ -234,7 +233,7 @@ async function main() {
   // 62 seconds for the clock of the date stamp, with Apple's creation date 18:15:10
   ff(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-t', '62', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '30', '-g', '30', '-pix_fmt', 'yuv420p', '-movflags', 'use_metadata_tags', '-metadata', 'com.apple.quicktime.creationdate=2024-12-25T18:15:10+0200', file('clock.mov')]);
 
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data'), homeZone: 'Asia/Jerusalem' });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), homeZone: 'Asia/Jerusalem' });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -611,7 +610,7 @@ async function main() {
         const arcProject = entries.get('project.json')!.toString('utf8');
         // birth dates in any spelling, the word choice, a people map: the archive holds none (ages the titles showed are plain words now, as anyone watching sees them)
         const birthLeak = familyLeak(familyNeedles(NOA_BIRTH, []), arc.body.toString('utf8'), arc.body.toString('latin1'));
-        const s2 = await startServer({ port: PORT + 1, dataDir: path.join(art, 'data2'), homeZone: 'Asia/Jerusalem' });
+        const s2 = await startServer({ port: 0, dataDir: path.join(art, 'data2'), homeZone: 'Asia/Jerusalem' });
         try {
           const owner2: Who = { name: 'owner session of the second server', headers: { origin: s2.url, connection: 'close', cookie: (await fetch(`${s2.url}/api/v1/session`, { headers: { origin: s2.url, connection: 'close', 'x-pf-owner-key': s2.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]! } };
           const imp = await fetch(`${s2.url}/api/v1/projects/import`, { method: 'POST', headers: { ...owner2.headers, 'content-type': 'application/x-tar' }, body: new Uint8Array(arc.body) });

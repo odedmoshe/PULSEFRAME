@@ -91,7 +91,7 @@ const checks: Record<string, () => Promise<true | string>> = {
     const starts: number[] = [];
     const embedder = Object.assign(Object.create(null), inner) as typeof inner;
     embedder.embedImages = (rgb, count, signal) => { starts.push(Date.now()); return inner.embedImages(rgb, count, signal); };
-    const s = await startServer({ port: 18600 + Math.floor(Math.random() * 90), dataDir: path.join(base, 'data'), webDist: WEB, speechPython: null, voicePython: null, backupDir: null }, { searchEmbedder: embedder });
+    const s = await startServer({ port: 0, dataDir: path.join(base, 'data'), webDist: WEB, speechPython: null, voicePython: null, backupDir: null }, { searchEmbedder: embedder });
     try {
       const origin = s.url;
       const cookie = (await fetch(`${origin}/api/v1/session`, { headers: { origin, connection: 'close', 'x-pf-owner-key': s.auth.tokens.owner } })).headers.get('set-cookie')!.split(';')[0]!;

@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-26T01:50:51.770Z",
-  "commit": "0311eaad0f16f95b4223df2f67718117d7fb3f21",
+  "ranAt": "2026-11-26T13:27:17.737Z",
+  "commit": "1e69ee8824c0e2a2947b213a718cdeb50196658e",
   "result": "PASSED",
   "passed": 15,
   "total": 15,
@@ -406,34 +406,34 @@
       }
     },
     "timing1080x1920": {
-      "plainStillMs": 272,
+      "plainStillMs": 1032,
       "film-burn": {
-        "stillMs": 910,
-        "passMsEstimate": 637
+        "stillMs": 2973,
+        "passMsEstimate": 1942
       },
       "light-leak": {
-        "stillMs": 892,
-        "passMsEstimate": 620
+        "stillMs": 3858,
+        "passMsEstimate": 2826
       },
       "ink-bleed": {
-        "stillMs": 1136,
-        "passMsEstimate": 864
+        "stillMs": 4896,
+        "passMsEstimate": 3864
       },
       "brush-left": {
-        "stillMs": 906,
-        "passMsEstimate": 634
+        "stillMs": 3227,
+        "passMsEstimate": 2195
       },
       "brush-right": {
-        "stillMs": 913,
-        "passMsEstimate": 641
+        "stillMs": 3918,
+        "passMsEstimate": 2887
       },
       "page-turn-left": {
-        "stillMs": 627,
-        "passMsEstimate": 354
+        "stillMs": 3622,
+        "passMsEstimate": 2590
       },
       "page-turn-right": {
-        "stillMs": 601,
-        "passMsEstimate": 329
+        "stillMs": 2554,
+        "passMsEstimate": 1522
       }
     }
   },
@@ -1002,34 +1002,34 @@
       "name": "L7 time per pass at 1080x1920 recorded for each kernel (median of 3 still round trips with the transition, minus the same still without one; software adapter, no speed claim)",
       "ok": true,
       "detail": {
-        "plainStillMs": 272,
+        "plainStillMs": 1032,
         "film-burn": {
-          "stillMs": 910,
-          "passMsEstimate": 637
+          "stillMs": 2973,
+          "passMsEstimate": 1942
         },
         "light-leak": {
-          "stillMs": 892,
-          "passMsEstimate": 620
+          "stillMs": 3858,
+          "passMsEstimate": 2826
         },
         "ink-bleed": {
-          "stillMs": 1136,
-          "passMsEstimate": 864
+          "stillMs": 4896,
+          "passMsEstimate": 3864
         },
         "brush-left": {
-          "stillMs": 906,
-          "passMsEstimate": 634
+          "stillMs": 3227,
+          "passMsEstimate": 2195
         },
         "brush-right": {
-          "stillMs": 913,
-          "passMsEstimate": 641
+          "stillMs": 3918,
+          "passMsEstimate": 2887
         },
         "page-turn-left": {
-          "stillMs": 627,
-          "passMsEstimate": 354
+          "stillMs": 3622,
+          "passMsEstimate": 2590
         },
         "page-turn-right": {
-          "stillMs": 601,
-          "passMsEstimate": 329
+          "stillMs": 2554,
+          "passMsEstimate": 1522
         }
       }
     },

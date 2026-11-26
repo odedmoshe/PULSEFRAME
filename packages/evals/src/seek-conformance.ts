@@ -52,8 +52,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   if (!fs.existsSync(path.join(root, 'apps/web/dist/render.html'))) throw new Error('web bundle missing: run `pnpm build` first');
   const dataDir = fs.mkdtempSync(path.join(art, 'data-'));
-  const port = 20000 + Math.floor(Math.random() * 20000);
-  const server = await startServer({ port, dataDir });
+  const server = await startServer({ port: 0, dataDir });
   const tok = server.auth.tokens.agent;
   const rest = (p: string, init: RequestInit = {}) => fetch(`${server.url}/api/v1${p}`, { ...init, headers: { authorization: `Bearer ${tok}`, ...(typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}), ...init.headers } });
   const json = async (r: Response) => ({ status: r.status, body: await r.json().catch(() => null) as any });

@@ -22,7 +22,6 @@ const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/browser-export-proof');
 const webDist = path.join(root, 'apps/web/dist');
 const evidenceDir = path.join(root, 'docs/evidence');
-const PORT = Number(process.env.PF_BX_PORT ?? 8801);
 const R = { num: 30, den: 1 };
 const f = (n: number) => T.frameTime(n, R);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -51,7 +50,7 @@ async function main() {
   if (!fs.existsSync(path.join(webDist, 'browser-export.html'))) throw new Error('web bundle missing: run `pnpm build` first');
 
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'barcode_640x360_30fps_4s.mp4') });
-  const server = await startServer({ port: PORT, dataDir: path.join(art, 'data'), webDist });
+  const server = await startServer({ port: 0, dataDir: path.join(art, 'data'), webDist });
   const base = server.url;
   const h = { authorization: `Bearer ${server.auth.tokens.agent}` };
   const rest = async (p: string, body?: unknown, headers: Record<string, string> = h) => {

@@ -29,7 +29,6 @@ const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/trend-baseline');
 const evidence = path.join(root, 'docs/evidence/trend-baseline.json');
 const CHECK = process.argv.includes('--check');
-const PORT = 8883;
 const ff = (args: string[], input?: Buffer) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', ...args], { maxBuffer: 1 << 30, ...(input ? { input } : {}) });
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 /** SHA-256 of the decoded RGBA pixels of a PNG. */
@@ -78,7 +77,7 @@ async function main() {
   if (CHECK && !recorded) throw new Error(`no baseline at ${evidence}`);
 
   delete process.env.PF_RENDER_GPU; // as gpu-proof: the render host finds a launch mode that gives a graphics device, if this machine has one
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

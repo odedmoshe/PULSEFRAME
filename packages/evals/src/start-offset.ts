@@ -35,7 +35,7 @@ async function main() {
     { name: 'off-0.500', offset: 0.5, container: 'mp4' },
   ];
   for (const c of cases.slice(1)) ff(['-y', '-itsoffset', String(c.offset), '-i', fixture.file, '-i', fixture.file, '-map', '0:v', '-map', '1:a', '-c', 'copy', path.join(art, `${c.name}.${c.container}`)]);
-  const s = await startServer({ port: 8817, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

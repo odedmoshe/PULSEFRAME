@@ -79,7 +79,6 @@ import { runRenderCacheUiChecks } from './a11y-render-cache.ts';
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/incremental');
 const evidenceFile = path.join(root, 'docs/evidence/incremental-export.json');
-const PORT = Number(process.env.PF_PROOF_PORT ?? 8931);
 const QUALITY = 'standard' as const;
 /** The options of every fast export of project A; the plan route is asked with the same, because the encoder arguments are part of the key. */
 const INC = { format: 'mp4-h264-aac', mode: 'incremental', quality: QUALITY, selfCheck: 'every-segment' } as const;
@@ -107,7 +106,7 @@ let api: Api;
 let own: Api;
 const dataDir = path.join(art, 'data');
 async function boot(over: Partial<Config> = {}) {
-  s = await startServer({ port: PORT, dataDir, ...over });
+  s = await startServer({ port: 0, dataDir, ...over });
   api = makeApi(s.url, s.auth.tokens.agent);
   own = await ownerApi(s.url, s.auth.tokens.owner); // the owner's session cookie: the launch key as a bearer token is refused (401)
 }

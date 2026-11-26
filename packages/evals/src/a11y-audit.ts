@@ -232,7 +232,7 @@ async function main() {
   fs.mkdirSync(art, { recursive: true });
   const fixture = await generateBarcodeFixture({ out: path.join(art, 'fixture.mp4'), frames: 120 });
   // the phone drop's dialog is audited with a live code: the door may bind loopback for this audit only (startServer's override)
-  const s = await startServer({ port: 8803, dataDir: path.join(art, 'data'), dropPort: 8804, dropAdmitAddresses: ['127.0.0.1'] });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data'), dropPort: 0, dropAdmitAddresses: ['127.0.0.1'] });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const post = async (p: string, body: unknown) => (await fetch(`${s.url}/api/v1${p}`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
   const browser = await chromium.launch();

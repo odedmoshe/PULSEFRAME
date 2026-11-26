@@ -39,7 +39,6 @@ import { diffBox, overlappingPairs, type Box } from './titleBoxes.ts';
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/packs-proof');
 const evidence = path.join(root, 'docs/evidence/packs-proof.json');
-const PORT = 8891;
 const checks: { name: string; ok: boolean; detail?: unknown }[] = [];
 const measurements: Record<string, unknown> = {};
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, detail }); console.log(`${ok ? '  ok  ' : ' FAIL '} ${name}${detail !== undefined ? `  ${JSON.stringify(detail).slice(0, 600)}` : ''}`); };
@@ -82,7 +81,7 @@ async function main() {
   const stills = [still('s0.png', 'testsrc2'), still('s1.png', 'smptebars'), still('s2.png', 'rgbtestsrc'), still('s3.png', 'mandelbrot')];
   const videos = [video('v0.mp4', 'mandelbrot'), video('v1.mp4', 'testsrc2')];
 
-  const s = await startServer({ port: PORT, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

@@ -51,7 +51,7 @@ async function main() {
   const dissolveFile = path.join(art, 'dissolve.mp4');
   ff(['-f', 'lavfi', '-t', '3', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '3', '-i', 'mandelbrot=s=640x360:r=30', '-filter_complex', `[0:v]${V}[a];[1:v]${V}[b];[a][b]xfade=transition=fade:duration=1:offset=2[v]`, '-map', '[v]', ...enc, dissolveFile]);
 
-  const s = await startServer({ port: 8800, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const bearer = (t: string) => ({ authorization: `Bearer ${t}`, connection: 'close' });
   const h = bearer(s.auth.tokens.agent);
   const call = async (p: string, body?: unknown, headers: Record<string, string> = h) => {

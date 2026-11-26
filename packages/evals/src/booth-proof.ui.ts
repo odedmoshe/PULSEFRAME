@@ -13,7 +13,6 @@
  * Nobody here can listen or look: every check is a measurement of the page (text, states, focus, currentTime, counts, times, bytes of the clipboard).
  */
 import fs from 'node:fs';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
@@ -28,7 +27,6 @@ export interface BoothUiRow { id: 'B12' | 'B13' | 'B14'; status: BoothUiStatus; 
 
 const say = makeSay('he');
 const START = 'booth-start';
-const freePort = async () => { const x = net.createServer(); await new Promise<void>((r) => x.listen(0, '127.0.0.1', r)); const p = (x.address() as net.AddressInfo).port; await new Promise((r) => x.close(r)); return p; };
 const sel = (id: string) => `[data-testid="${id}"]`;
 
 interface Opened { page: Page; ctx: BrowserContext; bootRequests: string[] }
@@ -253,7 +251,7 @@ export async function runBoothUiProof(): Promise<BoothUiRow[]> {
   const art = fs.mkdtempSync(path.join(os.tmpdir(), `pf-booth-ui-${process.pid}-`));
   let server: RunningServer | null = null, browser: Browser | null = null;
   try {
-    server = await startServer({ port: await freePort(), host: '127.0.0.1', dataDir: path.join(art, 'data'), backupDir: null, libraryDir: null });
+    server = await startServer({ port: 0, host: '127.0.0.1', dataDir: path.join(art, 'data'), backupDir: null, libraryDir: null });
     const made = await fetch(`${server.url}/api/v1/projects`, { method: 'POST', headers: { authorization: `Bearer ${server.auth.tokens.agent}`, 'content-type': 'application/json' }, body: JSON.stringify({ name: 'booth-ui-proof', width: 640, height: 360, frameRate: { num: 30, den: 1 } }) });
     const pid = ((await made.json()) as { project: { id: string } }).project.id;
     browser = await chromium.launch();

@@ -1,5 +1,5 @@
 {
- "when": "2026-11-26T02:08:13.001Z",
+ "when": "2026-11-26T10:48:26.217Z",
  "checks": [
   {
    "name": "1. The bottom clip alone and the top clip at opacity 1 are byte-identical to their files",

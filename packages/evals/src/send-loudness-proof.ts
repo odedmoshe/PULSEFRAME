@@ -82,7 +82,7 @@ async function main() {
   const bursts = '0.1*sin(2*PI*220*t)+if(lt(mod(t\\,2)\\,0.005)\\,0.9*sin(2*PI*1000*t)\\,0)';
   const loudBed = gen('bursts', bursts, bursts, 8);
 
-  const s: RunningServer = await startServer({ port: 8871, dataDir: path.join(art, 'data') });
+  const s: RunningServer = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });

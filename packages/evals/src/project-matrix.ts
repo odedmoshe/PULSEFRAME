@@ -43,7 +43,7 @@ async function main() {
     { name: 'odd size 641×361 at 30 fps', width: 641, height: 361, num: 30, den: 1, browser: true },
     { name: 'small 160×90 at 30 fps', width: 160, height: 90, num: 30, den: 1 },
   ];
-  const s = await startServer({ port: 8825, dataDir: path.join(art, 'data') });
+  const s = await startServer({ port: 0, dataDir: path.join(art, 'data') });
   const h = { authorization: `Bearer ${s.auth.tokens.agent}`, connection: 'close' };
   const call = async (p: string, body?: unknown) => {
     const r = await fetch(`${s.url}/api/v1${p}`, { method: body === undefined ? 'GET' : 'POST', headers: { ...h, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
