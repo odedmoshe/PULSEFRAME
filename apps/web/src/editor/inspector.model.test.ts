@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, clipEnd, createProject, findClip, type OpCall, type ProjectDocument } from '@pulseframe/core';
-import { activeTab, cutBefore, firstTab, framesToNearestBeat, keyframeSummary, matchingPreset, objectActions, objectKind, trackRole, pagesFor, pinnedTab, rollCutOps, shortTimecode, tabsFor } from './inspector.model.ts';
+import { activeTab, effectsThatOpenTheTab, cutBefore, firstTab, framesToNearestBeat, keyframeSummary, matchingPreset, objectActions, objectKind, trackRole, pagesFor, pinnedTab, rollCutOps, shortTimecode, tabsFor } from './inspector.model.ts';
 import { ratioLabel } from './FormatPrism.tsx';
 
 const R = { num: 30, den: 1 };
@@ -187,5 +187,17 @@ describe('matchingPreset: which ready text style a title wears', () => {
   });
   it('a title changed by hand wears none', () => {
     expect(matchingPreset({ fontFamily: 'Rubik', fontWeight: 700, color: '#FFFFFF' }, P)).toBeNull();
+  });
+});
+
+describe('the effects tab opens when an effect is added, not when a living picture is made (wave 8 living integration)', () => {
+  it('effectsThatOpenTheTab counts the effects of the effects tab; a living picture (made in the Motion tab with set_living_picture) is not one', () => {
+    const fx = (type: string) => ({ id: type, type, enabled: true, params: {} });
+    const clip = (types: string[]) => ({ type: 'media', effects: types.map(fx) }) as unknown as Parameters<typeof effectsThatOpenTheTab>[0];
+    expect(effectsThatOpenTheTab(clip([]))).toBe(0);
+    expect(effectsThatOpenTheTab(clip(['blur.gaussian']))).toBe(1);
+    // making a living picture adds depth.living: the count the tab follows does not grow, so the Motion tab stays shown
+    expect(effectsThatOpenTheTab(clip(['blur.gaussian', 'depth.living']))).toBe(1);
+    expect(effectsThatOpenTheTab({ type: 'caption' } as unknown as Parameters<typeof effectsThatOpenTheTab>[0])).toBe(0);
   });
 });

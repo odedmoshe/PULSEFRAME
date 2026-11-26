@@ -3,7 +3,7 @@
  * category per screen), the panels each mode offers, and the cut a clip starts with. No React, no DOM: tested on their own.
  */
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, handleBeforeStart, previousAdjacent, spareAfter, type Clip, type MediaClip, type ProjectDocument, type Track } from '@pulseframe/core';
+import { clipEnd, findClip, handleBeforeStart, opOnlyEffect, previousAdjacent, spareAfter, type Clip, type MediaClip, type ProjectDocument, type Track } from '@pulseframe/core';
 import type { Workspace } from './store.ts';
 
 /** The panels of the inspector column. `clip` is whatever is selected; `all` is every panel on one screen. */
@@ -81,6 +81,11 @@ const TABS: Record<ObjectKind, readonly ObjectTab[]> = {
   cut: ['cut', 'transition'],
 };
 /** The tab set of an object, in order. The first one is what a new selection opens. */
+/**
+ * The effects the inspector's "an effect was added: open the effects tab" rule follows. An effect made by its own operation in
+ * another tab (core opOnlyEffect: the living picture, set_living_picture in the Motion tab) is not one: making it keeps that tab shown.
+ */
+export const effectsThatOpenTheTab = (clip: Clip): number => (clip.type === 'caption' ? 0 : (clip.effects ?? []).filter((e) => !opOnlyEffect(e.type)).length);
 export const tabsFor = (kind: ObjectKind): readonly ObjectTab[] => TABS[kind];
 export const firstTab = (kind: ObjectKind): ObjectTab => TABS[kind][0]!;
 

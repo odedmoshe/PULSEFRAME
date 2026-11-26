@@ -28,7 +28,7 @@ import { ActivityDialog } from './ActivityDialog.tsx';
 import { CaptionControls, FillerPanel, SilencePanel, TranscribeAll, TranscriptPanel } from './TranscriptPanel.tsx';
 import { TAB_ICON_COMPONENTS } from './icons.tsx';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
-import { activeTab, INSPECTOR_PAGES, objectKind, pagesFor, pinnedTab, REAL_PAGES, tabsFor, type InspectorPage, type ObjectTab } from './inspector.model.ts';
+import { activeTab, effectsThatOpenTheTab, INSPECTOR_PAGES, objectKind, pagesFor, pinnedTab, REAL_PAGES, tabsFor, type InspectorPage, type ObjectTab } from './inspector.model.ts';
 import { ObjectFooter, ObjectHeader, ObjectPanels } from './InspectorObject.tsx';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import { useWideStage } from './Transport.tsx';
@@ -194,7 +194,7 @@ export function Inspector({ keymap }: { keymap: Keymap }) {
     redraw();
   }, [state.panelRequest?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   // an effect added to the selected clip: the effects tab opens on it
-  const fxCount = sel && sel.clip.type !== 'caption' ? sel.clip.effects?.length ?? 0 : 0;
+  const fxCount = sel ? effectsThatOpenTheTab(sel.clip) : 0; // a living picture, made in the Motion tab, does not switch the tab
   const lastFx = useRef({ key: selKey, n: fxCount });
   useEffect(() => {
     const grew = lastFx.current.key === selKey && fxCount > lastFx.current.n;
