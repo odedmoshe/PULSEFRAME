@@ -1,0 +1,19 @@
+/* «תמונה חיה» (wave 8). Logical properties only; numbers sit in LTR isolates; colours are the theme tokens. */
+.living { display: grid; gap: var(--pf-sp-4); }
+.living-chips { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); border: 0; padding: 0; margin: 0; }
+.living-chips legend { padding: 0; margin-block-end: var(--pf-sp-2); font-weight: var(--pf-fw-medium); }
+.living-chip[aria-checked='true'] { box-shadow: inset 0 0 0 1.5px var(--pf-frame); }
+.living-amount { display: grid; gap: var(--pf-sp-2); }
+.living-amount input[type='range'] { inline-size: 100%; }
+.living-line { margin: 0; font-size: var(--pf-fs-xs); }
+.living-err { margin: 0; font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); }
+.living-row { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); align-items: center; }
+.depth-dlg { display: grid; gap: var(--pf-sp-4); }
+.depth-pic { position: relative; inline-size: 100%; max-inline-size: 560px; direction: ltr; }
+.depth-canvas { display: block; inline-size: 100%; block-size: auto; background: var(--pf-surface-4); touch-action: none; cursor: crosshair; }
+.depth-canvas:focus-visible { outline: 2px solid var(--pf-frame); outline-offset: 2px; }
+.depth-tools { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); border: 0; padding: 0; margin: 0; align-items: center; }
+.depth-tools legend { padding: 0; margin-block-end: var(--pf-sp-2); font-weight: var(--pf-fw-medium); }
+.depth-tools button[aria-pressed='true'] { box-shadow: inset 0 0 0 1.5px var(--pf-frame); }
+.depth-size { display: grid; gap: var(--pf-sp-2); }
+.depth-dlg button.primary { background-color: var(--pf-frame); background-image: linear-gradient(180deg, var(--pf-frame-strong), var(--pf-frame) 60%); color: var(--pf-frame-ink); }
