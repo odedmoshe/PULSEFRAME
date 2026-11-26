@@ -44,6 +44,10 @@ import './templates.css';
 import './timeline.css';
 import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
 import { ImpactTick } from './musicfit/ImpactTick.tsx';
+import { PlayheadGrab } from './scrub/PlayheadGrab.tsx';
+import { useScrub } from './scrub/useScrub.ts';
+import { RangeFlags, RangeTint } from './range/RangeMarks.tsx';
+import { ClipSound } from './clipwave/ClipSound.tsx';
 
 const MAX_MARKERS = 3000;
 type MediaClip = Extract<Clip, { type: 'media' }>;
@@ -250,7 +254,7 @@ function PlayheadCap({ pps, beatSeconds, markerFrames }: { pps: number; beatSeco
   return (
     <>
       {lit && <i className={`pulse-now${editor.player?.playing ? ' playing' : ''}`} key={i} data-testid="pulse-now" style={{ left: beatSeconds[i]! * pps }} aria-hidden="true" />}
-      <div className="playhead-cap" style={{ left: at * pps }} aria-hidden="true"><bdi ref={code} className="num">{text}</bdi></div>
+      <div className="playhead-cap" style={{ left: at * pps }} aria-hidden="true"><bdi ref={code} className="num">{text}</bdi><PlayheadGrab where="cap" /></div>
     </>
   );
 }
@@ -451,6 +455,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                 {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                   <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as MediaClip).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={clipH} reverse={c.type === 'media' && !!c.reverse} tintKey={kind} />
                 )}
+                <ClipSound projectId={doc.id} clip={c} asset={asset} trackKind={tr.kind} laneHeight={height} clipHeight={clipH} widthPx={width} missing={missing} />
                 {/* the marked moment and the join of a shortened song (wave 7 musicfit): once builder C has built it */}
                 {MUSICFIT_UI_BUILT && <ImpactTick doc={doc} clip={c} pps={pps} />}
                 <span className="clip-plate">
@@ -517,6 +522,7 @@ export function Timeline() {
   const { containerProps, ghost } = useTimelineDrag({ disabled: tool === 'blade' });
   const { marqueeProps, box } = useMarquee(editor);
   const wheelZoomRef = useWheelZoom();
+  const scrub = useScrub();
   const [snapBeats, setSnapBeats] = useState(readSnapBeats);
   const [ruler, setRuler] = useState(readRuler);
   const [metrics, setMetrics] = useState(DEFAULT_METRICS);
@@ -840,7 +846,7 @@ export function Timeline() {
             </div>
             <div className="tl-top-lanes">
               <PulseStrip model={pulse.model} pps={pps} lang={lang} onSeekFrame={(f) => editor.seek(f)} truncatedTitle={t('timeline.markers.truncated')} />
-              <div className="ruler" data-testid="ruler" data-mode={rulerMode} onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.max(0, Math.round(((x / pps) * rate.num) / rate.den))); }}>
+              <div className="ruler" data-testid="ruler" data-mode={rulerMode} onPointerDown={scrub.onRulerDown}>
                 {rulerMode === 'time'
                   ? Array.from({ length: Math.floor(Math.max(totalSeconds + 80 / pps, (view.width - head) / pps) / step) + 1 }, (_, i) => <span key={i} className="num" style={{ left: i * step * pps }}>{rulerLabel(i * step, step)}</span>)
                   : pulse.model.beats.filter((b) => b.n !== null && (b.n - 1) % labelsEvery === 0).map((b) => <span key={b.frame} className="num" style={{ left: b.s * pps }}>{b.n}</span>)}
@@ -851,6 +857,7 @@ export function Timeline() {
                     {m.label && <bdi>{m.label}</bdi>}
                   </button>
                 ))}
+                <RangeFlags pps={pps} />
               </div>
               <div className="tl-flash" data-testid="flash-lane" role="img" aria-label={s.flashLane}>
                 {flashRanges.map((r, i) => <i key={i} data-testid="flash-risk" style={{ left: r.from * pps, width: Math.max(3, (r.to - r.from) * pps) }} title={s.flashRisk(rulerLabel(r.from, 1), rulerLabel(r.to, 1), String(r.perSecond))} />)}
@@ -883,6 +890,7 @@ export function Timeline() {
               <span>{g.kind === 'agent' ? t('actor.agent') : g.actor}{g.label ? ` · ${g.label}` : ''}</span>
             </div>
           ))}
+          <RangeTint pps={pps} head={head} />
           <MarkerSlot markers={userMarkers} pps={pps} head={head} />
           <PlayheadLine pps={pps} head={head} />
         </div>
