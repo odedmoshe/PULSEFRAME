@@ -258,7 +258,7 @@ export class MadeNotBuiltError extends Error {
   constructor(readonly fn: string) { super(`${fn}: clips made by a page are not built in this build yet`); }
 }
 /** Whether each part is built (flipped by the builders and the integrator). */
-export const MADE_BUILT = { op: false, check: false, harness: false, routes: false, ui: false } as const;
+export const MADE_BUILT = { op: true, check: true, harness: false, routes: true, ui: false } as const;
 
 /** checkMadePage and madeFieldsCheck: madeCheck.ts (W2). */
 /** Whole frames for `seconds` at `rate`: round(seconds × num / den), at least 1, at most MADE_LIMITS.maxFrames. The duration is T.frameTime(frames, rate). */

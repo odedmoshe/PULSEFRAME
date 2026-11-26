@@ -38,7 +38,7 @@ import { libraryError } from './library/contract.ts';
 import { creditsFor } from './library/credits.ts';
 import { useLibraryItemFor } from './library/routes.ts';
 import { MadeRenderRequestSchema } from '@pulseframe/core';
-import { madeError } from './made/contract.ts';
+import { madeServiceFor } from './made/routes.ts';
 import { FindQuerySchema } from '@pulseframe/core';
 import { findTextFor } from './craft/findText.ts';
 import { pearlsView } from './pearls.ts';
@@ -177,7 +177,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     server.registerTool('get_multicam', { description: 'A multicam group: its angles and files with each file\'s sync verdict and measured quality, the group-time span each file covers, the program tracks that use it, program segments out of step with the master sound, the level envelopes\' state and the capture-time priors. Read-only.', inputSchema: z.object({ projectId: pid, groupId: z.string() }), annotations: ro }, ({ projectId, groupId }) =>
       run('observe', () => { read(projectId); return multicamView(store, projectId, groupId); }));
     // perform mode (ADR-0025): a take's raw taps, planned on the server and committed as ONE internal apply_take (dryRun plans only)
-    // «קליפ מקוד» (wave 8 motioncode; made/contract.ts MADE_MCP_TOOLS): answers 501 made_not_built until W2 builds them against the runner
+    // «קליפ מקוד» (wave 8 motioncode; made/contract.ts MADE_MCP_TOOLS): the same service as the made routes (made/routes.ts madeServiceFor)
     server.registerTool('submit_made_clip', { description: [
       'Draw a short clip («קליפ מקוד») from ONE HTML page, once, offline, into a transparent video (VP9 with alpha) in the project library; a durable job (get_job / view_made_clip; cancel_job stops it).',
       'page: the page text (at most 262144 bytes) or {templateId} of a built-in page (GET /api/v1/made/templates: rising-title, lower-third, counter, intro-plate, end-card). fields/values: typed text, colour (#rrggbb) and number fields the page reads as window.PF.fields.',
@@ -185,11 +185,18 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       'Allowed: inline script and style, pinned libraries served at https://made.invalid/lib/ (GSAP), catalogue fonts by family name (Heebo, Rubik, Assistant, Secular One and the rest of the catalogue), the project\'s own media by assetIds (read-only at https://made.invalid/assets/<assetId>), and internet files the page names, fetched once before drawing and recorded by hash. Nothing else reaches the network while drawing; the editor itself is never reachable from the page.',
       'Limits: 1–20 seconds at the sequence rate, long side at most 1920 px, 2 s per frame, 15 minutes per job, 256 MB of memory; one running render per credential, three in all (made_busy).',
       'then: {place:{start}} (a new top track), {replaceAssetId} (every clip that shows an earlier version keeps its place, length and effects) or {library:true}; applied when the job succeeds as ONE undoable step committed as you. Leave it out and apply later (POST …/made/jobs/:jobId/apply).',
+      'The answer is {jobId, warnings}: each static finding (a clock or random read, a network or storage name, SMIL, an outside script) with its character offset, so all can be fixed in one round; only a page over the size limit, with a NUL character or not UTF-8 is refused (made_bad_page). Field values must fit their fields. An agent paused by the owner gets made_agents_paused; a credential that may only observe or propose cannot render.',
       'Flashing is measured over black and over white and reported with its rate (above 3 a second is a warning, not a refusal). An empty clip, a page that never finishes a frame, or a file that does not decode back fail the job with the reason. Nobody has watched the result: look at it with view_made_clip.',
-    ].join(' '), inputSchema: z.object({ projectId: pid, ...MadeRenderRequestSchema.shape }) }, ({ projectId }) =>
-      run('edit', () => { read(projectId); throw madeError('notBuilt'); }));
-    server.registerTool('view_made_clip', { description: 'The report of a «קליפ מקוד» render (status, stage, frame progress, the checks with their numbers, warnings, the failure with its next step) and, once it succeeded, three stills (first, middle, last frame) as images, to judge the design and draw again. Your own renders, or any for the owner.', inputSchema: z.object({ projectId: pid, jobId: z.string() }), annotations: ro }, ({ projectId }) =>
-      run('observe', () => { read(projectId); throw madeError('notBuilt'); }));
+    ].join(' '), inputSchema: z.object({ projectId: pid, ...MadeRenderRequestSchema.shape }) }, ({ projectId, ...body }) =>
+      run('edit', () => madeServiceFor(store, gov).render(principal, projectId, body)));
+    server.registerTool('view_made_clip', { description: 'The report of a «קליפ מקוד» render (status, stage, frame progress, the checks with their numbers, warnings, the failure with its next step) and, once it succeeded, three stills (first, middle, last frame) as images, to judge the design and draw again. Your own renders, or any for the owner.', inputSchema: z.object({ projectId: pid, jobId: z.string() }), annotations: ro }, ({ projectId, jobId }) =>
+      run('observe', () => {
+        const made = madeServiceFor(store, gov);
+        const report = made.report(principal, projectId, jobId);
+        if (report.status !== 'succeeded') return report;
+        const stills = ([0, 1, 2] as const).map((k) => ({ type: 'image' as const, data: made.still(principal, projectId, jobId, k).png.toString('base64'), mimeType: 'image/png' }));
+        return { content: [...text(report).content, ...stills] };
+      }));
     server.registerTool('perform_take', { description: 'Record a performance take (perform mode): pad presses (timeline seconds, pads 0-7) with the pad bank (built-in moves: adjustment hits, zoom punch, sounds, titles, stickers; catalogue ids, never asset ids), the project assets each sound or sticker pad resolved to, and the snap settings (snap off/beat/half, tempo, strength). The server quantises and plans the take with fixed rules (no model) and commits it as ONE undoable step; a hit that would change light faster than three times a second, or needs what is missing, is left out and its chip says why. dryRun plans without changing anything (observe). Credentials in propose mode are refused. Answers 501 take_not_built while this build has no planner; 409 take_empty when no tap could be kept.', inputSchema: z.object({ projectId: pid, ...TakeRequestSchema.shape }) }, ({ projectId, ...b }) =>
       run('observe', () => { read(projectId); return takeFor(store, gov, principal, projectId, TakeRequestSchema.parse(b)); }));
     // the content library on disk (wave 7 library track): use an item by its catalogue key, and read the credits a sequence needs.

@@ -344,6 +344,7 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {
   'pulseframe://guide': ['no-document'], 'pulseframe://ops': ['no-document'], 'pulseframe://catalog': ['no-document'],
+  'pulseframe://made/contract': ['no-document'], // «קליפ מקוד» (wave 8 motioncode): the page contract from the core tables and the built-in catalogue; no project content
   'pulseframe://projects/{projectId}/summary': ['reader-document'], 'pulseframe://projects/{projectId}/timeline': ['reader-document'],
   'prompts/*': ['no-document'],
 };
