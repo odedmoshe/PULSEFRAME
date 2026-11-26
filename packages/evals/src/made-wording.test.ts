@@ -1,21 +1,24 @@
 /**
  * Keeps the Hebrew wording of «קליפ מקוד» (packages/i18n/src/made.ts) in step with the fixed English of core madeContract.ts: every
  * refusal of apply_made_clip and of the made routes is worded in Hebrew by its own pattern with a next step (a plural imperative),
- * every pattern is used, every job failure and warning has a he/en string, no string calls a clip safe or checked by eye, and the
- * not-built refusal is provoked through the real op. W2 owns this file after the pre-pass.
+ * every pattern is used, every job failure and warning has a he/en string, no string calls a clip safe or checked by eye, and
+ * a refusal is provoked through the real op (W2).
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, MADE_API, MADE_JOB_FAILURES, MADE_OP_REFUSALS, MADE_WARNINGS, OpError } from '@pulseframe/core';
+import { applyTransaction, createProject, MADE_API, MADE_LIMITS, MADE_JOB_FAILURES, MADE_OP_REFUSALS, MADE_WARNINGS, OpError } from '@pulseframe/core';
 import { HE_MADE, MADE_EN, MADE_HE, MADE_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
+import { MADE_ROUTE_REFUSALS } from '../../../apps/server/src/made/routes.ts';
 
 const SAMPLES: Record<string, string> = {
   notBuilt: MADE_OP_REFUSALS.notBuilt.message(), noRecord: MADE_OP_REFUSALS.noRecord.message(), notVideo: MADE_OP_REFUSALS.notVideo.message(),
   placeAndReplace: MADE_OP_REFUSALS.placeAndReplace.message(), replaceUnused: MADE_OP_REFUSALS.replaceUnused.message('ast_x1'),
   tooShort: MADE_OP_REFUSALS.tooShort.message('clp_x1', 120),
   ...Object.fromEntries(Object.entries(MADE_API).map(([k, v]) => [`api.${k}`, v.message])),
+  'route.notYours': MADE_ROUTE_REFUSALS.notYours.message(), 'route.noTemplate': MADE_ROUTE_REFUSALS.noTemplate.message('no-such-page'),
+  'route.badValues': MADE_ROUTE_REFUSALS.badValues.message(), 'route.unknownAssets': MADE_ROUTE_REFUSALS.unknownAssets.message(),
 };
-const IMPERATIVE = /(צרו|הוסיפו|בחרו|חכו|חדשו|תקנו|השתמשו|עדכנו|נסו|קצרו|לחצו|ציירו|בדקו|הסירו|חפשו|האטו|השאירו|דווחו)/;
+const IMPERATIVE = /(צרו|שמרו|שלחו|הוסיפו|בחרו|חכו|חדשו|תקנו|השתמשו|עדכנו|נסו|קצרו|לחצו|ציירו|בדקו|הסירו|חפשו|האטו|השאירו|דווחו)/;
 
 describe('made-clip wording', () => {
   it('every refusal is worded in Hebrew with a next step by its own pattern, and every pattern is used', () => {
@@ -49,12 +52,22 @@ describe('made-clip wording', () => {
     expect(MADE_HE['made.unseen']).toContain('אף אחד עוד לא צפה בו');
     expect(MADE_HE['made.check.flash']).toContain('נמדד');
   });
-  it('provoked for real: apply_made_clip refuses with the not-built row until W2 builds it', () => {
-    const doc = createProject({ id: 'p', name: 'p', frameRate: { num: 30, den: 1 } });
+  it('provoked for real: apply_made_clip refuses a file without a made record and a short replacement in its own Hebrew words', () => {
+    const R = { num: 30, den: 1 };
+    const doc = createProject({ id: 'p', name: 'p', frameRate: R });
+    const asset = { kind: 'video', name: 'm.webm', contentHash: `sha256:${'a'.repeat(64)}`, byteSize: 1, container: 'webm', mimeType: 'video/webm', duration: T.frameTime(30, R),
+      video: { width: 640, height: 360, frameRate: R, codec: 'vp9', rotation: 0, frameCount: 30, hasAlpha: true }, provenance: { origin: 'generated', importedAt: 'x', importedBy: 'x' } };
     let err: unknown;
-    try { applyTransaction(doc, [{ op: 'apply_made_clip', args: { asset: {}, place: { start: T.frameTime(0, { num: 30, den: 1 }) } } }], { idSeed: 'm_', actor: 'test', allowInternal: true }); } catch (e) { err = e; }
+    try { applyTransaction(doc, [{ op: 'apply_made_clip', args: { asset, place: { start: T.frameTime(0, R) } } }], { idSeed: 'm_', actor: 'test', allowInternal: true }); } catch (e) { err = e; }
     expect(err).toBeInstanceOf(OpError);
-    expect((err as OpError).details.why).toBe('made_not_built');
-    expect(translateRefusal('he', (err as OpError).message)).toContain('עדכנו');
+    expect((err as OpError).details.why).toBe('made_no_record');
+    expect(translateRefusal('he', (err as OpError).message)).toContain('צרו');
+  });
+  it('the page and field problems and the auto-apply line have he and en strings with a next step', () => {
+    for (const k of ['too_large', 'nul', 'not_utf8'] as const) expect(IMPERATIVE.test(MADE_HE[`made.problem.${k}`]), k).toBe(true);
+    for (const k of ['unknown', 'colour', 'number', 'range', 'length'] as const) expect(IMPERATIVE.test(MADE_HE[`made.field.${k}`]), k).toBe(true);
+    expect(MADE_HE['made.problem.too_large']).toContain('{bytes}');
+    expect(MADE_LIMITS.pageBytes).toBeGreaterThan(0);
+    expect(IMPERATIVE.test(MADE_HE['made.autoApply.refused'])).toBe(true);
   });
 });

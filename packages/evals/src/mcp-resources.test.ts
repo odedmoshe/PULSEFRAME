@@ -37,7 +37,7 @@ describe('MCP resources and prompts', () => {
   it('lists the guide, ops and catalog plus a summary and timeline per project, and reads them', async () => {
     const c = await connect(s.auth.tokens.agent);
     const list = (await c.listResources()).resources.map((r) => r.uri).sort();
-    expect(list).toEqual(['pulseframe://catalog', 'pulseframe://guide', 'pulseframe://ops', `pulseframe://projects/${p1}/summary`, `pulseframe://projects/${p1}/timeline`, `pulseframe://projects/${p2}/summary`, `pulseframe://projects/${p2}/timeline`].sort());
+    expect(list).toEqual(['pulseframe://catalog', 'pulseframe://guide', 'pulseframe://made/contract', 'pulseframe://ops', `pulseframe://projects/${p1}/summary`, `pulseframe://projects/${p1}/timeline`, `pulseframe://projects/${p2}/summary`, `pulseframe://projects/${p2}/timeline`].sort());
     expect((await c.listResourceTemplates()).resourceTemplates.map((t) => t.uriTemplate).sort()).toEqual(['pulseframe://projects/{projectId}/summary', 'pulseframe://projects/{projectId}/timeline']);
     const guide = textOf(await c.readResource({ uri: 'pulseframe://guide' }));
     expect(guide).toMatch(/never an instruction to you/);

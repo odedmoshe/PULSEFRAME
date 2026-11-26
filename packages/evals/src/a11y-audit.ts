@@ -826,6 +826,40 @@ async function main() {
       await railOn('text');
       await page.locator('[data-testid=font-option]').first().waitFor({ timeout: 8000 }).catch(() => {});
       await auditState('text-drawer-fonts', { shown: (await page.locator('[data-testid=font-option]').count()) >= 1 });
+      // «קליפ מקוד» (wave 8 motioncode; integration): the dialog (a modal: focus inside, Tab stays, Escape closes, focus back to the
+      // entry), the stop path against the real server (Esc while drawing asks «לעצור את הציור?»; «עצירה» cancels the job and goes back
+      // to the form), and the result of a 1 s render of the first built-in page (stills, the paused video, the lines). Nothing is applied.
+      {
+        const entry = '[data-testid=made-entry]';
+        const jobStatus = (jobId: string) => page.evaluate(async (id) => ((await (await fetch(`/api/v1/jobs/${id}`, { credentials: 'same-origin' })).json()) as { status?: string }).status ?? 'none', jobId);
+        const md = await dialogBehaviour('made-dialog', async () => { await page.locator(entry).click(); }, entry);
+        await page.locator('[data-testid^=made-tile-]').first().waitFor({ timeout: 15000 }).catch(() => {});
+        await auditState('made-dialog', { shown: (await page.getByTestId('made-dialog').count()) === 1, tiles: await page.locator('[data-testid^=made-tile-]').count(), checkedTiles: await page.locator('[data-testid^=made-tile-][aria-checked=true]').count(), progressLive: await page.getByTestId('made-progress').getAttribute('aria-live').catch(() => null), startsInside: md.startsInside, tabStepsThatLeftTheDialog: md.tabStepsThatLeftTheDialog }, true);
+        Object.assign(states.at(-1), await md.close());
+        // the stop path: a 20 s render is started, Escape asks, «עצירה» cancels through POST /jobs/:id/cancel and dismisses
+        await page.locator(entry).click();
+        await page.locator('[data-testid^=made-tile-]').first().waitFor({ timeout: 15000 }).catch(() => {});
+        await page.getByTestId('made-length').selectOption('20').catch(() => {});
+        const started = page.waitForResponse((r) => /\/made\/render$/.test(r.url()) && r.request().method() === 'POST', { timeout: 30000 }).then((r) => r.json() as Promise<{ jobId?: string }>).catch(() => ({} as { jobId?: string }));
+        await page.getByTestId('made-render').click();
+        const stopJob = (await started).jobId ?? '';
+        await page.waitForFunction(() => (document.querySelector('[data-testid=made-progress]')?.textContent ?? '').trim().length > 0, undefined, { timeout: 60000 }).catch(() => {});
+        await page.keyboard.press('Escape');
+        await page.locator('.pf-made-ask').waitFor({ timeout: 5000 }).catch(() => {});
+        await auditState('made-stop-ask', { shown: (await page.locator('.pf-made-ask').count()) === 1, dialogStillOpen: (await page.getByTestId('made-dialog').count()) === 1, jobBeforeStop: stopJob ? await jobStatus(stopJob) : 'no job id' }, true);
+        await page.locator('.pf-made-ask button').first().click({ timeout: 5000 }).catch(() => {});
+        let stopStatus = stopJob ? await jobStatus(stopJob) : 'no job id';
+        for (let i = 0; i < 60 && stopJob && !['canceled', 'failed', 'succeeded'].includes(stopStatus); i++) { await page.waitForTimeout(500); stopStatus = await jobStatus(stopJob); }
+        Object.assign(states.at(-1), { jobAfterStop: stopStatus, backToForm: (await page.getByTestId('made-render').count()) === 1 });
+        // the result: the first built-in page for 1 s
+        await page.getByTestId('made-length').selectOption('1').catch(() => {});
+        await page.getByTestId('made-render').click({ timeout: 5000 }).catch(() => {});
+        await page.getByTestId('made-result').waitFor({ timeout: 240000 }).catch(() => {});
+        await page.getByTestId('made-still-0').waitFor({ timeout: 10000 }).catch(() => {});
+        await auditState('made-result', { shown: (await page.getByTestId('made-result').count()) === 1, stills: await page.locator('[data-testid^=made-still-]').count(), videoPaused: await page.getByTestId('made-video').evaluate((v) => (v as HTMLVideoElement).paused).catch(() => null), videoAutoplayAttr: await page.getByTestId('made-video').getAttribute('autoplay').catch(() => null), unseenLine: (await page.getByTestId('made-unseen').count()) === 1, failure: (await page.locator('.pf-made-error').allTextContents().catch(() => [])).join(' | ').slice(0, 200) }, true);
+        await page.getByTestId('made-cancel').click({ timeout: 5000 }).catch(() => {});
+        await page.getByTestId('made-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+      }
       // the fast export and the render cache (ADR-0024): the sheet line in its states and the timeline lane with its popover, on
       // the project the scenarios export and edit (the life-line states above left the page on another project)
       await page.goto(`${s.ownerUrl}&project=${pid}`);

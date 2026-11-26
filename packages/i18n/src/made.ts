@@ -33,7 +33,7 @@ export const MADE_HE = {
   'made.check.sandbox.none': 'הדפדפן רץ בלי ארגז החול של כרום',
   // job failures (MADE_JOB_FAILURES, by why)
   'made.fail.made_frame_timeout': 'הדף לא סיים לצייר את פריים {frame} בתוך {s} שניות. חפשו בדף לולאה שלא נגמרת',
-  'made.fail.made_crashed': 'הדף קרס בזמן הציור (כנראה זיכרון). ציירו עם פחות זיכרון ונסו שוב',
+  'made.fail.made_crashed': 'הדף קרס או זרק שגיאה בזמן הציור (הפירוט אומר מה). תקנו את השגיאה, או ציירו עם פחות זיכרון, ונסו שוב',
   'made.fail.made_job_timeout': 'הציור נמשך יותר מ־{m} דקות ונעצר. קצרו או פשטו את הקליפ ונסו שוב',
   'made.fail.made_empty': 'הקליפ ריק — לא צויר כלום. בדקו שהדף מצייר ושהצבעים לא שקופים לגמרי',
   'made.fail.made_decode_back': 'הקובץ לא שומר את מה שצויר (פריים {frame}). צרו שוב; אם זה חוזר, דווחו על הדף',
@@ -51,6 +51,16 @@ export const MADE_HE = {
   'made.warn.made_font_missing': 'הגופן {family} לא בקטלוג, ולכן צויר בגופן חלופי. בחרו גופן מהקטלוג',
   'made.warn.made_webgl_differs': 'דף ה־WebGL צייר {pixels} פיקסלים אחרת בפעם השנייה (פריים {frame}). הקליפ נשמר; במחשב או בכרטיס מסך אחר הוא עשוי להיראות מעט אחרת',
   'made.on.black': 'שחור', 'made.on.white': 'לבן',
+  // what the page check refuses (facts) and the field check (W2: madeCheck.ts)
+  'made.problem.too_large': 'הדף גדול מדי ({bytes} בתים לכל היותר). קצרו את הדף ושלחו שוב',
+  'made.problem.nul': 'בדף יש תו NUL (בתו {at}). הסירו אותו ושלחו שוב',
+  'made.problem.not_utf8': 'הדף לא נשמר כ־UTF-8 (בתו {at}). שמרו אותו כ־UTF-8 ושלחו שוב',
+  'made.field.unknown': 'הערך {key} לא שייך לאף שדה של הדף. הסירו אותו',
+  'made.field.colour': 'הצבע ב־{key} צריך להיות בצורה #rrggbb. תקנו את הצבע',
+  'made.field.number': 'ב־{key} צריך להיות מספר. תקנו את הערך',
+  'made.field.range': 'המספר ב־{key} מחוץ לטווח של השדה. בחרו מספר בתוך הטווח',
+  'made.field.length': 'הטקסט ב־{key} ארוך מדי. קצרו אותו',
+  'made.autoApply.refused': 'הקליפ נוצר אבל לא הוכנס לציר: {reason}. הוסיפו אותו מהתוצאה',
 } as const;
 
 export const MADE_EN: Record<keyof typeof MADE_HE, string> = {
@@ -73,7 +83,7 @@ export const MADE_EN: Record<keyof typeof MADE_HE, string> = {
   'made.check.time': 'Took {s} seconds on this computer (one sample)',
   'made.check.sandbox.none': 'The browser ran without Chromium\'s sandbox',
   'made.fail.made_frame_timeout': 'The page did not finish drawing frame {frame} within {s} seconds. Look for a loop that never ends',
-  'made.fail.made_crashed': 'The page crashed while drawing (probably memory). Draw with less memory and try again',
+  'made.fail.made_crashed': 'The page crashed or threw an error while drawing (the detail says which). Fix the error, or draw with less memory, and try again',
   'made.fail.made_job_timeout': 'Drawing took longer than {m} minutes and was stopped. Make the clip shorter or simpler and try again',
   'made.fail.made_empty': 'The clip is empty: nothing was drawn. Check that the page draws and that the colours are not fully transparent',
   'made.fail.made_decode_back': 'The file does not keep what was drawn (frame {frame}). Render again; if it repeats, report the page',
@@ -90,6 +100,15 @@ export const MADE_EN: Record<keyof typeof MADE_HE, string> = {
   'made.warn.made_font_missing': 'The font {family} is not in the catalogue, so a fallback face was used. Choose a catalogue font',
   'made.warn.made_webgl_differs': 'The WebGL page drew {pixels} pixels differently the second time (frame {frame}). It was kept; on another computer or graphics card it may look slightly different',
   'made.on.black': 'black', 'made.on.white': 'white',
+  'made.problem.too_large': 'The page is too large (at most {bytes} bytes). Shorten it and send it again',
+  'made.problem.nul': 'The page has a NUL character (at character {at}). Remove it and send it again',
+  'made.problem.not_utf8': 'The page was not saved as UTF-8 (at character {at}). Save it as UTF-8 and send it again',
+  'made.field.unknown': 'The value {key} belongs to no field of the page. Remove it',
+  'made.field.colour': 'The colour in {key} must be written #rrggbb. Correct it',
+  'made.field.number': '{key} must be a number. Correct the value',
+  'made.field.range': 'The number in {key} is outside the field\'s range. Choose one within it',
+  'made.field.length': 'The text in {key} is too long. Shorten it',
+  'made.autoApply.refused': 'The clip was made but not placed: {reason}. Add it from the result',
 };
 
 /** Hebrew of the refusals of apply_made_clip (core MADE_OP_REFUSALS) and of the made routes (MADE_API), each with the next step. */
@@ -108,4 +127,9 @@ export const HE_MADE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^this render was already brought into the project$/, () => 'התוצאה של הציור הזה כבר נמצאת בפרויקט. השתמשו בקובץ שנוצר'],
   [/^the page cannot be drawn as sent$/, () => 'אי אפשר לצייר את הדף כמו שנשלח. תקנו את מה שמופיע ברשימה ושלחו שוב'],
   [/^this file was not made from a page$/, () => 'הקובץ הזה לא נוצר מדף, ולכן אי אפשר לערוך אותו ולצייר מחדש. בחרו קליפ שנוצר בקוד'],
+  // the made routes' own refusals (apps/server/src/made/routes.ts MADE_ROUTE_REFUSALS)
+  [/^this render was started by another credential$/, () => 'את הציור הזה התחיל מישהו אחר. השתמשו בציורים שלכם; בעורך עצמו רואים את כולם'],
+  [/^no built-in page is named (\S+)$/, (m) => `אין דף מוכן בשם ${ltr(m[1]!)}. בחרו דף מהרשימה, או הדביקו דף משלכם`],
+  [/^the values do not fit the fields of the page$/, () => 'הערכים לא מתאימים לשדות של הדף. תקנו את מה שמופיע ברשימה: צבע כ־#rrggbb, מספר בתוך הטווח, טקסט באורך המותר'],
+  [/^the page names files that are not in this project$/, () => 'הדף משתמש בקבצים שאינם בפרויקט הזה. בחרו קבצים מהספרייה של הפרויקט'],
 ];

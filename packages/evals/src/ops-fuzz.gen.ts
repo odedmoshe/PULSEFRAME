@@ -708,13 +708,16 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
    * «קליפ מקוד» (wave 8 motioncode; internal: the made routes commit it with allowInternal from a finished job). `genMade(doc)` returns a
    * random apply_made_clip call: a made asset (a VP9 file with alpha and its made record, frames matching), sometimes without the record,
    * as a picture, or with frames that disagree; then place (at a random frame, on a new or an existing track), replace (an asset on the
-   * timeline, an unused one or an unknown id), library only, or place AND replace (refused). Not drawn by `gen`. Until W2 builds the
-   * body every call is refused with made_not_built.
+   * timeline, an unused one or an unknown id), library only, or place AND replace (refused); now and then the bytes of a made file
+   * already in the library (dedup). Not drawn by `gen`.
    */
   const genMade = (doc: ProjectDocument): OpCall => {
-    const frames = 30 + int(90);
-    const hash = `sha256:${Array.from({ length: 64 }, () => '0123456789abcdef'[int(16)]).join('')}`;
-    const record = { v: 1, pageSha256: hash, pageBytes: 200 + int(4000), templateId: pick(['rising-title', 'lower-third', 'counter', 'intro-plate', 'end-card']), templateVersion: 1, fields: [{ key: 'title', kind: 'text', label: { he: 'כותרת', en: 'Title' }, default: 'שלום' }], values: { title: pick(['טיול לגליל 2026', 'Hello', '']) }, frames, width: 640, height: 360, browser: 'fuzz', sandbox: 'chromium', checks: { determinism: { frames: [0, frames >> 1, frames - 1] }, flash: { black: { general: 0, red: 0 }, white: { general: 0, red: 0 } }, alpha: true } };
+    // now and then the same bytes again (a made file already in the library: import_asset's dedup)
+    const again = Object.values(doc.assets ?? {}).filter((a) => a.provenance?.made);
+    const reuse = again.length && rnd() < 0.2 ? pick(again) : undefined;
+    const frames = reuse ? reuse.provenance.made!.frames : 30 + int(90);
+    const hash = reuse ? reuse.contentHash : `sha256:${Array.from({ length: 64 }, () => '0123456789abcdef'[int(16)]).join('')}`;
+    const record = { v: 1, pageSha256: hash, pageBytes: 200 + int(4000), templateId: pick(['rising-title', 'lower-third', 'counter', 'intro-plate', 'end-card', 'card-3d']), templateVersion: 1, fields: [{ key: 'title', kind: 'text', label: { he: 'כותרת', en: 'Title' }, default: 'שלום' }], values: { title: pick(['טיול לגליל 2026', 'Hello', '']) }, frames, width: 640, height: 360, browser: 'fuzz', sandbox: 'chromium', checks: { determinism: { frames: [0, frames >> 1, frames - 1] }, flash: { black: { general: 0, red: 0 }, white: { general: 0, red: 0 } }, alpha: true } };
     const r = rnd();
     const asset = {
       kind: r < 0.05 ? 'image' : 'video', name: 'made.webm', contentHash: hash, byteSize: 1000 + int(9000), container: 'webm', mimeType: 'video/webm', duration: f(frames),

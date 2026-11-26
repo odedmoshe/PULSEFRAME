@@ -33,7 +33,7 @@ export const MADE_LIMITS = {
   /** internet files a page names, fetched once before drawing */ fetchFiles: 16, fetchBytes: 50_000_000,
   /** the owner's media a page reads */ assets: 16,
   /** frames compared for determinism: three fixed (0, n/2, n−1) plus three from a per-job seed (verify C6) */ determinismFrames: 6,
-  /** a page with more running animations than this is refused at the first frame (a fact about the page, not policy) */ animations: 200,
+  /** informative (lead, integration decision 3): a page with more running animations is not refused; the frame budget bounds the seek */ animations: 200,
   /** flash rate above which the report warns (per second, ADR-0009's general limit) */ flashPerSecond: 3,
 } as const;
 
@@ -48,11 +48,11 @@ const Key = z.string().regex(/^[a-z][a-zA-Z0-9]{0,23}$/);
 export interface MadeLibrary { name: string; version: string; licence: string; licenceRead: string | null; files: readonly string[]; unpackedBytes: number | null; installed: boolean; note: string }
 export const MADE_LIBRARIES: readonly MadeLibrary[] = [
   { name: 'gsap', version: '3.15.1', licence: "Standard 'no charge' license: https://gsap.com/standard-license (package.json license field, read on npm 2026-11-26)", licenceRead: 'package.json license field via npm view (pre-pass, 2026-11-26); the licence page itself is research §6',
-    files: ['dist/gsap.min.js'], unpackedBytes: 6_274_260, installed: false, note: 'Not open source; keep its notices; NOTICE row quoting the prohibited-use sentence (tools that build visual animations without code competing with Webflow). Bundled by decision 4; not installed by the pre-pass (house rule: install nothing; the lead adds the pin).' },
+    files: ['dist/gsap.min.js'], unpackedBytes: 6_274_260, installed: true, note: 'Not open source; keep its notices; NOTICE row quoting the prohibited-use sentence (tools that build visual animations without code competing with Webflow). Bundled by decision 4; pinned exactly in apps/renderer/package.json (W1, integrated 2026-11-26).' },
   { name: 'three', version: '0.187.0', licence: 'MIT ("The MIT License — Copyright © 2010-2026 three.js authors", package/LICENSE; package.json "license": "MIT")', licenceRead: 'LICENSE and package.json of three-0.187.0.tgz from registry.npmjs.org, read in the pre-pass 2026-11-26 (published 2026-10-30)',
-    files: ['build/three.module.js', 'build/three.core.js'], unpackedBytes: 21_030_536, installed: false, note: 'WebGL build: three.module.js 658,900 B + three.core.js 1,474,799 B (unminified, the package ships no .min). Add-ons (examples/jsm loaders, FontLoader + typeface JSON for 3D text) are separate files, each pinned and served locally. Not installed by the pre-pass.' },
-  { name: 'hyperframes-runtime', version: '0.0.0', licence: 'Apache-2.0 (research §2; package name and file to be read on npm)', licenceRead: null,
-    files: [], unpackedBytes: null, installed: false, note: 'TODO W1: read the npm package (name, exact version, LICENSE, NOTICE) and check it makes no network or telemetry call at render; accepted through a seek adapter only then (decision 4).' },
+    files: ['build/three.module.js', 'build/three.core.js'], unpackedBytes: 21_030_536, installed: true, note: 'WebGL build: three.module.js 658,900 B + three.core.js 1,474,799 B (unminified, the package ships no .min). Add-ons (examples/jsm loaders, FontLoader + typeface JSON for 3D text) are separate files, each pinned and served locally (none served yet). Pinned exactly in apps/renderer/package.json (W1, integrated 2026-11-26).' },
+  { name: 'hyperframes-runtime', version: '0.0.0', licence: 'Apache-2.0 (research §2); its package.json has no licence field (W1 read)', licenceRead: null,
+    files: [], unpackedBytes: null, installed: false, note: 'OUT of made clips (lead, integration decision 7, 2026-11-26): W1 read that its page runtime fetches while rendering and that its package.json has no licence field. HyperFrames compositions come back in the engines track (round 2), rendered by its own program as a separate process. Never served here.' },
 ];
 export const MADE_FIELD_KINDS = ['text', 'colour', 'number'] as const;
 export type MadeFieldKind = (typeof MADE_FIELD_KINDS)[number];
@@ -153,7 +153,7 @@ export const MADE_OP_REFUSALS = {
  */
 export const MADE_JOB_FAILURES = {
   frameTimeout: row('made_frame_timeout', 'made_frame_timeout', (frame: number, ms: number) => `the page did not finish drawing frame ${frame} within ${ms / 1000} seconds`, 'Look for a loop that never ends in render(); each frame must finish on its own.'),
-  crashed: row('made_crashed', 'made_crashed', () => 'the page crashed while drawing (probably memory)', 'Draw with less memory: smaller pictures, fewer objects kept between frames.'),
+  crashed: row('made_crashed', 'made_crashed', () => 'the page crashed or threw an error while drawing (the detail says which)', 'Read the detail: fix the error the page threw, or, for a crash (usually memory), draw with smaller pictures and fewer objects kept between frames.'),
   jobTimeout: row('made_job_timeout', 'made_job_timeout', (minutes: number) => `drawing took longer than ${minutes} minutes and was stopped`, 'Make the clip shorter or simpler, then render again.'),
   empty: row('made_empty', 'made_empty', () => 'the clip is empty: nothing was drawn', 'Check that render() draws into the page and that the colours are not fully transparent.'),
   decodeBack: row('made_decode_back', 'made_decode_back', (frame: number) => `the file does not keep what was drawn (frame ${frame} differs after encoding)`, 'Render again; if it repeats, report the page.'),
@@ -233,7 +233,7 @@ export interface MadeJobReport {
   /** when succeeded */ fileSha256?: string; record?: MadeRecord; stills?: [string, string, string];
   /** set once applied */ appliedAssetId?: string;
   warnings: { why: MadeWarning; message: string; at?: number }[];
-  failure?: { why: MadeJobFailure; message: string; hint: string };
+  failure?: { why: MadeJobFailure; message: string; hint: string; /** what the browser said: the error a page threw, a crash */ detail?: string };
   /** one sample of the wall time on this machine */ seconds?: number;
 }
 /** GET /api/v1/made/templates */
@@ -258,7 +258,7 @@ export class MadeNotBuiltError extends Error {
   constructor(readonly fn: string) { super(`${fn}: clips made by a page are not built in this build yet`); }
 }
 /** Whether each part is built (flipped by the builders and the integrator). */
-export const MADE_BUILT = { op: false, check: false, harness: false, routes: false, ui: false } as const;
+export const MADE_BUILT = { op: true, check: true, harness: true, routes: true, ui: true } as const;
 
 /** checkMadePage and madeFieldsCheck: madeCheck.ts (W2). */
 /** Whole frames for `seconds` at `rate`: round(seconds × num / den), at least 1, at most MADE_LIMITS.maxFrames. The duration is T.frameTime(frames, rate). */

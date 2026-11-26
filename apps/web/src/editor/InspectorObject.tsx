@@ -54,6 +54,7 @@ import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { cutBefore, keyframeSummary, matchingPreset, objectActions, secondsText, shortTimecode, tabsFor, type InspectorPage, type ObjectAction, type ObjectKind, type ObjectTab } from './inspector.model.ts';
 import { TextStyles } from './TextStyles.tsx';
 import { CutPanel, TransitionPanel } from './InspectorCut.tsx';
+import { MadeInspectorLine } from './made/MadeInspectorLine.tsx'; // «קליפ מקוד» (wave 8 motioncode)
 import { ProjectPanel } from './InspectorProject.tsx';
 import { FontPicker } from './FontPicker.tsx';
 import { FieldLiveLine, FieldMenu, FieldTextBox } from './lifeline/FieldMenu.tsx';
@@ -1057,6 +1058,7 @@ export function ObjectPanels({ kind, tab, onTab, keymap, firstIsClipTab }: { kin
   return (
     <div className="insp-object" data-kind={kind} data-tab={tab}>
       {!flat && tabs.length > 1 && <Tabs tabs={specs} value={tab} onChange={(id) => onTab(id as ObjectTab)} label={S.objectTabs} panelPrefix="insp-panel" collapsed={narrow && tabs.length > 5} className="insp-tabs" />}
+      {clip && <MadeInspectorLine clip={clip} />}
       {clip && sel ? <WithLook key={clip.id} clip={clip} trackKind={sel.track.kind}>{(look) => panels(look)}</WithLook> : panels(null)}
       {/* all tools on one screen: the transition at the start of a picture clip stands with the clip (in tabs it belongs to the cut) */}
       {flat && (kind === 'video' || kind === 'image') && clip?.type === 'media' && (

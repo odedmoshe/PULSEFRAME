@@ -203,4 +203,6 @@ export const OPEN_GATES: readonly OpenGate[] = [
   { id: 'I9', file: 'importContracts.ts', needle: "(cfg.maxUploadBytesSet || !warnsOpen(cfg) ? cfg.maxUploadBytes : Number.POSITIVE_INFINITY)", decision: 'W', reads: 'mode' },
   { id: 'I11', file: 'speech.ts', needle: "if (long && !warnsOpen(this.cfg)) throw new ApiError(422, 'script_too_long',", decision: 'W', reads: 'mode' },
   { id: 'D1', file: 'speech.ts', needle: "const opened = warnsOpen(this.cfg) ? { admittedOpen: true", decision: 'W', reads: 'mode' },
+  { id: 'M1', file: 'made/routes.ts', needle: 'if (!actsAsOwner(p) && r.submittedBy !== p.actor) throw notYours(jobId);', decision: 'O' },
+  { id: 'M1', file: 'made/runner.ts', needle: 'if (actsAsOwner(p) || p.actor === j.actor) return;', decision: 'O' },
 ];

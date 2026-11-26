@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>3D title card</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// «כרטיס בתלת־ממד» / 3D title card (PULSEFRAME built-in page, version 1). A card turns into view, settles facing the camera and
+// tilts a little; its face carries a title and a second line. Drawn with three.js (pinned, served locally) on WebGL.
+// Every frame is drawn from its number only. Values arrive as typed values in PF.fields and are drawn as Canvas text, never as markup.
+import * as THREE from 'https://made.invalid/lib/three@0.187.0/build/three.module.js';
+var W = PF.width, H = PF.height, n = PF.frames;
+var canvas = document.getElementById('c');
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H, false); renderer.setClearColor(0x000000, 0);
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(35, W / H, 0.1, 100); camera.position.set(0, 0, 6);
+// the card is 16:9 whatever the frame; it fills about 60% of the frame's height
+var cardH = 2 * Math.tan((35 / 2) * Math.PI / 180) * 6 * 0.6, cardW = cardH * 16 / 9;
+var face = document.createElement('canvas'); face.width = 1280; face.height = 720;
+var fx = face.getContext('2d');
+var tex = new THREE.CanvasTexture(face); tex.colorSpace = THREE.SRGBColorSpace;
+var side = new THREE.MeshBasicMaterial({ color: 0xffffff });
+var front = new THREE.MeshBasicMaterial({ map: tex });
+var card = new THREE.Mesh(new THREE.BoxGeometry(cardW, cardH, cardH * 0.04), [side, side, side, side, front, side]);
+scene.add(card);
+var rtlOf = function (s) { var m = /[A-Za-zÀ-ɏ]|[֐-׿؀-ۿ]/.exec(s); return !!m && /[֐-׿؀-ۿ]/.test(m[0]); };
+var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+var easeOut = function (p) { return 1 - Math.pow(1 - p, 3); };
+var drawFace = function (f) {
+  var title = String(f.title || ''), sub = String(f.subtitle || ''), bg = String(f.background || '#1d2a44'), ink = String(f.colour || '#ffffff');
+  fx.clearRect(0, 0, 1280, 720);
+  fx.fillStyle = bg; fx.fillRect(0, 0, 1280, 720);
+  fx.fillStyle = ink; fx.globalAlpha = 0.85; fx.fillRect(560, 470, 160, 6); fx.globalAlpha = 1;
+  fx.textAlign = 'center'; fx.textBaseline = 'alphabetic';
+  fx.direction = rtlOf(title) ? 'rtl' : 'ltr'; fx.font = '700 104px Heebo';
+  fx.fillText(title, 640, 420, 1160);
+  if (sub) { fx.direction = rtlOf(sub) ? 'rtl' : 'ltr'; fx.font = '400 52px Heebo'; fx.fillText(sub, 640, 560, 1160); }
+  side.color.set(bg);
+  tex.needsUpdate = true;
+};
+PF.render = function (frame) {
+  drawFace(PF.fields);
+  var turn = easeOut(clamp(frame / Math.max(1, Math.round(n * 0.4))));
+  var settle = clamp((frame - n * 0.4) / Math.max(1, n * 0.6));
+  card.rotation.set(-0.08 * settle, (1 - turn) * -1.35 + 0.12 * settle, 0);
+  card.position.set(0, (1 - turn) * -0.4, (1 - turn) * -2);
+  renderer.render(scene, camera);
+};
+</script></body></html>
