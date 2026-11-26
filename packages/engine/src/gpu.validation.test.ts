@@ -10,10 +10,11 @@
  * checked on a real adapter by `pnpm proof:gpu`.
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GPU_EFFECTS, GRADE_CURVES_PASS_NOT_BUILT, gpuEffect, gpuTransition, initGpu, takeUnavailable } from './gpu.ts';
+import { gradeCurveTables, gradeCurveTablesRgba } from '@pulseframe/core';
+import { GPU_EFFECTS, gpuEffect, gpuTransition, gradeCurvesShader, initGpu, takeUnavailable } from './gpu.ts';
 
 type Rgba = [number, number, number, number];
-interface Tex { valid: boolean; w: number; h: number; data: Uint8Array; createView(): { texture: Tex }; destroy(): void }
+interface Tex { valid: boolean; w: number; h: number; data: Uint8Array; destroyed?: boolean; createView(): { texture: Tex }; destroy(): void }
 interface Pipe { valid: boolean; id: number; code: string; getBindGroupLayout(i: number): { valid: boolean } }
 
 /** The reference pixels initGpu checks at (0,0) and (540,960); everything else of the reference draw is the second. */
@@ -26,6 +27,11 @@ function fakeGpu() {
   const scopes: { filter: string; error: { message: string } | null }[] = [];
   const uncaptured: string[] = [];
   const shaderModules: string[] = [];
+  /** Every texture made, and every raw write into one (writeTexture), in order: the curve table's checks read them. */
+  const textures: Tex[] = [];
+  const textureWrites: { texture: Tex; bytes: Uint8Array; bytesPerRow: number; size: number[] }[] = [];
+  /** The entries of every bind group made (binding → the texture view's texture, when it is one). */
+  const bindGroups: { binding: number; texture?: Tex }[][] = [];
   const rules = { brokenShader: (_code: string) => false, rejectBindGroups: false, maxSide: Infinity };
   let pipelines = 0;
   const raise = (message: string) => {
@@ -35,7 +41,8 @@ function fakeGpu() {
   const texture = (w: number, h: number): Tex => {
     const valid = w <= rules.maxSide && h <= rules.maxSide;
     if (!valid) raise(`Texture size (${w}x${h}) exceeds the maximum texture dimension (${rules.maxSide}).`);
-    const t: Tex = { valid, w, h, data: new Uint8Array(valid ? w * h * 4 : 0), createView: () => ({ texture: t }), destroy: () => {} };
+    const t: Tex = { valid, w, h, data: new Uint8Array(valid ? w * h * 4 : 0), createView: () => ({ texture: t }), destroy: () => { t.destroyed = true; } };
+    textures.push(t);
     return t;
   };
   const device = {
@@ -68,7 +75,8 @@ function fakeGpu() {
       };
       return p;
     },
-    createBindGroup: ({ layout }: { layout: { valid: boolean } }) => {
+    createBindGroup: ({ layout, entries }: { layout: { valid: boolean }; entries?: { binding: number; resource: { texture?: Tex } }[] }) => {
+      bindGroups.push((entries ?? []).map((e) => ({ binding: e.binding, ...(e.resource?.texture ? { texture: e.resource.texture } : {}) })));
       const valid = layout.valid && !rules.rejectBindGroups;
       if (!valid) raise(layout.valid ? 'Binding doesn\'t exist in [BindGroupLayout].' : 'Invalid BindGroupLayout (unlabeled).');
       return { valid };
@@ -109,11 +117,12 @@ function fakeGpu() {
         if (buffers.some((b) => !b.valid)) { raise('Invalid CommandBuffer in submit.'); return; }
         for (const b of buffers) for (const op of b.ops) op();
       },
-      writeBuffer: () => {}, writeTexture: () => {}, copyExternalImageToTexture: () => {},
+      writeBuffer: () => {}, copyExternalImageToTexture: () => {},
+      writeTexture: ({ texture }: { texture: Tex }, bytes: Uint8Array, { bytesPerRow }: { bytesPerRow: number }, size: number[]) => { textureWrites.push({ texture, bytes: new Uint8Array(bytes), bytesPerRow, size }); },
     },
   };
   const adapter = { info: { vendor: 'mock', architecture: 'mock' }, isFallbackAdapter: false, requestDevice: () => Promise.resolve(device) };
-  return { gpu: { requestAdapter: () => Promise.resolve(adapter) }, rules, scopes, uncaptured, shaderModules };
+  return { gpu: { requestAdapter: () => Promise.resolve(adapter) }, rules, scopes, uncaptured, shaderModules, textures, textureWrites, bindGroups };
 }
 
 /** A 2D context that records what was put into it. */
@@ -186,21 +195,56 @@ describe('a GPU pass the adapter rejects (mock device)', () => {
     expect(fake.scopes).toEqual([]);
   });
 
-  it('a grade with colour curves is refused with its reason until the curve pass is built; a grade without curves is unchanged (wave 8 grade pre-pass)', async () => {
+  it('a grade with curves runs the pipeline fx:color.grade+curves with `var crv` at binding 3 (a 256×1 rgba8 texture written raw), the plain grade keeps fx:color.grade; the curve texture cache holds at most 16 and clears all when full', async () => {
+    const plainCode = () => fake.shaderModules.filter((c) => c.includes(GPU_EFFECTS['color.grade']!.wgsl));
     const plain = fakeContext();
     const before = fake.shaderModules.length;
     expect(await gpuEffect('color.grade', {}, picture, plain.ctx, env)).toBe(true);
     expect(fake.shaderModules.slice(before).some((c) => c.includes('var crv'))).toBe(false);
+    expect(plainCode().length).toBe(1); // the plain grade's module: exactly its old text, compiled once
+    expect(plainCode()[0]).not.toMatch(/binding\(3\)/);
     expect(takeUnavailable().effects).toEqual([]);
+    const curves = { master: [[0, 0], [128, 160], [255, 255]] as [number, number][] };
     const curved = fakeContext();
-    expect(await gpuEffect('color.grade', {}, picture, curved.ctx, env, { curves: { master: [[0, 0], [128, 160], [255, 255]] } })).toBe(false);
-    expect(curved.pixels()).toBeNull();
-    const told = takeUnavailable();
-    expect(told.effects).toEqual(['color.grade']);
-    expect(told.reasons['color.grade']).toBe(GRADE_CURVES_PASS_NOT_BUILT);
+    const mods = fake.shaderModules.length, writes = fake.textureWrites.length;
+    expect(await gpuEffect('color.grade', {}, picture, curved.ctx, env, { curves })).toBe(true);
+    expect(curved.pixels()).not.toBeNull();
+    expect(takeUnavailable()).toEqual({ effects: [], reasons: {} });
+    const code = fake.shaderModules.slice(mods);
+    expect(code.length).toBe(1);
+    expect(code[0]).toBe(gradeCurvesShader());
+    expect(code[0]).toContain('@group(0) @binding(3) var crv: texture_2d<f32>;');
+    expect(code[0]).toContain('textureLoad(crv,');
+    expect(code[0]).not.toMatch(/textureSample[A-Za-z]*\(crv/); // never the sampler (C6)
+    expect(code[0]).not.toContain('return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)) * s.a, s.a);');
+    // the table: one 256×1 texture written raw with the core bytes, bound at 3
+    const w = fake.textureWrites.slice(writes);
+    expect(w.length).toBe(1);
+    expect([w[0]!.texture.w, w[0]!.texture.h, w[0]!.bytesPerRow, ...w[0]!.size]).toEqual([256, 1, 1024, 256, 1]);
+    expect(Array.from(w[0]!.bytes)).toEqual(Array.from(gradeCurveTablesRgba(gradeCurveTables(curves))));
+    expect(fake.bindGroups.at(-1)!.find((e) => e.binding === 3)!.texture).toBe(w[0]!.texture);
+    // the same curves again: the same pipeline and texture, nothing written or compiled
+    expect(await gpuEffect('color.grade', { exposure: 0.3 }, picture, fakeContext().ctx, env, { curves: structuredClone(curves) })).toBe(true);
+    expect(fake.shaderModules.length).toBe(mods + 1);
+    expect(fake.textureWrites.length).toBe(writes + 1);
+    expect(fake.bindGroups.at(-1)!.find((e) => e.binding === 3)!.texture).toBe(w[0]!.texture);
+    // the plain grade still runs its own pipeline after the curved one (no binding 3)
+    expect(await gpuEffect('color.grade', {}, picture, fakeContext().ctx, env)).toBe(true);
+    expect(fake.bindGroups.at(-1)!.some((e) => e.binding === 3)).toBe(false);
+    expect(plainCode().length).toBe(1);
+    // the cache: 16 different tables are kept; the 17th clears all of them first (each destroyed), then holds one
+    const made: Tex[] = [w[0]!.texture];
+    for (let k = 1; k < 16; k++) {
+      const n0 = fake.textureWrites.length;
+      expect(await gpuEffect('color.grade', {}, picture, fakeContext().ctx, env, { curves: { r: [[0, k], [255, 255]] } })).toBe(true);
+      made.push(fake.textureWrites[n0]!.texture);
+    }
+    expect(made.every((t) => !t.destroyed)).toBe(true);
+    expect(await gpuEffect('color.grade', {}, picture, fakeContext().ctx, env, { curves: { r: [[0, 99], [255, 255]] } })).toBe(true);
+    expect(made.every((t) => t.destroyed)).toBe(true);
+    expect(fake.textureWrites.at(-1)!.texture.destroyed).toBeFalsy();
+    expect(takeUnavailable().effects).toEqual([]);
   });
-  it.todo('W1: a grade with curves runs the pipeline fx:color.grade+curves with `var crv` at binding 3 (a 256×1 rgba8 texture written raw), the plain grade keeps fx:color.grade; the curve texture cache holds at most 16 and clears all when full');
-
   it('an effect whose shader does not compile is unavailable too', async () => {
     const crt = GPU_EFFECTS['stylize.crt']!.wgsl;
     fake.rules.brokenShader = (code) => code.includes(crt);
@@ -639,6 +683,28 @@ function checkWgsl(src: string): void {
   }
 }
 
+describe('a grade with curves on an adapter that refuses its shader (mock device)', () => {
+  const fake = fakeGpu();
+  it('a curve shader that does not compile is unavailable with the message, never drawn as the plain grade; the plain grade still runs', async () => {
+    vi.resetModules();
+    vi.stubGlobal('navigator', { gpu: fake.gpu });
+    vi.stubGlobal('OffscreenCanvas', class {});
+    const g = await import('./gpu.ts');
+    expect((await g.initGpu()).available).toBe(true);
+    fake.rules.brokenShader = (code) => code.includes('var crv');
+    const out = fakeContext();
+    expect(await g.gpuEffect('color.grade', {}, picture, out.ctx, env, { curves: { b: [[0, 30], [255, 255]] } })).toBe(false);
+    expect(out.pixels()).toBeNull();
+    const told = g.takeUnavailable();
+    expect(told.effects).toEqual(['color.grade']);
+    expect(told.reasons['color.grade']).toMatch(/did not compile.*Error while parsing WGSL/);
+    expect(await g.gpuEffect('color.grade', {}, picture, fakeContext().ctx, env)).toBe(true);
+    expect(g.takeUnavailable().effects).toEqual([]);
+    expect(fake.uncaptured).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('static WGSL check of the passes (not a compiler: see checkWgsl)', () => {
   const fake = fakeGpu();
   const shaders = new Map<string, string>(); // transition id -> its whole shader module, as the adapter would receive it
@@ -677,6 +743,15 @@ describe('static WGSL check of the passes (not a compiler: see checkWgsl)', () =
       expect(code, type).toBeDefined();
       expect(() => checkWgsl(code!), type).not.toThrow();
     }
+    // the grade's curve variant (wave 8 grade, C2): its own pipeline, crv at binding 3, read with textureLoad
+    const before = fake.shaderModules.length;
+    await g.gpuEffect('color.grade', {}, picture, fakeContext().ctx, env, { curves: { master: [[0, 0], [64, 40], [192, 210], [255, 255]] } });
+    const curve = fake.shaderModules.slice(before).find((c) => c.includes('var crv'));
+    expect(curve).toBeDefined();
+    expect(() => checkWgsl(curve!)).not.toThrow();
+    // and the checker reads the curve step: a fault in it is found
+    expect(() => checkWgsl(curve!.replace('textureLoad(crv, vec2i(i32(i.r), 0), 0).r', 'textureLoad(crv, vec2f(i.r, 0.0), 0).r'))).toThrow();
+    expect(() => checkWgsl(curve!.replace('return vec4f(vec3f(r, g, b) * s.a, s.a);', 'return vec3f(r, g, b);'))).toThrow();
   });
 
   it('reads the whole of each trend-pack kernel: a fault put into any of them is found', () => {

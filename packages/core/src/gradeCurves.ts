@@ -114,7 +114,7 @@ export class GradeCurvesNotBuilt extends Error {
   constructor(public what: string) { super(`${what}: colour curves are not built in this build yet`); }
 }
 /** W1 sets this when the four table functions below are built and gradeCurves.test.ts' todo rows pass. */
-export const GRADE_CURVE_TABLES_BUILT = false;
+export const GRADE_CURVE_TABLES_BUILT = true;
 
 /**
  * One curve's table: 256 entries, C[x] for x = 0..255. THE ARITHMETIC (plan §4.1, confirmed by grade-verify), binding for W1:
@@ -136,23 +136,73 @@ export const GRADE_CURVE_TABLES_BUILT = false;
  * leaves the range of its two knots; the identity gives C[v] = v. Refuses (RangeError) a point list gradeCurveIssue rejects.
  */
 export function gradeCurveTable(points: readonly GradeCurvePoint[]): Uint8Array {
-  void points;
-  throw new GradeCurvesNotBuilt('gradeCurveTable');
+  const issue = gradeCurveIssue(points);
+  if (issue) throw new RangeError(`gradeCurveTable: the points are not a valid curve (${issue})`);
+  const n = points.length;
+  const x: number[] = [], y: number[] = [];
+  for (let k = 0; k < n; k++) { x.push(points[k]![0]); y.push(points[k]![1]); }
+  // 1. segment widths and slopes
+  const h: number[] = [], d: number[] = [];
+  for (let k = 0; k < n - 1; k++) { h.push(x[k + 1]! - x[k]!); d.push((y[k + 1]! - y[k]!) / h[k]!); }
+  const m: number[] = new Array<number>(n).fill(0);
+  if (n === 2) {
+    // 2. a straight line
+    m[0] = d[0]!; m[1] = d[0]!;
+  } else {
+    // 3. interior: the Fritsch–Butland weighted harmonic mean, 0 at a local extreme or a flat neighbour
+    for (let k = 1; k <= n - 2; k++) {
+      const a = d[k - 1]!, b = d[k]!;
+      if (a * b <= 0) { m[k] = 0; continue; }
+      const w1 = 2 * h[k]! + h[k - 1]!, w2 = h[k]! + 2 * h[k - 1]!;
+      m[k] = (w1 + w2) / (w1 / a + w2 / b);
+    }
+    // 4. the ends (MATLAB/Moler), the end mirrored with the last two segments
+    m[0] = endSlope(h[0]!, h[1]!, d[0]!, d[1]!);
+    m[n - 1] = endSlope(h[n - 2]!, h[n - 3]!, d[n - 2]!, d[n - 3]!);
+  }
+  // 5. evaluate at every code value
+  const out = new Uint8Array(GRADE_CURVE_TABLE_SIZE);
+  let k = 0;
+  for (let xi = 0; xi < GRADE_CURVE_TABLE_SIZE; xi++) {
+    while (k < n - 2 && xi > x[k + 1]!) k++;
+    const t = (xi - x[k]!) / h[k]!, u = 1 - t;
+    const v = (1 + 2 * t) * u * u * y[k]! + t * u * u * h[k]! * m[k]! + t * t * (3 - 2 * t) * y[k + 1]! + t * t * (t - 1) * h[k]! * m[k + 1]!;
+    const c = Math.floor(v + 0.5);
+    out[xi] = c < 0 ? 0 : c > GRADE_CURVE_GRID ? GRADE_CURVE_GRID : c;
+  }
+  return out;
 }
+const sign = (v: number) => (v > 0 ? 1 : v < 0 ? -1 : 0);
+const abs = (v: number) => (v < 0 ? -v : v);
+/** Step 4 of gradeCurveTable for one end: h0, d0 are the end segment, h1, d1 its neighbour. */
+function endSlope(h0: number, h1: number, d0: number, d1: number): number {
+  const m = ((2 * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
+  if (sign(m) !== sign(d0)) return 0;
+  if (sign(d0) !== sign(d1) && abs(m) > abs(3 * d0)) return 3 * d0;
+  return m;
+}
+const IDENTITY_TABLE = (() => { const t = new Uint8Array(GRADE_CURVE_TABLE_SIZE); for (let v = 0; v < t.length; v++) t[v] = v; return t; })();
 /** The composed tables of a curves value (step 6 of §4.1): R[v] = M[Cr[v]] … a missing curve is the identity; integer composition rounds once per stage. */
 export function gradeCurveTables(curves: GradeCurves): GradeCurveTables {
-  void curves;
-  throw new GradeCurvesNotBuilt('gradeCurveTables');
+  const bad = gradeCurvesIssue(curves);
+  if (bad) throw new RangeError(`gradeCurveTables: the ${bad.channel} curve is not valid (${bad.issue})`);
+  const of = (c: GradeCurve | undefined) => (c ? gradeCurveTable(c) : IDENTITY_TABLE);
+  const M = of(curves.master);
+  const compose = (C: Uint8Array) => { const t = new Uint8Array(GRADE_CURVE_TABLE_SIZE); for (let v = 0; v < t.length; v++) t[v] = M[C[v]!]!; return t; };
+  return { r: compose(of(curves.r)), g: compose(of(curves.g)), b: compose(of(curves.b)) };
 }
 /** The 256×1 rgba8 texture bytes the pass reads at binding 3 (1024 bytes: R, G, B tables interleaved, alpha 255), written raw (no premultiply). */
 export function gradeCurveTablesRgba(tables: GradeCurveTables): Uint8Array {
-  void tables;
-  throw new GradeCurvesNotBuilt('gradeCurveTablesRgba');
+  for (const ch of ['r', 'g', 'b'] as const) if (tables[ch].length !== GRADE_CURVE_TABLE_SIZE) throw new RangeError(`gradeCurveTablesRgba: the ${ch} table has ${tables[ch].length} entries, not ${GRADE_CURVE_TABLE_SIZE}`);
+  const out = new Uint8Array(GRADE_CURVE_TABLE_SIZE * 4);
+  for (let v = 0; v < GRADE_CURVE_TABLE_SIZE; v++) { out[v * 4] = tables.r[v]!; out[v * 4 + 1] = tables.g[v]!; out[v * 4 + 2] = tables.b[v]!; out[v * 4 + 3] = 255; }
+  return out;
 }
 /** FNV-1a 32-bit over r, then g, then b (768 bytes), as 8 hex digits: proof G1 compares it between Node and Chromium (window.__pfGradeCurveHash). */
 export function gradeCurveTablesDigest(tables: GradeCurveTables): string {
-  void tables;
-  throw new GradeCurvesNotBuilt('gradeCurveTablesDigest');
+  let hsh = 0x811c9dc5;
+  for (const t of [tables.r, tables.g, tables.b]) for (let i = 0; i < t.length; i++) { hsh ^= t[i]!; hsh = Math.imul(hsh, 0x01000193) >>> 0; }
+  return hsh.toString(16).padStart(8, '0');
 }
 
 /**

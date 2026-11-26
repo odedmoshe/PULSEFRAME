@@ -184,7 +184,8 @@ export async function matchColour(store: Store, exporter: Exporter, projectId: s
   ];
   const note = [
     'Candidates only. To apply, send `ops` as ONE transaction with expectedRevision set to this revision (or propose it).',
-    'Each op replaces the clip\'s colour grade (a look included); every value stays editable with update_effect.',
+    // replaces_grade, worded (wave 8 grade, C5): the op sets the sliders; the clip's colour curves are kept and are not fitted
+    'Each op replaces the slider values of the clip\'s colour grade (a look included); the curves stay (they are not fitted: the verify render includes them, so residual.verified reports what they do to the match); every value stays editable with update_effect.',
     method === 'match' ? 'Matched by picture statistics (lightness spread and the mean colour of the mid-tones), not by what the pictures show: a large area of one colour pulls the result toward it.' : 'Balanced toward neutral grey mid-tones and a fuller lightness range: a scene that should look warm, cool or dark is pulled toward neutral (lower `amount` to keep some of it).',
     'The verdict and residual say how close it got (the verdict follows residual.verified when the result was rendered, residual.model only when it was not); nobody has compared the result by eye on real footage yet.',
     ...(left.length ? [`Left out of ops: ${left.join('; ')}.`] : []),

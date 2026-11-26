@@ -17,6 +17,7 @@ import { api, type ColourMatch, type ColourMatchRequest, type ColourMatchTarget 
 import { useEditorState, type Editor } from './store.ts';
 import { thumbSize } from './gallery.pick.ts';
 import { COLOUR_MATCH_STRINGS, COLOUR_MATCH_TESTIDS as ID, fill, type ColourMatchStrings } from './colourMatch.strings.ts';
+import { gradeT } from './grade/grade.strings.ts';
 import './colourMatch.css';
 
 type PictureClip = Extract<Clip, { type: 'media' }>;
@@ -125,7 +126,7 @@ export const pressesButton = (key: string, tagName: string): boolean => (key ===
  */
 const keepButtonKeys = (e: ReactKeyboardEvent) => { if (pressesButton(e.key, (e.target as HTMLElement).tagName)) e.stopPropagation(); };
 const verdictWord = (S: ColourMatchStrings, v: ColourMatchTarget['verdict']) => (v === 'close' ? S.verdictClose : v === 'noticeable' ? S.verdictNoticeable : S.verdictPartial);
-const WARNING_WORD = { changes_within_clip: 'warnChanges', not_verified: 'warnNotVerified', replaces_grade: 'warnReplaces', animated_grade: 'warnAnimated' } as const;
+const WARNING_WORD = (S: ColourMatchStrings, lang: 'he' | 'en', w: ColourMatchTarget['warnings'][number]) => (w === 'replaces_grade' ? gradeT(lang)('matchKeepsCurves') : S[({ changes_within_clip: 'warnChanges', not_verified: 'warnNotVerified', animated_grade: 'warnAnimated' } as const)[w]]); // replaces_grade: «מחליף את ערכי המחוונים; העקומות נשארות» (wave 8 grade, C5)
 const nameOf = (doc: ProjectDocument, clipId: string) => { const c = findClip(doc, clipId)?.clip; return c?.type === 'media' ? doc.assets[c.assetId]?.name ?? clipId : clipId; };
 
 // ---- still tiles: one drawGraph at a time, drawn once ----
@@ -176,7 +177,7 @@ function ResultRow({ doc, target, referenceId, S, lang, editor }: { doc: Project
         {target.limitedBy.length > 0 && (
           <ul className="cm-chips">{target.limitedBy.map((k) => <li key={k} className="cm-chip">{fill(S.limit, { name: effectParamLabel(k, lang, 'color.grade') })}</li>)}</ul>
         )}
-        {target.warnings.length > 0 && <ul className="cm-warnings">{target.warnings.map((w) => <li key={w}>{S[WARNING_WORD[w]]}</li>)}</ul>}
+        {target.warnings.length > 0 && <ul className="cm-warnings">{target.warnings.map((w) => <li key={w}>{WARNING_WORD(S, lang, w)}</li>)}</ul>}
       </td>
     </tr>
   );
