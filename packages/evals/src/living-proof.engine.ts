@@ -56,12 +56,42 @@ function coordinatePhoto(file: string) {
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = (y * W + x) * 3; raw[i] = x % 256; raw[i + 1] = y % 256; raw[i + 2] = 64 * Math.floor(x / 256); }
   ff(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${W}x${H}`, '-i', 'pipe:0', '-frames:v', '1', '-y', file], raw);
 }
-/** The photo position (px, continuous) an rgb24 pixel shows, unwrapped near `near` (the model's prediction); null near a wrap. */
-function decode(img: Buffer, x: number, y: number, near: [number, number]): [number, number] | null {
+/**
+ * The photo position (px, continuous) an rgb24 pixel shows, unwrapped near `near` (the model's prediction); null near a wrap: where
+ * the model puts the source within 2 px of a wrap column or row (x or y a multiple of 256), whose sample blends both sides, or where
+ * the colour itself is at a wrap.
+ */
+export function decode(img: Buffer, x: number, y: number, near: [number, number]): [number, number] | null {
   const i = (y * W + x) * 3, r = img[i]!, g = img[i + 1]!, b = img[i + 2]!;
   const sx = r + 256 * Math.round(b / 64), sy = g + 256 * Math.round((near[1] - g) / 256);
-  if (r < 2 || r > 253 || g < 2 || g > 253) return null;
+  const wrapDist = (v: number) => { const m = ((v % 256) + 256) % 256; return Math.min(m, 256 - m); };
+  if (r < 2 || r > 253 || g < 2 || g > 253 || wrapDist(near[0]) < 2 || wrapDist(near[1]) < 2) return null;
   return [sx, sy];
+}
+
+/** One decoded pixel of a row: the photo x it shows, its place at rest (no move) and the nearness 0..1 at that photo point; null = outside the picture. */
+export type LivingBandPixel = { got: number; rest: number; near: number } | null;
+/**
+ * The longest run of band pixels in a row, and how many band pixels show a source inside the near shape (nearness > 0.5). A band pixel
+ * shows a source more than 1 px from where its own nearness puts it (rest + (f − n)·d, d the signed full shift in px): the far side
+ * stretched across the gap the near shape leaves. A pixel outside the picture ends a run.
+ */
+export function livingBand(row: readonly LivingBandPixel[], d: number, f: number): { longest: number; fromInside: number } {
+  let run = 0, longest = 0, fromInside = 0;
+  for (const p of row) {
+    if (!p) { run = 0; continue; }
+    const band = Math.abs(p.got - (p.rest + (f - p.near) * d)) > 1;
+    run = band ? run + 1 : 0; longest = Math.max(longest, run);
+    if (band && p.near > 0.5) fromInside++;
+  }
+  return { longest, fromInside };
+}
+/** Nearness 0..1 at photo pixel (sx, sy) of a w×h photo: bilinear over the grid's texel centres, edges clamped (as the pass reads it). */
+export function nearBilinear(grid: { width: number; height: number; data: Uint8Array }, sx: number, sy: number, w: number, h: number): number {
+  const gx = Math.min(grid.width - 1, Math.max(0, ((sx + 0.5) / w) * grid.width - 0.5)), gy = Math.min(grid.height - 1, Math.max(0, ((sy + 0.5) / h) * grid.height - 0.5));
+  const x0 = Math.floor(gx), y0 = Math.floor(gy), x1 = Math.min(grid.width - 1, x0 + 1), y1 = Math.min(grid.height - 1, y0 + 1), tx = gx - x0, ty = gy - y0;
+  const v = (x: number, y: number) => grid.data[y * grid.width + x]! / 255;
+  return (v(x0, y0) * (1 - tx) + v(x1, y0) * tx) * (1 - ty) + (v(x0, y1) * (1 - tx) + v(x1, y1) * tx) * ty;
 }
 
 export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
@@ -134,22 +164,21 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
     ctx.check(1, `slide, amount 1, the still at the last frame (${LAST}): pixels well outside the disc (m = −f) and well inside it (m = 1 − f) decode to livingModel's source within 1 px`, a.compared > 500 && b.compared > 50 && a.within1px === a.compared && b.within1px === b.compared, { outside: a, inside: b, travel: mLast.travel, numbers: mLast.numbers });
   }
   {
-    // the trailing edge of the disc on the middle row: the band is where the output shows a source that is neither its far-plane
-    // place nor its near-plane place (the far side stretched across the gap)
-    const A = A_PX(1), y = H / 2; let band = 0, longest = 0, intoDisc = 0, transparent = 0;
+    // the middle row across the disc: a band pixel shows a source whose own nearness does not explain its shift (the far side
+    // stretched across the gap); a pixel on the disc's soft edge (DEPTH_FALLOFF, half the radius wide) moved by its own nearness is
+    // not one. The nearness at the source is read bilinearly, as the pass reads it.
+    const A = A_PX(1), y = H / 2; let transparent = 0;
     const lastPng = (await call(`/projects/${disc.pid}/frame?index=${FRAMES - 1}`)).body as Buffer;
     const rgba = ff(['-f', 'png_pipe', '-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-'], lastPng);
     for (let i = 3; i < rgba.length; i += 4) if (rgba[i] === 0) transparent++;
+    const S = mLast.numbers[11]!, cv = (mLast.numbers[4]! + mLast.numbers[6]!) / 2, d = mLast.numbers[8]! * W, f = mLast.numbers[9]!;
+    const row: LivingBandPixel[] = [];
     for (let x = 0; x < W; x++) {
-      const s = mLast.source(x, y); if (!s) { band = 0; continue; }
+      const s = mLast.source(x, y); if (!s) { row.push(null); continue; }
       const got = decode(last, x, y, s); if (!got) continue;
-      const S = mLast.numbers[11]!, cv = (mLast.numbers[4]! + mLast.numbers[6]!) / 2, d = mLast.numbers[8]! * W;
-      const rest = (cv + ((x + 0.5) / W - cv) / S) * W - 0.5;
-      const farPlace = rest + 0.5 * d, nearPlace = rest - 0.5 * d;
-      const stretched = Math.abs(got[0] - farPlace) > 1 && Math.abs(got[0] - nearPlace) > 1;
-      band = stretched ? band + 1 : 0; longest = Math.max(longest, band);
-      if (stretched && mLast.nearAt(got[0], got[1]) > 128) intoDisc++;
+      row.push({ got: got[0], rest: (cv + ((x + 0.5) / W - cv) / S) * W - 0.5, near: nearBilinear(mLast.grid, got[0], got[1], W, H) });
     }
+    const { longest, fromInside: intoDisc } = livingBand(row, d, f);
     ctx.check(3, `the band beside the disc's trailing edge is at most ⌈A⌉ + 2 = ${Math.ceil(A) + 2} px wide, its pixels come from outside the disc, and no pixel of the picture is transparent`, longest <= Math.ceil(A) + 2 && intoDisc === 0 && transparent === 0, { longestBandPx: longest, bandPixelsFromInsideTheDisc: intoDisc, transparentPixels: transparent });
   }
 
