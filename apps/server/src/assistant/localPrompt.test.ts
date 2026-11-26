@@ -17,7 +17,7 @@ describe('the local prompt', () => {
     expect(localPromptDigestOf(`${LOCAL_ASSISTANT_SYSTEM} `, p.schema)).not.toBe(p.digest);
   });
   it('leaves the cloud prompt and its pin byte-for-byte as reviewed', () => {
-    expect(ASSISTANT_PROMPT_DIGEST).toBe('sha256:be49337a799f70911112f8f4ff4d92076eba11482beb047dccef90e68b3671c8');
+    expect(ASSISTANT_PROMPT_DIGEST).toBe('sha256:90a0e5b93c02fd3999c13bf5a9c5eca28d9985d66582baed37f7c4ee4551425c');
     expect(assistantPrompt().digest).toBe(ASSISTANT_PROMPT_DIGEST);
   });
   it('is small: a few kilobytes, not the cloud tool schema', () => {

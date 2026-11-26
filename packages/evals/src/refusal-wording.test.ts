@@ -73,6 +73,11 @@ describe('Hebrew wording of common refusals', () => {
       ['a date stamp text changed to letters', stamped.doc, [{ op: 'update_effect', args: { clipId: a, effectId: stampId, params: { text: 'abc' } } }]],
       ['an effect value outside its range', d, [{ op: 'add_effect', args: { clipId: a, type: 'blur.gaussian', params: { radius: 5 } } }]],
       ['a fixed colour value over an animated one', animatedGrade, [{ op: 'set_colour_grade', args: { clipId: a, params: { exposure: 0.5 } } }]],
+      // a held frame (add_clip freeze, wave 8 growing): each of its own refusals
+      ['a held frame of a still picture', d, [{ op: 'add_clip', args: { assetId: stillId, start: f(400), duration: f(30), freeze: true } }]],
+      ['a held frame with its sound', d, [{ op: 'add_clip', args: { assetId, start: f(400), duration: f(30), freeze: true, withLinkedAudio: true } }]],
+      ['a held frame without a duration', d, [{ op: 'add_clip', args: { assetId, start: f(400), freeze: true } }]],
+      ['a held frame on a sound track', d, [{ op: 'add_clip', args: { assetId, start: f(400), duration: f(30), freeze: true, trackId: Object.values(d.sequences)[0]!.tracks.find((t) => t.kind === 'audio')!.id } }]],
     ];
     // a title with live fields (ADR-0021) left holding a brace group that is not a field, in its text and in a format's wording
     const titled = tx(d, [{ op: 'add_text', args: { text: '{date}', start: f(0), duration: f(60) } }]);

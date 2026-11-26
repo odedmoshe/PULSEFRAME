@@ -20,6 +20,7 @@ import { WELCOME_STRINGS } from './welcome.strings.ts';
 import { OnThisDayCard } from './lifeline/OnThisDayCard.tsx';
 import { FamilyFilmEntry } from './FamilyFilmEntry.tsx';
 import { StoryEntry } from './story/StoryEntry.tsx';
+import { GrowingEntry } from './growing/GrowingEntry.tsx';
 import { sourceFromSelection } from './familyFilm.logic.ts';
 import '../ds/chrome.css';
 import './welcome.css';
@@ -143,7 +144,7 @@ export function Welcome() {
         <section className="pf-hub-sec" aria-labelledby="pf-hub-start">
           <div className="pf-hub-hrow"><h3 id="pf-hub-start" className="pf-hub-h">{C.hubStart}</h3>{templates && templates.length > 0 && <span className="pf-hub-sub">{C.hubStartNote}</span>}</div>
           {/* the family film (ADR-0026) beside the moments: in an empty project it asks for the files first */}
-          <div className="pf-hub-film"><FamilyFilmEntry variant="start-hub" source={null} lang={lang} onEmpty={() => { filmIntent.current = true; inputRef.current?.click(); }} /><StoryEntry variant="start-hub" source={null} lang={lang} /></div>
+          <div className="pf-hub-film"><FamilyFilmEntry variant="start-hub" source={null} lang={lang} onEmpty={() => { filmIntent.current = true; inputRef.current?.click(); }} /><StoryEntry variant="start-hub" source={null} lang={lang} /><GrowingEntry variant="start-hub" lang={lang} /></div>
           {templates && templates.length > 0 && (
             <ul className="pf-hub-cards">
               {templates.slice(0, 6).map((tp) => (

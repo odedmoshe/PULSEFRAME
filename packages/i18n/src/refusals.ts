@@ -17,6 +17,7 @@ import { HE_STABILISE } from './stabilise.ts';
 import { HE_DRAWN } from './drawn.ts';
 import { HE_PEARLS } from './pearls.ts';
 import { HE_STORY } from './story.ts';
+import { HE_GROWING } from './growing.ts';
 import { HE_MUSICFIT } from './musicFit.ts';
 import { HE_AUDIENCES } from './audiences.ts';
 import { HE_INSTRUMENTS } from './instruments.ts';
@@ -47,6 +48,11 @@ const HE: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^a freeze frame has no speed$/, () => 'לפריים קפוא אין מהירות'],
   [/^a still image has no speed$/, () => 'לתמונה סטטית אין מהירות'],
   [/^this clip is already a freeze frame$/, () => 'הקליפ הזה כבר פריים קפוא'],
+  // add_clip { freeze: true }: a held frame (wave 8 growing, verifier C3)
+  [/^a held frame needs a video file$/, () => 'אפשר להחזיק רק פריים של סרטון. בחרו סרטון, או הוסיפו תמונה רגילה'],
+  [/^a held frame has no sound$/, () => 'לפריים מוחזק אין קול. אפשר להוסיף את הקול כקליפ נפרד'],
+  [/^a held frame needs a duration$/, () => 'צריך לקבוע כמה זמן להחזיק את הפריים'],
+  [/^a held frame goes on a picture track$/, () => 'פריים מוחזק נכנס לרצועת תמונה. בחרו רצועת וידאו'],
   [/^the key must lie inside the clip$/, () => 'הנקודה חייבת להיות בתוך הקליפ'],
   [/^the transition \((\d+) frames\) is longer than the clip \((\d+) frames\)$/, (m) => `המעבר (${m[1]} פריימים) ארוך מהקליפ (${m[2]} פריימים)`],
   [/^the previous clip has only (\d+) unused source frames after its end; the transition needs (\d+)$/, (m) => `לקליפ הקודם נשארו רק ${m[1]} פריימים של חומר מקור אחרי סופו; המעבר צריך ${m[2]}`],
@@ -290,7 +296,7 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -353,6 +359,8 @@ export const CRAFT_REFUSAL_PATTERNS: readonly RegExp[] = HE_CRAFT.map(([re]) => 
 export const STABILISE_REFUSAL_PATTERNS: readonly RegExp[] = HE_STABILISE.map(([re]) => re);
 /** The patterns of marked source ranges (pearls.ts HE_PEARLS, wave 7), for packages/evals/src/pearls-wording.test.ts. */
 export const PEARLS_REFUSAL_PATTERNS: readonly RegExp[] = HE_PEARLS.map(([re]) => re);
+/** The patterns of «גדלים מול העיניים» (growing.ts HE_GROWING, wave 8), for packages/evals/src/growing-wording.test.ts. */
+export const GROWING_REFUSAL_PATTERNS: readonly RegExp[] = HE_GROWING.map(([re]) => re);
 /** The patterns of «ספרו מה היה» (story.ts HE_STORY, wave 7), for packages/evals/src/story-wording.test.ts. */
 export const STORY_REFUSAL_PATTERNS: readonly RegExp[] = HE_STORY.map(([re]) => re);
 /** The patterns of «מוזיקה שמתאימה לסרט» (musicFit.ts HE_MUSICFIT, wave 7), for packages/evals/src/musicfit-wording.test.ts. */

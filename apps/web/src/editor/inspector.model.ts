@@ -3,7 +3,7 @@
  * category per screen), the panels each mode offers, and the cut a clip starts with. No React, no DOM: tested on their own.
  */
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, handleAfterEnd, handleBeforeStart, previousAdjacent, type Clip, type MediaClip, type ProjectDocument, type Track } from '@pulseframe/core';
+import { clipEnd, findClip, handleBeforeStart, previousAdjacent, spareAfter, type Clip, type MediaClip, type ProjectDocument, type Track } from '@pulseframe/core';
 import type { Workspace } from './store.ts';
 
 /** The panels of the inspector column. `clip` is whatever is selected; `all` is every panel on one screen. */
@@ -108,11 +108,12 @@ export interface CutInfo {
   track: Track;
   /** frame index of the cut on the timeline */
   frame: number;
-  /** spare source after the previous clip's end, in frames; null = a still image (it never runs out) */
+  /** spare source after the previous clip's end, in frames; null = a still image or a freeze frame (it never runs out; core spareAfter) */
   handleAfter: number | null;
   /** spare source before the next clip's start, in frames; null = a still image */
   handleBefore: number | null;
 }
+const clampSpare = (n: number | null) => (n === null ? null : Math.max(0, n));
 /** The cut at the start of a picture clip: the clip that ends exactly where it starts on the same track, with both handles. */
 export function cutBefore(doc: ProjectDocument, clipId: string): CutInfo | null {
   const f = findClip(doc, clipId);
@@ -123,7 +124,7 @@ export function cutBefore(doc: ProjectDocument, clipId: string): CutInfo | null 
   const prevAsset = doc.assets[prev.assetId], ownAsset = doc.assets[f.clip.assetId];
   return {
     prev, next: f.clip, track: f.track, frame: T.frameIndexAt(f.clip.start, rate),
-    handleAfter: prevAsset && prevAsset.kind !== 'image' ? Math.max(0, T.frameIndexAt(handleAfterEnd(prev, prevAsset.duration), rate)) : null,
+    handleAfter: prevAsset ? clampSpare(spareAfter(prev, prevAsset, rate)) : null,
     handleBefore: ownAsset && ownAsset.kind !== 'image' ? Math.max(0, T.frameIndexAt(handleBeforeStart(f.clip), rate)) : null,
   };
 }

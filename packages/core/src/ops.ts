@@ -13,7 +13,7 @@ import {
 } from './schema.ts';
 import { findProfile, FORMAT_PROFILES } from './variants.ts';
 import { parseSubtitles, snapCuesToFrames } from './subtitles.ts';
-import { handleAfterEnd, handleBeforeStart, isFreeze, isRamped, isReverse, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, speedFromNumber, speedValue, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
+import { handleAfterEnd, handleBeforeStart, isFreeze, isRamped, isReverse, pictureSourceAt, rampWindowOf, rampWindowOfPart, sourceEnd, sourceInOfPart, spareAfter, speedFromNumber, speedValue, timelineAt, toSourceSpan, toTimelineSpan, type Speed } from './speed.ts';
 import { AUDIO_EFFECTS, AUDIO_PRESETS, findAudioEffect, MAX_AUDIO_FX, sortAudioFx, type AudioFxInstance, type AudioFxParams } from './audioEffects.ts';
 import { soundTails } from './queries.ts';
 import { cleanVoiceEffects, isCleanupType, NOISE_PROFILE_PATTERN } from './voiceClean.ts';
@@ -573,6 +573,7 @@ defineOp({
       duration: RT.optional(),
       withLinkedAudio: z.boolean().optional().describe('Default true'),
       audioTrackId: z.string().optional().describe('Sound track for the linked sound of a picture asset (default: the first free one). For a sound-only asset use trackId.'),
+      freeze: z.literal(true).optional().describe('A held frame (wave 8): the clip shows the one picture of the video at sourceIn for its whole duration, and nothing else moves (freeze_frame, by contrast, inserts time). Needs a video file, a picture track and a duration; never linked sound. sourceIn is the picture held: sourceTimeOfFrame(asset, frame) for source frame `frame`.'),
     })
     .strict(),
   apply(d, a, ctx) {
@@ -580,6 +581,12 @@ defineOp({
     const asset = d.assets[a.assetId];
     if (!asset) throw new OpError('not_found', `asset ${a.assetId} not found`, { assetId: a.assetId }, 'Call get_summary to list assets.');
     if (asset.kind === 'lut') throw new OpError('incompatible', 'a colour table (LUT) is not placed on the timeline; it is applied to a clip as an effect', { assetId: asset.id }, 'Use apply_lut with a clipId, or add the effect color.lut with this id as its lut parameter.');
+    // a held frame (wave 8 growing, verifier C3): the checks a held picture needs before anything else; old logs never carry `freeze`
+    if (a.freeze) {
+      if (asset.kind !== 'video' || !asset.video) throw new OpError('incompatible', 'a held frame needs a video file', { assetId: asset.id }, 'Choose a video, or add a still picture without freeze.');
+      if (a.withLinkedAudio) throw new OpError('incompatible', 'a held frame has no sound', { assetId: asset.id }, 'Leave withLinkedAudio out (or false); add the sound as its own clip if it is wanted.');
+      if (!a.duration) throw new OpError('invalid_args', 'a held frame needs a duration', { assetId: asset.id }, 'Give duration: how long the picture is held, in whole frames.');
+    }
     const rate = d.settings.frameRate;
     const sourceIn = a.sourceIn ?? T.ZERO;
     if (asset.kind !== 'image' && (T.isNegative(sourceIn) || !T.lt(sourceIn, asset.duration))) throw new OpError('out_of_bounds', 'sourceIn is outside the asset', { sourceIn, assetDuration: asset.duration });
@@ -589,16 +596,18 @@ defineOp({
     assertAligned(d, a.start, 'start');
     assertAligned(d, duration, 'duration');
     if (!T.lt(T.ZERO, duration)) throw new OpError('invalid_args', 'duration must be positive', { duration });
-    if (asset.kind !== 'image' && T.lt(available, duration)) throw new OpError('out_of_bounds', 'clip would read past the end of the source', { available, requested: duration }, 'Shorten duration or lower sourceIn.');
+    // a held frame reads one picture (sourceIn, inside the file), never a stretch: it may be held longer than the file is
+    if (asset.kind !== 'image' && !a.freeze && T.lt(available, duration)) throw new OpError('out_of_bounds', 'clip would read past the end of the source', { available, requested: duration }, 'Shorten duration or lower sourceIn.');
     if (T.isNegative(a.start)) throw new OpError('out_of_bounds', 'start must be >= 0', { start: a.start });
     const end = T.add(a.start, duration);
     const hasPicture = !!asset.video || (asset.kind === 'image' && !!asset.image);
-    const wantAudio = !!asset.audio && (a.withLinkedAudio ?? true);
+    const wantAudio = !!asset.audio && !a.freeze && (a.withLinkedAudio ?? true);
     const ids: string[] = [];
     const linkGroupId = hasPicture && wantAudio ? ctx.newId('lnk') : null;
-    const make = (): MediaClip => ({ id: ctx.newId('clp'), type: 'media', assetId: asset.id, start: a.start, duration, sourceIn, gain: 1, linkGroupId, transform: { ...DEFAULT_TRANSFORM } });
+    const make = (): MediaClip => ({ id: ctx.newId('clp'), type: 'media', assetId: asset.id, start: a.start, duration, sourceIn, gain: 1, linkGroupId, transform: { ...DEFAULT_TRANSFORM }, ...(a.freeze ? { freeze: true as const } : {}) });
     const out: Record<string, unknown> = {};
     const explicit = a.trackId ? mustTrack(seq, a.trackId) : undefined;
+    if (a.freeze && explicit && explicit.kind !== 'video') throw new OpError('incompatible', 'a held frame goes on a picture track', { trackId: explicit.id }, 'Choose a video track, or leave trackId out to use the first free one.');
     if (hasPicture) {
       const track = explicit && explicit.kind === 'video' ? explicit : placeTrack(seq, 'video', a.start, end, ctx);
       if (explicit && explicit.kind !== 'video') throw new OpError('incompatible', `asset with picture cannot go on ${explicit.kind} track`, { trackId: explicit.id });
@@ -622,7 +631,7 @@ defineOp({
       if (hasPicture) out.audioClipId = c.id;
       else { out.clipId = c.id; out.trackId = track.id; }
     }
-    return { affectedIds: ids, summary: `Added "${asset.name}" at ${fmt(a.start)} for ${fmt(duration)}`, output: out };
+    return { affectedIds: ids, summary: a.freeze ? `Held a frame of "${asset.name}" at ${fmt(a.start)} for ${fmt(duration)}` : `Added "${asset.name}" at ${fmt(a.start)} for ${fmt(duration)}`, output: out };
   },
 });
 
@@ -2948,7 +2957,7 @@ function transitionSource(d: ProjectDocument, track: Track, clip: MediaClip): { 
   const prev = previousAdjacent(track, clip);
   const prevAsset = prev ? d.assets[prev.assetId] : undefined;
   const ownAsset = d.assets[clip.assetId];
-  const haveOut = prev && prevAsset && prevAsset.kind !== 'image' ? T.frameIndexAt(handleAfterEnd(prev, prevAsset.duration), rate) : null;
+  const haveOut = prev && prevAsset ? spareAfter(prev, prevAsset, rate) : null; // null: a still or a freeze frame never runs out
   const haveHead = ownAsset && ownAsset.kind !== 'image' ? T.frameIndexAt(handleBeforeStart(clip), rate) : null;
   return { prev, haveOut, haveHead };
 }
@@ -3489,8 +3498,8 @@ defineOp({
       if (track.kind !== 'video') continue;
       const next = track.clips.find((o) => o.type === 'media' && o.id !== c.id && o.transition && T.eq(o.start, clipEnd(c)));
       if (!next || next.type !== 'media' || !next.transition) continue;
-      const after = T.frameIndexAt(handleAfterEnd({ ...c, sourceIn }, asset.duration), rate);
-      if (after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames after this clip, and the file has only ${after}`, { clipId: c.id, nextClipId: next.id, maxFrames: Math.max(0, after) }, 'Choose an earlier sourceIn or a longer file, or shorten that transition first (set_transition).');
+      const after = spareAfter({ ...c, sourceIn }, asset, rate); // null: a freeze frame holds its picture for the whole transition
+      if (after !== null && after < next.transition.frames) throw new OpError('out_of_bounds', `the transition into the next clip needs ${next.transition.frames} spare source frames after this clip, and the file has only ${after}`, { clipId: c.id, nextClipId: next.id, maxFrames: Math.max(0, after) }, 'Choose an earlier sourceIn or a longer file, or shorten that transition first (set_transition).');
     }
     const unchanged = targets.every((t) => t.clip.assetId === asset.id && T.eq(t.clip.sourceIn, sourceIn)) && (follow || !partners.length);
     if (unchanged) throw new OpError('invalid_args', 'the clip already plays this file from this point', { clipId: clip.id, assetId: asset.id, sourceIn });

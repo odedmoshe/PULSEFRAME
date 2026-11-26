@@ -101,6 +101,14 @@ describe('the length of a transition picked in the gallery', () => {
   }
   const accepts = (doc: ProjectDocument, clipId: string, frames: number) => { try { tx(doc, [{ op: 'set_transition', args: { clipId, type: 'dissolve', frames } }]); return true; } catch (e) { if (e instanceof OpError) return false; throw e; } };
 
+  it('after a held frame (a freeze) the previous side never runs out: the room is the clip and the op (wave 8, core spareAfter)', () => {
+    let r = tx(createProject({ id: 'prj_tf', name: 'TF', width: 1920, height: 1080, frameRate: R }), [{ op: 'import_asset', args: { asset: video('a') } }, { op: 'import_asset', args: { asset: video('b') } }], true);
+    const [a, b] = r.results.map((x) => x.output!.assetId as string);
+    r = tx(r.doc, [{ op: 'add_clip', args: { assetId: a, start: f(0), sourceIn: f(149), duration: f(150), freeze: true } }, { op: 'add_clip', args: { assetId: b, start: f(150), duration: f(150), withLinkedAudio: false } }]);
+    const second = r.results[1]!.output!.clipId as string;
+    expect(transitionRoom(r.doc, second)).toEqual({ maxFrames: 150, limit: 'max' });
+    expect(accepts(r.doc, second, 150)).toBe(true);
+  });
   it('two whole clips: nothing fits, so nothing is sent (the op would refuse every length)', () => {
     const p = pair(0, 150);
     const room = transitionRoom(p.doc, p.second)!;

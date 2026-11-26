@@ -122,3 +122,19 @@ describe('preflight: transition_freeze, whose fix is accepted whatever options t
     expect(issues(fixed)).toEqual([]);
   });
 });
+
+describe('preflight: a transition out of a freeze frame (wave 8 growing, the freeze-handle rule)', () => {
+  it('is not reported: a held picture never runs out of source (written into the document directly, as an older build could not)', () => {
+    const r0 = applyTransaction(createProject({ id: 'prj_pf', name: 'PF', frameRate: R }), [{ op: 'import_asset', args: { asset } }], { idSeed: `pt${k++}_`, actor: 'test', allowInternal: true });
+    const assetId = r0.results[0]!.output!.assetId as string;
+    const r = applyTransaction(r0.doc, [{ op: 'add_clip', args: { assetId, start: f(0), sourceIn: f(239), duration: f(60), withLinkedAudio: false, freeze: true } }, { op: 'add_clip', args: { assetId, start: f(60), sourceIn: f(0), duration: f(60), withLinkedAudio: false } }], { idSeed: `pt${k++}_`, actor: 'test' });
+    const doc = structuredClone(r.doc);
+    (doc.sequences[doc.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.id === r.results[1]!.output!.clipId) as MediaClip).transition = { type: 'dissolve', frames: 30 };
+    expect(issues(doc)).toEqual([]);
+    // the same picture as an ordinary clip at the very end of its file has no spare frames: reported as before
+    const plain = structuredClone(doc);
+    delete (plain.sequences[plain.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.id === r.results[0]!.output!.clipId) as MediaClip).freeze;
+    (plain.sequences[plain.mainSequenceId]!.tracks.flatMap((t) => t.clips).find((c) => c.id === r.results[0]!.output!.clipId) as MediaClip).sourceIn = f(180);
+    expect(issues(plain).map((i) => i.code)).toEqual(['transition_freeze']);
+  });
+});
