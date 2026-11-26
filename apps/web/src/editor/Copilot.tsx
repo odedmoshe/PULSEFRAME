@@ -17,6 +17,7 @@ import { useEditorState, type Editor } from './store.ts';
 import { HUB_STRINGS } from './aiHub.strings.ts';
 import './copilot.css';
 import { AGENT_TAB_BUILT, AgentTab } from './agent/AgentTab.tsx';
+import { tr as agentTr } from './agent/agentState.ts';
 
 type CopTab = 'chat' | 'receipts';
 type Mode = 'guide' | 'run';
@@ -36,10 +37,11 @@ export function Copilot() {
       <header className="pf-cop-head">
         <span className="pf-cop-ico" aria-hidden="true"><Bot size={20} strokeWidth={1.75} /></span>
         <div className="pf-cop-titles"><h2>{H.title}</h2><span>{H.subtitle}</span></div>
-        <Badge tone="hollow">{H.off}</Badge>
-        <Seg label={H.mode} size="sm" value={mode} onChange={(v) => setMode(v)} options={[{ value: 'guide', label: H.guide }, { value: 'run', label: H.run }]} />
+        {/* the built agent has its own connect card and states: the old "not connected" badge and the guide / do-it switch belong to the placeholder chat only */}
+        {!AGENT_TAB_BUILT && <Badge tone="hollow">{H.off}</Badge>}
+        {!AGENT_TAB_BUILT && <Seg label={H.mode} size="sm" value={mode} onChange={(v) => setMode(v)} options={[{ value: 'guide', label: H.guide }, { value: 'run', label: H.run }]} />}
       </header>
-      <Tabs label={H.title} value={tab} onChange={(id) => setTab(id as CopTab)} panelPrefix="pf-cop-panel" tabs={[{ id: 'chat', label: H.chat, testId: 'copilot-tab-chat' }, { id: 'receipts', label: H.receipts, count: receipts.length, testId: 'copilot-tab-receipts' }]} />
+      <Tabs label={H.title} value={tab} onChange={(id) => setTab(id as CopTab)} panelPrefix="pf-cop-panel" tabs={[{ id: 'chat', label: AGENT_TAB_BUILT ? agentTr(state.lang, 'agent.tab') : H.chat, testId: 'copilot-tab-chat' }, { id: 'receipts', label: H.receipts, count: receipts.length, testId: 'copilot-tab-receipts' }]} />
       {tab === 'chat' ? (AGENT_TAB_BUILT ? <AgentTab /> : <Chat />) : <Receipts editor={editor} receipts={receipts} />}
     </section>
   );
