@@ -27,6 +27,7 @@ import { ModelStore, type ModelStatus } from './models.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
 import { assertStorageRoom } from './storage.ts';
 import type { Principal } from './auth.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 const TYPE = 'capability';
 /**
@@ -42,7 +43,9 @@ const LICENCE_CODES = new Set(['model_not_commercially_eligible', 'model_license
 /** Free space kept on the models volume beyond a download (ADR-0017). */
 const DOWNLOAD_MARGIN_BYTES = 2 * 1024 ** 3;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const isAgent = (req: { actor: string; principal?: Principal }) => req.actor.startsWith('agent:') || req.principal?.kind === 'agent';
+/** The agent caps apply (I5, I6, B11, B12) unless the caller acts as the owner: the owner, or an agent stamped open, as recorded at admission (C2: not keyed on the actor prefix alone). */
+const actsOpen = (req: { open?: boolean; principal?: Principal }) => req.open === true || (!!req.principal && actsAsOwner(req.principal));
+const isAgent = (req: { actor: string; open?: boolean; principal?: Principal }) => !actsOpen(req) && (req.actor.startsWith('agent:') || req.principal?.kind === 'agent');
 
 /** Where a validated result goes, fixed when the job is created (job.input.placement). */
 export interface Placement {
@@ -252,8 +255,9 @@ export class Capabilities implements CapabilityService {
    * different (larger) download. Refused before any byte moves when a source host is not in PF_MODEL_HOSTS (host_not_allowed) or the
    * models volume lacks the download plus a 2 GiB margin (disk_insufficient). Each provider has its own model store.
    */
-  async startDownload(projectId: string, capabilityId: string, confirmBytes: number, actor: string): Promise<JobRow> {
-    if (!actor.startsWith('user:')) throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential', {}, 'Ask for the download (request_model_download); the owner approves it.');
+  async startDownload(projectId: string, capabilityId: string, confirmBytes: number, by: string | Principal): Promise<JobRow> {
+    const actor = typeof by === 'string' ? by : by.actor;
+    if (!actor.startsWith('user:') && !(typeof by !== 'string' && actsAsOwner(by))) throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential', {}, 'Ask for the download (request_model_download); the owner approves it.');
     const d = this.descriptor(capabilityId);
     const store = this.modelStoreFor(d);
     if (!store) throw new ApiError(503, 'engine_not_configured', 'local tools are not available in this server, so their model files cannot be downloaded');
@@ -473,7 +477,7 @@ export class Capabilities implements CapabilityService {
     // Submission intent, including the id we will give the provider, is durable before anything is dispatched.
     const job = this.store.createJob(req.projectId, TYPE, req.actor, {
       capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, logicDigest: d.graphDigest, params: resolved.resolved, graph: resolved.graph,
-      clientRequestId: randomUUID(), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, sources,
+      clientRequestId: randomUUID(), ...(actsOpen(req) ? { admittedOpen: true } : {}), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, sources,
       attach: req.attach ?? null, placement,
       // Stale-result protection (SPEC §20, FFG-09): remember the version of everything the placement depends on.
       preconditions: this.preconditions(req.projectId, [...(req.dependsOn ?? []), ...(req.attach?.trackId ? [req.attach.trackId] : []), ...dependsOn]),
@@ -515,14 +519,15 @@ export class Capabilities implements CapabilityService {
     const { doc, revision } = this.store.getProject(req.projectId);
     const p = this.planFrameJob(d, req, doc);
     this.assertComfyReady(d);
-    admitFramePlan({ d, plan: p.plan, agent: isAgent(req), limits: this.cfg, measured: p.measured, seconds: p.seconds, confirmLongRun: req.confirmLongRun, scratchBytes: p.scratch, freeBytes: this.freeBytes(this.store.tmpDir) });
+    const admissionWarnings = admitFramePlan({ d, plan: p.plan, agent: isAgent(req), warnOnly: actsOpen(req), limits: this.cfg, measured: p.measured, seconds: p.seconds, confirmLongRun: req.confirmLongRun, scratchBytes: p.scratch, freeBytes: this.freeBytes(this.store.tmpDir) });
     const { placement, dependsOn } = this.placement(doc, apply, req, { m: p.plan.multiplier, sourceRangeStart: p.src.sourceRangeStart });
     const job = this.store.createJob(req.projectId, TYPE, req.actor, {
       capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.graphDigest, logicDigest: d.graphDigest, params: p.resolved.resolved, graph: p.resolved.graph,
       frameBinding: { nodeId: p.media.nodeId, input: p.media.input },
-      clientRequestId: randomUUID(), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null,
+      clientRequestId: randomUUID(), ...(actsOpen(req) ? { admittedOpen: true } : {}), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null,
       sources: [{ input: d.frames!.input, assetId: p.src.assetId, contentHash: p.asset.contentHash, mimeType: p.asset.mimeType, width: p.src.width, height: p.src.height, bytes: p.asset.byteSize }],
       frames: p.plan, frameSource: p.src, outputSize: p.out, scratchBytes: p.scratch, estimate: { seconds: p.seconds, basis: p.seconds === null ? 'none' : 'measured-profile' },
+      ...(admissionWarnings.length ? { admissionWarnings } : {}), // open mode (B11, B12): told, not refused
       attach: req.attach ?? null, placement,
       preconditions: this.preconditions(req.projectId, [...(req.dependsOn ?? []), ...(req.attach?.trackId ? [req.attach.trackId] : []), ...dependsOn]),
     });
@@ -543,7 +548,7 @@ export class Capabilities implements CapabilityService {
       ...additions,
       provider: 'local', capabilityId: d.id, capabilityVersion: d.version, graphDigest: d.codeDigest, logicDigest: d.codeDigest, params: resolved.resolved,
       source: req.source ?? null, apply, placement: { mode: apply, clipId } satisfies Placement,
-      clientRequestId: randomUUID(), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, attach: req.attach ?? null,
+      clientRequestId: randomUUID(), ...(actsOpen(req) ? { admittedOpen: true } : {}), projectRevision: revision, idempotencyKey: req.idempotencyKey ?? null, attach: req.attach ?? null,
       preconditions: this.preconditions(req.projectId, [...(req.dependsOn ?? []), ...(apply === 'replace-clip' && f ? [f.clip.id, f.track.id] : [])]),
     });
     this.reserveCost(job, d, req);

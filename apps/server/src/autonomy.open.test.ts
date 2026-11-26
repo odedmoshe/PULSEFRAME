@@ -92,3 +92,9 @@ describe('family A — undo anyone\'s edit (A9), in both modes', () => {
       } finally { await m.s.close(); }
     }, 60_000);
 });
+
+export const FAMILY_B: Case[] = [
+  { family: 'B', id: 'B4/D2 capability model download', method: 'POST', path: '/api/v1/projects/{pid}/capabilities/image.upscale/models/download', body: { confirmBytes: 1 }, guarded: 'human_approval_required' },
+  { family: 'B', id: 'B4/D2 speech model download', method: 'POST', path: '/api/v1/projects/{pid}/speech/models/none/download', body: { confirmBytes: 1 }, guarded: 'human_approval_required' },
+];
+describe('family B — approvals (the download gate)', () => { bothModes(FAMILY_B); });

@@ -77,6 +77,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const presence = new Presence();
   const governance = new Governance(store);
   auth.resolveGrant = (token) => governance.principalForToken(token);
+  governance.openAgentBudgetCents = () => autonomy.agentBudgetCents;
   capabilities.governance = governance;
   const speech = new Speech(store, cfg, lane);
   // picture search «חיפוש בצילומים» (wave 7 search track; search/runtime.ts, builder B): the not-built runtime until built

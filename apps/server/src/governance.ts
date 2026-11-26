@@ -322,12 +322,25 @@ export class Governance {
   reserve(p: Principal, jobId: string, cents: number) {
     if (cents <= 0) return;
     if (p.kind === 'user') return; // the owner spends their own money; grants limit agents
+    // B5/I3 (autonomy.ts): an open agent without a budget of its own spends from ONE owner-wide agent budget (C13), unlimited
+    // unless the owner set one (PUT /api/v1/autonomy agentBudgetCents); a grant with its own budget keeps it
+    if (actsAsOwner(p) && !(p.grant && p.grant.budgetCents > 0)) return this.reserveOpen(jobId, cents);
     if (modeOf(p) !== 'autopilot' || !p.grant) throw new ApiError(403, 'insufficient_scope', 'paid work needs an Autopilot grant with a budget', { mode: modeOf(p) });
     const g = p.grant;
     this.store.db.transaction(() => {
       const { spentCents, reservedCents } = this.spend(g.id);
       if (spentCents + reservedCents + cents > g.budgetCents) throw new ApiError(402, 'budget_exceeded', `this would exceed the grant's budget`, { budgetCents: g.budgetCents, spentCents, reservedCents, requestedCents: cents }, 'Ask the owner for a larger budget or an approval.');
       this.store.db.prepare('INSERT INTO budget_ledger (job_id, grant_id, reserved_cents, state, created_at, updated_at) VALUES (?,?,?,?,?,?)').run(jobId, g.id, cents, 'reserved', now(), now());
+    }).immediate();
+  }
+  /** The owner-wide budget open agents spend from (autonomy.ts AutonomySettings.agentBudgetCents; null = no ceiling). */
+  openAgentBudgetCents: () => number | null = () => null;
+  private reserveOpen(jobId: string, cents: number) {
+    const budget = this.openAgentBudgetCents();
+    this.store.db.transaction(() => {
+      const { spentCents, reservedCents } = this.spend(OPEN_AGENTS_LEDGER);
+      if (budget !== null && spentCents + reservedCents + cents > budget) throw new ApiError(402, 'budget_exceeded', 'this would exceed the owner\'s budget for agents', { budgetCents: budget, spentCents, reservedCents, requestedCents: cents }, 'The owner raises the agents\' budget in Settings › Access, or clears it.');
+      this.store.db.prepare('INSERT INTO budget_ledger (job_id, grant_id, reserved_cents, state, created_at, updated_at) VALUES (?,?,?,?,?,?)').run(jobId, OPEN_AGENTS_LEDGER, cents, 'reserved', now(), now());
     }).immediate();
   }
   // ---------- the command bar's assistant (ADR-0027): the owner's money, spent by a propose-only principal ----------

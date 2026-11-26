@@ -1032,7 +1032,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = need(c, 'edit');
     if (!actsAsOwner(p)) throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
     const b = await body(c, z.object({ confirmBytes: z.number().int().positive() }).strict());
-    const job = await capabilities.startDownload(c.req.param('id'), c.req.param('capabilityId'), b.confirmBytes, p.actor);
+    const job = await capabilities.startDownload(c.req.param('id'), c.req.param('capabilityId'), b.confirmBytes, p);
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
   });
   // ---- local speech recognition (optional; an honest setup state when the engine or the model is absent) ----

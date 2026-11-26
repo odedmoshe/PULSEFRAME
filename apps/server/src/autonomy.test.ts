@@ -18,6 +18,8 @@ const RAW = /kind !== 'user'|kind === 'user'|isOwnerSession\(|kind === 'agent'|k
 
 /** Raw owner/agent checks that are NOT policy gates, each with its reason. */
 const RAW_ALLOWED: readonly { file: string; frag: string; why: string }[] = [
+  { file: 'capabilities.ts', frag: 'const isAgent = ', why: 'I5/I6: the agent caps apply only when !actsOpen(req) (the line above reads actsAsOwner; open is recorded at admission)' },
+  { file: 'governance.ts', frag: "if (p.kind === 'user') return; // the owner spends their own money", why: 'the owner pays nothing to a ledger; open agents reserve on the next line (actsAsOwner)' },
   { file: 'assistant/contract.ts', frag: 'export const isOwnerSession', why: 'the definition (kept for wording; no gate reads it after the swap)' },
   { file: 'auth.ts', frag: 'if (!perMinute || p.kind !== \'agent\') return p;', why: 'I1 rate limit: an owner switch, off by default (S)' },
   { file: 'mcp.ts', frag: 'if (principal.kind === \'user\' && !auth.originAllowed(req))', why: 'FLOOR A8: Origin check of the owner cookie' },
@@ -42,7 +44,6 @@ const RAW_ALLOWED: readonly { file: string; frag: string; why: string }[] = [
 const PENDING: readonly { file: string; frag: string }[] = [
   { file: 'peoplePrivacy.ts', frag: 'if (p.kind === \'user\') return \'full\';' },
   { file: 'peoplePrivacy.ts', frag: 'if (p.kind === \'user\') return;' },
-  { file: 'capabilities.ts', frag: 'const isAgent = (req: { actor: string; principal?: Principal }) => req' },
   { file: 'governance.ts', frag: 'if (p.kind === \'user\') return; // the owner spends their own money; gr' },
   { file: 'search/answer.ts', frag: 'if (!isOwnerSession(p)) {' },
   { file: 'assistant/visibility.ts', frag: 'if (j.type !== ASSISTANT_JOB_TYPE || isOwnerSession(p)) return null;' },

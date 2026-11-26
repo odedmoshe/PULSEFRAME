@@ -218,6 +218,8 @@ export function scratchBytes(plan: FramePlan, out: PixelSize, hasAudio: boolean)
 export interface AdmitInput {
   d: ComfyDescriptor;
   plan: FramePlan;
+  /** Autonomy (autonomy.ts): an open caller's first-run cap and long-run confirmation become warnings (B11, B12). */
+  warnOnly?: boolean;
   /** The caller is an agent (actor 'agent:…'): the agent caps apply. */
   agent: boolean;
   limits: { agentMaxFramesPerJob: number; aiFirstRunMaxFrames: number; aiConfirmMinutes: number; aiScratchBytes: number };
@@ -235,7 +237,8 @@ export interface AdmitInput {
  * 422 input_too_large (maxPixels, maxFrames), 422 output_rate_too_high (maxOutputRate), 409 agent_limit (agent frame cap),
  * 409 first_run_limit, 409 confirm_long_run, 409 scratch_budget_exceeded, 409 disk_insufficient.
  */
-export function admitFramePlan(a: AdmitInput): void {
+export function admitFramePlan(a: AdmitInput): string[] {
+  const warnings: string[] = [];
   const { d, plan } = a;
   const px = plan.width * plan.height;
   if (d.limits.maxPixels && px > d.limits.maxPixels) throw new ApiError(422, 'input_too_large', `the video is ${plan.width}x${plan.height}; this tool is qualified up to ${d.limits.maxPixels} pixels per frame`, { width: plan.width, height: plan.height, maxPixels: d.limits.maxPixels });
@@ -243,8 +246,11 @@ export function admitFramePlan(a: AdmitInput): void {
   const maxRate = d.frames?.maxOutputRate ?? 120;
   if (plan.outputRate.num > maxRate * plan.outputRate.den) throw new ApiError(422, 'output_rate_too_high', `the result would play at ${rateText(plan.outputRate)} frames per second; this tool allows at most ${maxRate}`, { outputRate: plan.outputRate, maxOutputRate: maxRate }, 'Pick a smaller multiplier.');
   if (a.agent && plan.frameCount > a.limits.agentMaxFramesPerJob) throw new ApiError(409, 'agent_limit', `an agent may process at most ${a.limits.agentMaxFramesPerJob} frames per run; this range has ${plan.frameCount}`, { frames: plan.frameCount, limit: a.limits.agentMaxFramesPerJob }, 'Ask the owner to run it, or run a shorter range.');
-  if (!a.measured && plan.frameCount > a.limits.aiFirstRunMaxFrames) throw new ApiError(409, 'first_run_limit', `this tool has not been measured on this machine yet, so a first run may process at most ${a.limits.aiFirstRunMaxFrames} frames; this range has ${plan.frameCount}`, { frames: plan.frameCount, limit: a.limits.aiFirstRunMaxFrames }, 'Run it once on a short range; its time is then measured and longer runs can be estimated.');
-  if (a.seconds !== null && a.seconds > a.limits.aiConfirmMinutes * 60 && !a.confirmLongRun) throw new ApiError(409, 'confirm_long_run', `this run is estimated at ${Math.round(a.seconds / 60)} minutes (measured on this machine), more than ${a.limits.aiConfirmMinutes}`, { seconds: a.seconds, limitMinutes: a.limits.aiConfirmMinutes }, 'Confirm the long run (confirmLongRun: true), or run a shorter range.');
+  if (!a.measured && plan.frameCount > a.limits.aiFirstRunMaxFrames && a.warnOnly) warnings.push(`first_run_limit: this tool has not been measured on this machine yet; the run is longer than the first-run cap of ${a.limits.aiFirstRunMaxFrames} frames and goes ahead`);
+  else if (!a.measured && plan.frameCount > a.limits.aiFirstRunMaxFrames) throw new ApiError(409, 'first_run_limit', `this tool has not been measured on this machine yet, so a first run may process at most ${a.limits.aiFirstRunMaxFrames} frames; this range has ${plan.frameCount}`, { frames: plan.frameCount, limit: a.limits.aiFirstRunMaxFrames }, 'Run it once on a short range; its time is then measured and longer runs can be estimated.');
+  if (a.seconds !== null && a.seconds > a.limits.aiConfirmMinutes * 60 && !a.confirmLongRun && a.warnOnly) warnings.push(`confirm_long_run: this run is estimated at ${Math.round(a.seconds / 60)} minutes (measured on this machine) and goes ahead`);
+  else if (a.seconds !== null && a.seconds > a.limits.aiConfirmMinutes * 60 && !a.confirmLongRun) throw new ApiError(409, 'confirm_long_run', `this run is estimated at ${Math.round(a.seconds / 60)} minutes (measured on this machine), more than ${a.limits.aiConfirmMinutes}`, { seconds: a.seconds, limitMinutes: a.limits.aiConfirmMinutes }, 'Confirm the long run (confirmLongRun: true), or run a shorter range.');
   if (a.scratchBytes > a.limits.aiScratchBytes) throw new ApiError(409, 'scratch_budget_exceeded', `this run needs about ${a.scratchBytes} bytes of scratch space; one job may use ${a.limits.aiScratchBytes}`, { scratchBytes: a.scratchBytes, limit: a.limits.aiScratchBytes }, 'Run it on a shorter range or at a smaller size.');
   if (a.freeBytes !== null && a.freeBytes < a.scratchBytes) throw new ApiError(409, 'disk_insufficient', `this run needs about ${a.scratchBytes} bytes of scratch space; ${a.freeBytes} are free`, { scratchBytes: a.scratchBytes, freeBytes: a.freeBytes }, 'Free some disk space and try again.');
+  return warnings;
 }

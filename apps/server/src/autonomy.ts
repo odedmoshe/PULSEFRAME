@@ -172,5 +172,8 @@ export const OPEN_GATES: readonly OpenGate[] = [
   { id: 'A24', file: 'importContracts.ts', needle: 'if (actsAsOwner(p)) return; // A24', decision: 'O' },
   { id: 'A17', file: 'growing.ts', needle: 'if (!actsAsOwner(principal)) throw GROWING_API_ERRORS.ownerRequired();', decision: 'O' },
   { id: 'D10', file: 'speech.ts', needle: 'if (!actsAsOwner(principal)) throw new ApiError(403, \'human_approval_required\', \'speaking in a recorded person', decision: 'O' },
+  { id: 'B4', file: 'capabilities.ts', needle: "if (!actor.startsWith('user:') && !(typeof by !== 'string' && actsAsOwner(by))) throw", decision: 'O' },
+  { id: 'I5', file: 'capabilities.ts', needle: "const actsOpen = (req: { open?: boolean; principal?: Principal }) => req.open === true || (!!req.principal && actsAsOwner(req.principal));", decision: 'W' },
+  { id: 'B5', file: 'governance.ts', needle: "if (actsAsOwner(p) && !(p.grant && p.grant.budgetCents > 0)) return this.reserveOpen(jobId, cents);", decision: 'O' },
   { id: 'B4', file: 'http.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'human_approval_required\', \'model downloads must be started', decision: 'O' },
 ];
