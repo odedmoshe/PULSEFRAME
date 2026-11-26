@@ -6,6 +6,7 @@ import { ANIMATABLE, CaptureSchema, LifeEventSchema, MAX_LIFE_EVENTS, MAX_PEOPLE
 import { personNameKey } from './people.ts';
 import { drawnIssues } from './drawn.ts';
 import { lifeIssues } from './fields.ts';
+import { isInheritedName, own } from './own.ts';
 import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tracking.ts';
 import { momentsProblem } from './momentsContract.ts';
 import { type Keyframe } from './keyframe.ts';
@@ -38,7 +39,7 @@ export const forbidsOverlap = (t: Track) => t.kind !== 'audio';
 
 export function sequenceDuration(doc: ProjectDocument, sequenceId = doc.mainSequenceId): T.RationalTime {
   let end = T.ZERO;
-  for (const tr of doc.sequences[sequenceId]?.tracks ?? []) for (const c of tr.clips) end = T.max(end, clipEnd(c));
+  for (const tr of own(doc.sequences, sequenceId)?.tracks ?? []) for (const c of tr.clips) end = T.max(end, clipEnd(c));
   return end;
 }
 
@@ -92,11 +93,25 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   const rate = doc.settings.frameRate;
   const motionTracks = doc.motionTracks ?? {};
   const seen = new Set<string>();
+  const reserved = (id: string) => issues.push({ code: 'reserved_id', message: `id "${id}" is reserved and cannot name an item`, ids: [id] });
   const uniq = (id: string) => {
     if (seen.has(id)) issues.push({ code: 'duplicate_id', message: `duplicate id ${id}`, ids: [id] });
+    // Entity ids key the document's records (and records beside them: transcripts by asset, overrides by clip). One that names
+    // something every object inherits would be found there without being there, so no entity may carry it (see own.ts).
+    if (isInheritedName(id)) reserved(id);
     seen.add(id);
   };
-  if (!doc.sequences[doc.mainSequenceId]) issues.push({ code: 'missing_sequence', message: 'mainSequenceId does not exist', ids: [doc.mainSequenceId] });
+  /**
+   * Phrase and word ids are data: an imported transcript may call a phrase "constructor", and every record keyed by them
+   * (a format's wording, a translation's sources) is read as own entries. Only "__proto__" is refused, because it cannot be
+   * such a key at all: loading drops it and assigning under it replaces the record's prototype instead of storing.
+   */
+  const uniqData = (id: string) => {
+    if (seen.has(id)) issues.push({ code: 'duplicate_id', message: `duplicate id ${id}`, ids: [id] });
+    if (id === '__proto__') reserved(id);
+    seen.add(id);
+  };
+  if (!own(doc.sequences, doc.mainSequenceId)) issues.push({ code: 'missing_sequence', message: 'mainSequenceId does not exist', ids: [doc.mainSequenceId] });
   for (const [key, a] of Object.entries(doc.assets)) {
     if (key !== a.id) issues.push({ code: 'key_mismatch', message: `asset key ${key} != id ${a.id}`, ids: [key] });
     uniq(a.id);
@@ -188,7 +203,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           if (!d) issues.push({ code: 'unknown_effect', message: `clip ${c.id} uses effect "${fx.type}", which this build does not have`, ids: [c.id] });
           else if (!d.params.safeParse(fx.params).success) issues.push({ code: 'effect_params', message: `clip ${c.id} effect ${fx.type} has invalid parameters`, ids: [c.id] });
           const table = lutRef(fx);
-          if (table && doc.assets[table]?.kind !== 'lut') issues.push({ code: 'missing_lut', message: `clip ${c.id} effect color.lut names colour table ${table}, which is not a colour table in this project's library`, ids: [c.id, table] });
+          if (table && own(doc.assets, table)?.kind !== 'lut') issues.push({ code: 'missing_lut', message: `clip ${c.id} effect color.lut names colour table ${table}, which is not a colour table in this project's library`, ids: [c.id, table] });
           for (const [param, keys] of Object.entries(fx.keyframes ?? {})) {
             // Keys on a parameter that may no longer be animated (effects.ts NOT_ANIMATABLE) are tolerated in a document
             // that already holds them: they are inert (animation.ts effectParamsAt ignores them) and no op adds new ones.
@@ -278,7 +293,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           continue;
         }
         if (tr.kind === 'caption') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on caption track`, ids: [c.id, tr.id] });
-        const asset = doc.assets[c.assetId];
+        const asset = own(doc.assets, c.assetId);
         if (!asset) { issues.push({ code: 'missing_asset', message: `clip ${c.id} references missing asset ${c.assetId}`, ids: [c.id, c.assetId] }); continue; }
         if (tr.kind === 'text') issues.push({ code: 'incompatible_track', message: `media clip ${c.id} on text track`, ids: [c.id, tr.id] });
         if (tr.kind === 'video' && !asset.video && !(asset.kind === 'image' && asset.image)) issues.push({ code: 'incompatible_track', message: `asset ${asset.id} has no picture for video track`, ids: [c.id, tr.id] });
@@ -320,7 +335,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   for (const [key, mk] of Object.entries(doc.markers ?? {})) {
     if (key !== mk.id) issues.push({ code: 'key_mismatch', message: `marker key ${key} != id ${mk.id}`, ids: [key] });
     uniq(mk.id);
-    if (!doc.sequences[mk.sequenceId]) issues.push({ code: 'missing_sequence', message: `marker ${mk.id} refers to a missing sequence`, ids: [mk.id] });
+    if (!own(doc.sequences, mk.sequenceId)) issues.push({ code: 'missing_sequence', message: `marker ${mk.id} refers to a missing sequence`, ids: [mk.id] });
     if (T.isNegative(mk.time) || !T.isFrameAligned(mk.time, doc.settings.frameRate)) issues.push({ code: 'marker_time', message: `marker ${mk.id} must sit on a non-negative whole frame`, ids: [mk.id] });
   }
   // Motion tracks (ADR-0015): one sample per source frame of a video asset, in equal-length integer columns.
@@ -328,7 +343,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   for (const [key, mt] of Object.entries(motionTracks)) {
     if (key !== mt.id) issues.push({ code: 'key_mismatch', message: `motion track key ${key} != id ${mt.id}`, ids: [key] });
     uniq(mt.id); // an entity of its own (entities.ts): its id must not be another entity's
-    const asset = doc.assets[mt.assetId];
+    const asset = own(doc.assets, mt.assetId);
     if (!asset?.video) issues.push({ code: 'missing_asset', message: `motion track ${mt.id} refers to asset ${mt.assetId}, which is missing or has no video`, ids: [mt.id, mt.assetId] });
     const n = mt.x.length;
     samples += n;
@@ -349,7 +364,7 @@ export function validateProject(doc: ProjectDocument): Issue[] {
     if (tl && tl.review === 'needed' && (tl.reviewedBy || tl.reviewedAt)) issues.push({ code: 'variant_translation', message: `variant ${va.id}: a translation that needs review names no reviewer`, ids: [va.id] });
   }
   for (const [key, an] of Object.entries(doc.analyses ?? {})) {
-    if (key !== an.assetId || !doc.assets[an.assetId]) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });
+    if (key !== an.assetId || !own(doc.assets, an.assetId)) issues.push({ code: 'missing_asset', message: `analysis ${key} refers to a missing asset`, ids: [key] });
     for (const [name, list] of [['scene cuts', an.scenes?.cuts], ['beats', an.beats?.beats], ['bar starts', an.beats?.downbeats]] as const)
       if (list?.some((t, i) => T.isNegative(t) || (i > 0 && !T.lt(list[i - 1]!, t)))) issues.push({ code: 'analysis_order', message: `${name} of asset ${key} must be non-negative and strictly ascending`, ids: [key] });
     // music sections (ADR-0022): each ends where the next starts, so they are ascending and the first starts with the file
@@ -365,16 +380,16 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   }
   for (const [key, tr] of Object.entries(doc.transcripts ?? {})) {
     if (key !== tr.assetId) issues.push({ code: 'key_mismatch', message: `transcript key ${key} != assetId ${tr.assetId}`, ids: [key] });
-    if (!doc.assets[tr.assetId]?.audio) issues.push({ code: 'missing_asset', message: `transcript refers to asset ${tr.assetId}, which is missing or has no audio`, ids: [tr.assetId] });
+    if (!own(doc.assets, tr.assetId)?.audio) issues.push({ code: 'missing_asset', message: `transcript refers to asset ${tr.assetId}, which is missing or has no audio`, ids: [tr.assetId] });
     let prevEnd = T.ZERO;
     for (const seg of tr.segments) {
-      uniq(seg.id);
+      uniqData(seg.id);
       const end = T.add(seg.start, seg.duration);
       if (T.lt(seg.start, prevEnd) || !T.lt(T.ZERO, seg.duration)) issues.push({ code: 'transcript_order', message: `segment ${seg.id} overlaps the previous one or has no duration`, ids: [seg.id] });
       prevEnd = end;
       let w = seg.start;
       for (const word of seg.words) {
-        uniq(word.id);
+        uniqData(word.id);
         if (T.lt(word.start, w) || T.lt(end, T.add(word.start, word.duration)) || T.isNegative(word.duration)) issues.push({ code: 'transcript_order', message: `word ${word.id} is out of order or outside its segment`, ids: [word.id, seg.id] });
         w = T.add(word.start, word.duration);
       }
@@ -432,7 +447,9 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   if (doc.multicam || hasTags(doc)) issues.push(...multicamIssues(doc, uniq));
   // stabilisation (wave 7): the clip switch and the camera measurements (steadyValidate.ts)
   issues.push(...steadyIssues(doc));
-  // marked source ranges (wave 7 pearls track; sourceRanges.ts validateSourceRanges, code source_range)
+  // marked source ranges (wave 7 pearls track; sourceRanges.ts validateSourceRanges, code source_range). A range is an entity
+  // (entities.ts), so its id is reserved like every other entity's (see uniq); the other rules for ranges are validateSourceRanges'.
+  for (const r of Object.values(doc.sourceRanges ?? {})) if (isInheritedName(r.id)) reserved(r.id);
   if (doc.sourceRanges) issues.push(...validateSourceRanges(doc));
   // music that fits the film (wave 7 musicfit): provenance.fitted and clip.impact (musicFitValidate.ts, codes fitted_provenance, clip_impact)
   issues.push(...musicFitIssues(doc));

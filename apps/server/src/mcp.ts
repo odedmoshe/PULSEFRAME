@@ -10,7 +10,7 @@ import { notBuiltAgentService, type AgentRunService } from './agent/loop.ts';
 import { NarrationBody, NarrationScriptBody, TranscribeBody, type Speech } from './speech.ts';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { ASSISTANT_JOB_TYPE, MulticamSyncBody, listOps, RationalTimeSchema, summarize, timeline, transcriptFor, transcriptView, TRACKING_JOB_TYPE, TrackRunBody, MOMENTS_JOB_TYPE, StartMomentsBodySchema, MOMENTS_LABEL, BuildShortsBodySchema, FindShortsBodySchema, ReframePlanBodySchema, sequenceList, SHORTS_MEASUREMENT_KIND, shortsRefusal, TakeRequestSchema } from '@pulseframe/core';
+import { ASSISTANT_JOB_TYPE, MulticamSyncBody, listOps, own, RationalTimeSchema, summarize, timeline, transcriptFor, transcriptView, TRACKING_JOB_TYPE, TrackRunBody, MOMENTS_JOB_TYPE, StartMomentsBodySchema, MOMENTS_LABEL, BuildShortsBodySchema, FindShortsBodySchema, ReframePlanBodySchema, sequenceList, SHORTS_MEASUREMENT_KIND, shortsRefusal, TakeRequestSchema } from '@pulseframe/core';
 import type { Auth, Principal, Scope } from './auth.ts';
 import type { Capabilities } from './capabilities.ts';
 import { assertMayExportStill, ExportOptionsSchema, outputDoc, priorExportJobs, withJobKey, type Exporter } from './export.ts';

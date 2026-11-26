@@ -20,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { createHash, randomBytes } from 'node:crypto';
-import { alignPhrase, RationalTimeSchema, splitSentences, timeOriginSeconds, type Asset } from '@pulseframe/core';
+import { alignPhrase, own, RationalTimeSchema, splitSentences, timeOriginSeconds, type Asset } from '@pulseframe/core';
 import type { CapabilityDescriptor } from '@pulseframe/providers';
 import * as T from '@pulseframe/time';
 import type { ComputeLane } from './aiContracts.ts';
@@ -375,10 +375,10 @@ export class Speech {
 
   private assertTranscribable(projectId: string, a: z.infer<typeof TranscribeBody> & { assetId: string }) {
     const p = this.store.getProject(projectId);
-    const asset = p.doc.assets[a.assetId];
+    const asset = own(p.doc.assets, a.assetId);
     if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
     if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to transcribe');
-    const existing = p.doc.transcripts?.[a.assetId];
+    const existing = own(p.doc.transcripts, a.assetId);
     if (a.mode === 'align') {
       if (!existing) throw new ApiError(404, 'no_transcript', 'this asset has no transcript to time', { assetId: a.assetId }, 'Import or type one first, or use mode=recognise.');
       if (!existing.segments.some((s) => s.timing !== 'word' && s.text.trim())) throw new ApiError(409, 'already_timed', 'every phrase of this transcript already has word times', { assetId: a.assetId });
@@ -512,7 +512,7 @@ export class Speech {
     }
     if (!actsAsOwner(principal)) throw new ApiError(403, 'human_approval_required', 'speaking in a recorded person\'s voice needs the owner\'s own consent statement; an agent credential cannot give it', {}, 'Use the built-in voice, or ask the owner to start this from the editor.');
     if (!a.consent) throw new ApiError(422, 'consent_required', 'a reference voice needs a consent statement: whose voice it is, and that they agreed', {}, 'Send consent: { speaker, confirmed: true }.');
-    const ref = doc.assets[a.referenceAssetId];
+    const ref = own(doc.assets, a.referenceAssetId);
     if (!ref) throw new ApiError(404, 'not_found', `asset ${a.referenceAssetId} not found`, { assetId: a.referenceAssetId });
     if (!ref.audio) throw new ApiError(422, 'no_audio', 'the reference asset has no sound');
     if (T.toSeconds(ref.duration) < 5) throw new ApiError(422, 'reference_too_short', 'the reference recording must be at least 5 seconds long', { seconds: Number(T.toSeconds(ref.duration).toFixed(2)) });
@@ -616,7 +616,7 @@ export class Speech {
       fs.writeFileSync(textFile, j.input.text, 'utf8');
       const args = ['synthesize', '--model', path.join(this.dir, model.dir), '--text-file', textFile, '--out', raw, '--language', j.input.language, '--seed', String(j.input.seed), '--device', this.cfg.speechDevice, '--nikud', path.join(this.dir, NIKUD_PATH)];
       if (j.input.referenceAssetId) {
-        const ref = this.store.getProject(j.projectId).doc.assets[j.input.referenceAssetId];
+        const ref = own(this.store.getProject(j.projectId).doc.assets, j.input.referenceAssetId);
         if (!ref?.audio) throw new ApiError(409, 'not_found', 'the reference recording is no longer in the project');
         const refWav = path.join(tmp, 'reference.wav');
         // the first half minute is plenty for the voice encoder

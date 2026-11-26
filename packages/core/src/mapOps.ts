@@ -12,7 +12,7 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { defineOp, mustClip, placeDrawnClip } from './ops.ts';
 import { musicAt } from './musicGrid.ts';
-import type { DrawnClip, ProjectDocument } from './schema.ts';
+import { RationalTimeSchema, type DrawnClip, type ProjectDocument } from './schema.ts';
 import {
   MAP_INTRO_SECONDS, MAP_KIND, MAP_LOOKS, MAP_MIN_LEG_SECONDS, MAP_MODES, MAP_OUTRO_SECONDS, MAP_TIMINGS, MAX_LAT_MICRO, MAX_LON_MICRO,
   MAX_MAP_STOPS, MAX_STOP_NAME, MIN_MAP_STOPS, isMapPayload, mapFrames, mapRefusal, type MapPayload, type MapStop,
@@ -23,7 +23,8 @@ import { barStopFrames, evenStopFrames } from './tripMap.ts';
 export const MAP_OPS_BUILT = true;
 export const MAP_PUBLIC_OPS = ['add_trip_map', 'update_trip_map', 'time_trip_map'] as const;
 
-const R = z.object({ value: z.string(), timescale: z.number().int().positive() }).strict();
+// the shared exact-time schema: a value that is not an integer is refused as invalid_args before any arithmetic (BigInt)
+const R = RationalTimeSchema;
 const StopArgSchema = z.object({
   id: z.string().min(1).max(64).optional(),
   name: z.string().max(200).describe(`the name drawn on the map, exactly as typed (at most ${MAX_STOP_NAME} characters; '' only with hidden)`),

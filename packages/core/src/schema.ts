@@ -5,6 +5,7 @@
  * Transient state (selection, playhead, presence, panel layout) is NOT part of this document.
  */
 import { z } from 'zod';
+import { own } from './own.ts';
 import { AudioFxInstanceSchema, MAX_AUDIO_FX } from './audioEffects.ts';
 import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from './effects.ts';
 import { DrawnPayloadSchema } from './drawn.ts';
@@ -848,7 +849,7 @@ export const timelineBehaviour = (doc: { settings: { timeline?: TimelineBehaviou
  * Undefined when the sequence has no picture track.
  */
 export const mainTrackOf = (doc: { sequences: Record<string, { tracks: { id: string; kind: string }[] }>; mainSequenceId: string }, sequenceId?: string) =>
-  doc.sequences[sequenceId ?? doc.mainSequenceId]?.tracks.find((t) => t.kind === 'video');
+  own(doc.sequences, sequenceId ?? doc.mainSequenceId)?.tracks.find((t) => t.kind === 'video');
 
 // ---------- sequences of one project (ADR-0018 shorts): optional fields; schema version 3 is the wave-4 bump (identity migration) ----------
 /** A project holds at most this many sequences (every commit rewrites the whole document). */

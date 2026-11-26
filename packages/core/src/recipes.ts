@@ -11,6 +11,7 @@ import { cutOps, skippedClips, sourceTimesToTimeline, sourceRangesToTimeline, ti
 import { beatsFor, untimedCopyFinder } from './lineage.ts';
 import { FORMAT_PROFILES } from './variants.ts';
 import { defineOp, findClip, getOp, OpError, type OpCall } from './ops.ts';
+import { own } from './own.ts';
 import { flashGapFrames } from './flashSafety.ts';
 import { clipEnd } from './validate.ts';
 import { FAMILY_FILM_RECIPE_ID, FamilyFilmParamsSchema } from './familyFilmContract.ts';
@@ -140,7 +141,7 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
   const analysis = measured?.beats;
   if (!measured || !analysis || analysis.beats.length < 2) throw new RecipeError('needs_analysis', 'the music has no beat analysis yet', 'Run analyze_asset kind=beats on the music asset first.');
   const onOwnClock = (times: T.RationalTime[]) => (T.isZero(measured.offset) ? times : times.map((t) => T.sub(t, measured.offset)));
-  for (const id of p.assetIds) { const a = doc.assets[id]; if (!a || (!a.video && !a.image)) throw new RecipeError('not_found', `asset ${id} is missing or has no picture`); }
+  for (const id of p.assetIds) { const a = own(doc.assets, id); if (!a || (!a.video && !a.image)) throw new RecipeError('not_found', `asset ${id} is missing or has no picture`); }
   const from = mclip.start, to = T.add(mclip.start, mclip.duration);
   const fi = (t: T.RationalTime) => T.nearestFrameIndex(t, rate);
   const beatFrames = [...new Set(sourceTimesToTimeline(doc, mclip.assetId, onOwnClock(analysis.beats)).filter((t) => !T.lt(t, from) && T.lt(t, to)).map(fi))].sort((a, b) => a - b);
@@ -170,7 +171,7 @@ function planMontage(doc: ProjectDocument, raw: unknown, ctx: PlanContext): Reci
     if (prot.some(([s, e]) => a < e && s < b)) { skipped++; continue; }
     if (gone.some(([s, e]) => a < e && s < b)) { leftEmpty++; continue; }
     const assetId = order[i % order.length]!;
-    const asset = doc.assets[assetId]!;
+    const asset = own(doc.assets, assetId)!; // every id in the list was found above
     let len = b - a, sourceIn = 0;
     if (asset.kind !== 'image') {
       const total = T.frameIndexAt(asset.duration, rate);
@@ -224,8 +225,8 @@ function planSocialPack(doc: ProjectDocument, raw: unknown): RecipePlan {
 
 function planTidySpeech(doc: ProjectDocument, raw: unknown, ctx: PlanContext): RecipePlan {
   const p = parse(TidySpeech, raw);
-  if (!doc.assets[p.assetId]?.audio) throw new RecipeError('not_found', `asset ${p.assetId} is missing or has no sound`);
-  const silences = ctx.silences?.[p.assetId];
+  if (!own(doc.assets, p.assetId)?.audio) throw new RecipeError('not_found', `asset ${p.assetId} is missing or has no sound`);
+  const silences = own(ctx.silences, p.assetId);
   if (!silences) throw new RecipeError('needs_analysis', 'silence measurement for this asset was not supplied');
   // clips of copies without a recorded time mapping are skipped and named; with nothing else playing the recording, refused
   const cov = timingCoverage(doc, p.assetId);
@@ -237,7 +238,7 @@ function planTidySpeech(doc: ProjectDocument, raw: unknown, ctx: PlanContext): R
   const removed = ranges.reduce((n, r) => n + T.toSeconds(T.sub(r.end, r.start)), 0);
   if (ranges.length) steps.push(`Remove ${ranges.length} pause(s), ${removed.toFixed(1)} s in total, from every track (keeping ${p.keepSeconds} s around speech)`);
   const seq = doc.sequences[doc.mainSequenceId]!;
-  if (p.captions && doc.transcripts?.[p.assetId] && !seq.tracks.some((t) => t.kind === 'caption')) { ops.push({ op: 'add_caption_track', args: { mode: 'transcript' } }); steps.push('Show the transcript as captions'); }
+  if (p.captions && own(doc.transcripts, p.assetId) && !seq.tracks.some((t) => t.kind === 'caption')) { ops.push({ op: 'add_caption_track', args: { mode: 'transcript' } }); steps.push('Show the transcript as captions'); }
   if (p.loudness !== null && doc.settings.loudness?.target !== p.loudness) { ops.push({ op: 'set_loudness_target', args: { target: p.loudness } }); steps.push(`Set the loudness target to ${p.loudness} LUFS`); }
   if (ops.length === 0) throw new RecipeError('nothing_to_do', 'no pauses long enough to remove, and captions and loudness are already set');
   return { recipeId: 'tidy-speech', params: p, steps, basis, ops, alternatives: [{ label: 'Tighter (keep 0.05 s)', params: { ...p, keepSeconds: 0.05 } }, { label: 'Looser (keep 0.25 s)', params: { ...p, keepSeconds: 0.25 } }], ...(skipped.length ? { skippedClips: skipped } : {}) };

@@ -7,6 +7,7 @@ import { FAMILY_FILM_RECIPE_ID, FAMILY_FILM_RUN_RECIPE_ID, GROWING_RECIPE_ID, GR
 import { envelopeOf } from './envelope.ts';
 import { multicamDerivatives } from './multicamSync.ts';
 import { applyFamilyFilmFor, planFamilyFilmFor, regenerateFamilyFilmFor } from './familyFilm.ts';
+import { own } from '@pulseframe/core';
 import { applyStoryFor, planStoryFor, regenerateStoryFor } from './story.ts';
 import { applyGrowingFor, planGrowingFor, regenerateGrowingFor } from './growing.ts';
 import type { Principal } from './auth.ts';
@@ -25,7 +26,7 @@ const wrap = <R>(fn: () => R): R => {
 async function context(store: Store, projectId: string, recipeId: string, params: any, protectedRanges?: TimeRange[]): Promise<PlanContext> {
   const ctx: PlanContext = { protectedRanges };
   if (recipeId === 'tidy-speech' && typeof params?.assetId === 'string') {
-    const asset = store.getProject(projectId).doc.assets[params.assetId];
+    const asset = own(store.getProject(projectId).doc.assets, params.assetId);
     if (asset?.audio) ctx.silences = { [params.assetId]: await heavy(() => detectSilences(store.blobPath(asset.contentHash), { thresholdDb: -35, minSeconds: 0.5 }, timeOriginSeconds(asset))) };
   }
   // multicam auto-switch (ADR-0020): the level envelopes of the speakers' mic files, built under heavy() where missing
@@ -82,7 +83,7 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
  */
 export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, options: RegenerateOptions = {}, expectedRevision?: number) {
   const p = store.getProject(projectId);
-  const run = p.doc.recipeRuns && Object.hasOwn(p.doc.recipeRuns, runId) ? p.doc.recipeRuns[runId] : undefined;
+  const run = own(p.doc.recipeRuns, runId);
   if (!run) throw new ApiError(404, 'not_found', `recipe run ${runId} not found`, { runId });
   if (run.recipeId === GROWING_RUN_RECIPE_ID) return regenerateGrowingFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options);
   if (run.recipeId === FAMILY_FILM_RUN_RECIPE_ID) return regenerateFamilyFilmFor(store, gov, principal, projectId, runId, newParams, expectedRevision, options);

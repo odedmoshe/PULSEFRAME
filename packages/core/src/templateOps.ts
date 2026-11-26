@@ -15,6 +15,7 @@ import { ApplyTemplateArgsSchema, AssetRefSchema, findGatedTemplate, RefSchema, 
 import * as T from '@pulseframe/time';
 import type { ProjectDocument, RecipeRun, RunRange, SlotRecord } from './schema.ts';
 import { attachKnownGrid } from './packOps.ts';
+import { own } from './own.ts';
 import { analysisEntityId, fingerprint } from './entities.ts';
 import { clipEnd } from './validate.ts';
 
@@ -260,7 +261,7 @@ defineOp({
     const gated = findGatedTemplate(a.templateId);
     if (gated) throw new OpError('incompatible', `template ${gated.id} needs a model that is not installed, so it is never applied`, { templateId: gated.id, needsModel: gated.needsModel }, 'Choose one of the available templates (GET /api/v1/templates).');
     const recipeId = `template:${a.templateId}`;
-    const earlier = a.runId ? d.recipeRuns[a.runId] : undefined;
+    const earlier = a.runId ? own(d.recipeRuns, a.runId) : undefined;
     if (earlier && earlier.recipeId !== recipeId) throw new OpError('invalid_args', `run ${a.runId} is a run of ${earlier.recipeId}, not of ${recipeId}`, { runId: a.runId, recipeId: earlier.recipeId });
     // a. regeneration: the previous run's untouched clips go (and what is left linked to nothing is unlinked)
     const affected = new Set<string>(removeRunClips(d, a.removeClipIds ?? []));

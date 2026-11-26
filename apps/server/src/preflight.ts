@@ -4,7 +4,7 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { BACKDROP, BACKDROP_MIN_BLUR, documentChecks, QC_BUILT, QC_LIMITS, drawnBox, drawnName, type DrawnClip, MULTICAM_PREFLIGHT_CODE, multicamGroupOf, segmentSyncOffset, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
+import { BACKDROP, BACKDROP_MIN_BLUR, documentChecks, QC_BUILT, QC_LIMITS, drawnBox, drawnName, type DrawnClip, MULTICAM_PREFLIGHT_CODE, own, multicamGroupOf, segmentSyncOffset, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
 import { audioPlan, captionCues, decodeOverBudget, evaluate, type DecodeStretch, type Layer } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { LIBRARY_EXPORT_NOTES, outputDoc } from './export.ts';
@@ -94,7 +94,7 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   const issues: PreflightIssue[] = [];
   const target = { sequenceId: opts.sequenceId, variantId: opts.variantId };
   const doc = outputDoc(master, target);
-  const variant = opts.variantId ? master.variants[opts.variantId]! : null;
+  const variant = opts.variantId ? own(master.variants, opts.variantId)! : null; // outputDoc above refused an id that names no format
   // The safe-area guides of this output (ADR-0018): the variant's, else the short's own format's. A short's own fixes edit the
   // short itself (its clip's transform, its caption track); a variant's stay per format (set_variant_override).
   const short = !variant && opts.sequenceId !== undefined && opts.sequenceId !== master.mainSequenceId ? sequenceOf(master, opts.sequenceId) ?? null : null;
@@ -331,7 +331,7 @@ export function trackingIssues(doc: ProjectDocument, rate: { num: number; den: n
       }
     }
   const name = (c: Clip) => (c.type === 'text' ? `the title "${c.text.slice(0, 30)}"` : c.type === 'media' ? `"${doc.assets[c.assetId]?.name ?? c.id}"` : c.type === 'drawn' ? `the ${drawnName(c.drawn).en.toLowerCase()}` : c.id);
-  const trackName = (ids: Set<string>) => [...ids].map((id) => doc.motionTracks?.[id]?.name).filter(Boolean).map((n) => `"${n}"`).join(', ') || 'its motion track';
+  const trackName = (ids: Set<string>) => [...ids].map((id) => own(doc.motionTracks, id)?.name).filter(Boolean).map((n) => `"${n}"`).join(', ') || 'its motion track';
   const out: PreflightIssue[] = [];
   for (const r of runs.values()) {
     const c = bound.get(r.clipId)!.clip;

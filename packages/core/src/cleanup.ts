@@ -6,6 +6,7 @@ import * as T from '@pulseframe/time';
 import type { MediaClip, ProjectDocument } from './schema.ts';
 import type { OpCall } from './ops.ts';
 import { sourceEnd, timelineAt, timelineOfSource } from './speed.ts';
+import { own } from './own.ts';
 import { beatsFor, sceneCutsFor, timingRelations } from './lineage.ts';
 
 export interface TimeRange { start: T.RationalTime; end: T.RationalTime }
@@ -59,7 +60,7 @@ export const untimedCopyRefusal = (copies: UntimedCopy[]) => ({
  * material outside the source range. Result: merged, ascending.
  */
 export function sourceRangesToTimeline(doc: ProjectDocument, assetId: string, ranges: TimeRange[], keep: T.RationalTime = T.ZERO, sequenceId = doc.mainSequenceId): TimeRange[] {
-  const seq = doc.sequences[sequenceId];
+  const seq = own(doc.sequences, sequenceId);
   if (!seq) return [];
   const rate = doc.settings.frameRate;
   const rel = timingRelations(doc, assetId);
@@ -97,7 +98,7 @@ export const cutOps = (ranges: TimeRange[]): OpCall[] => [...ranges].sort((a, b)
 
 /** Source times of an asset mapped to where they currently play on the timeline (every clip of the asset), ascending and unique. */
 export function sourceTimesToTimeline(doc: ProjectDocument, assetId: string, times: T.RationalTime[], sequenceId = doc.mainSequenceId): T.RationalTime[] {
-  const seq = doc.sequences[sequenceId];
+  const seq = own(doc.sequences, sequenceId);
   if (!seq) return [];
   const out: T.RationalTime[] = [];
   for (const track of seq.tracks)

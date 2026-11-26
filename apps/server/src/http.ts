@@ -7,7 +7,7 @@ import { streamSSE } from 'hono/streaming';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { MOMENTS_JOB_TYPE, StartMomentsBodySchema, TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, transcriptFor, skippedClips, timingCoverage, untimedCopyRefusal, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
+import { MOMENTS_JOB_TYPE, StartMomentsBodySchema, TRACKING_JOB_TYPE, TrackRunBody, COLOR_LOOKS, TEXT_PRESETS, SPEED_CURVES, MOTION_PRESETS, CAPTION_LOOKS, LAYOUTS, ELEMENTS, findFillers, timeOriginSeconds, own, transcriptFor, skippedClips, timingCoverage, untimedCopyRefusal, describeOps, projectVariant, RationalTimeSchema, serializeAss, serializeSrt, serializeVtt, describeRecipes, FORMAT_PROFILES, CAPTION_PRESETS, CLIP_MOTIONS, describeAudioCatalog, describeCatalog, FONT_CATALOG, cutOps, sourceRangesToTimeline, summarize, timeline, transcriptView, type Analysis, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, captionCues } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw, normalisationGain } from './audiomix.ts';
 import type { Auth, Principal, Scope } from './auth.ts';
@@ -258,7 +258,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   const fileMissing = (code: string, what: string) => () => new ApiError(404, code, `${what} is no longer stored on this computer`, {}, 'Make it again (run the export or the job once more).');
   app.get('/api/v1/render/:token/snapshot', (c) => { const s = session(c.req.param('token')); return c.json({ doc: s.doc, revision: s.revision, frameCount: s.totalFrames, firstFrame: s.firstFrame, outWidth: s.outWidth, outHeight: s.outHeight, ...(s.runs ? { runs: s.runs.map((r) => [r.first, r.count]) } : {}) }); });
   app.get('/api/v1/render/:token/assets/:assetId', (c) => {
-    const a = session(c.req.param('token')).doc.assets[c.req.param('assetId')];
+    const a = own(session(c.req.param('token')).doc.assets, c.req.param('assetId'));
     if (!a) throw new ApiError(404, 'asset_not_found', 'asset not in snapshot');
     return sendAsset(c, a, 'render worker');
   });
@@ -878,7 +878,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
   app.get('/api/v1/projects/:id/assets/:assetId/content', (c) => {
     need(c, 'observe');
-    const a = store.getProject(c.req.param('id')).doc.assets[c.req.param('assetId')];
+    const a = own(store.getProject(c.req.param('id')).doc.assets, c.req.param('assetId'));
     if (!a) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
     return sendAsset(c, a, 'asset content');
   });
@@ -889,7 +889,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
 
   const assetOf = (c: Context<Env>) => {
-    const a = store.getProject(c.req.param('id')!).doc.assets[c.req.param('assetId')!];
+    const a = own(store.getProject(c.req.param('id')!).doc.assets, c.req.param('assetId'));
     if (!a) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
     return a;
   };
@@ -1164,7 +1164,7 @@ export function startExportBatch(store: Store, gov: Governance, exporter: Export
 /** Serialize one caption track (default: the first) as it plays on the timeline. */
 export function exportCaptions(master: ProjectDocument, trackId: string | undefined, format: string, variantId?: string, sequenceId?: string) {
   if (format !== 'srt' && format !== 'vtt' && format !== 'ass') throw new ApiError(400, 'invalid_args', 'format must be srt, vtt or ass');
-  if (variantId && !Object.hasOwn(master.variants ?? {}, variantId)) throw new ApiError(404, 'not_found', `format ${variantId} not found`, { variantId });
+  if (variantId && !own(master.variants, variantId)) throw new ApiError(404, 'not_found', `format ${variantId} not found`, { variantId });
   // A linked format has its own caption style, hidden or reworded cues and reworded transcript phrases; a sequence (a short,
   // ADR-0018) is its own timeline with its own frame.
   const doc = outputDoc(master, { sequenceId, variantId });
@@ -1196,7 +1196,7 @@ export const SilenceBody = z.object({
 /** Silent stretches of an asset and the cuts that would remove them from the current timeline. Read-only: nothing is edited. */
 export async function findSilences(store: Store, projectId: string, a: z.infer<typeof SilenceBody>) {
   const p = store.getProject(projectId);
-  const asset = p.doc.assets[a.assetId];
+  const asset = own(p.doc.assets, a.assetId);
   if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
   if (!asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio');
   const opts = { thresholdDb: a.thresholdDb ?? -35, minSeconds: a.minSeconds ?? 0.5 };
@@ -1224,7 +1224,7 @@ export const FillerBody = z.object({
 /** Filler candidates from the transcript's words, and the timeline cuts that would remove them. Read-only. */
 export function findFillerWords(store: Store, projectId: string, a: z.infer<typeof FillerBody>) {
   const p = store.getProject(projectId);
-  if (!Object.hasOwn(p.doc.assets, a.assetId)) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
+  if (!own(p.doc.assets, a.assetId)) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
   // the asset's own transcript, or that of the recording a time-preserving copy was made from (core lineage.ts)
   const tr = transcriptFor(p.doc, a.assetId)?.transcript;
   if (!tr) throw new ApiError(404, 'no_transcript', 'this asset has no transcript to search', { assetId: a.assetId }, 'Recognise or import a transcript first.');
@@ -1401,16 +1401,16 @@ function checkAnalysis(store: Store, gov: Governance, principal: Principal, proj
 export const knownByConstruction = () => new ApiError(409, 'known_by_construction', 'the beats of this built-in music are known from its recipe; measuring them would replace exact beats, bars and sections with an estimate', { kind: 'beats' }, 'Nothing needs measuring. Pass overwrite=true to measure it anyway.');
 function assertAnalysable(store: Store, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
   const p = store.getProject(projectId);
-  const asset = p.doc.assets[a.assetId];
+  const asset = own(p.doc.assets, a.assetId);
   if (!asset) throw new ApiError(404, 'not_found', `asset ${a.assetId} not found`, { assetId: a.assetId });
   // The asset's OWN record on purpose, not its lineage (core lineage.ts): measuring replaces the record of the file it names. A
   // copy that is measured itself gets its own record (the next step offered for a copy without a recorded time mapping); its
   // source's record and the corrections in it stay as they are. Pinned in analysisLineage.test.ts.
-  const existing = a.kind === 'scenes' ? p.doc.analyses?.[a.assetId]?.scenes : p.doc.analyses?.[a.assetId]?.beats;
+  const existing = a.kind === 'scenes' ? own(p.doc.analyses, a.assetId)?.scenes : own(p.doc.analyses, a.assetId)?.beats;
   if (existing?.origin.edited && !a.overwrite) throw new ApiError(409, 'would_discard_edits', 'this result was corrected by hand; analysing again would discard those corrections', { kind: a.kind }, 'Pass overwrite=true to replace it.');
   // Built-in music (ADR-0022): its beats, bars and sections are known from the recipe. A measurement would replace them with
   // an estimate (the tracker can lock half a beat off or at double tempo) and drop the sections.
-  if (a.kind === 'beats' && !a.overwrite && isBuiltinMusic(asset) && isKnownGrid(p.doc.analyses?.[a.assetId]?.beats)) throw knownByConstruction();
+  if (a.kind === 'beats' && !a.overwrite && isBuiltinMusic(asset) && isKnownGrid(own(p.doc.analyses, a.assetId)?.beats)) throw knownByConstruction();
   if (a.kind === 'scenes' && !asset.video) throw new ApiError(422, 'no_video', 'this asset has no moving picture to analyse');
   if (a.kind === 'beats' && !asset.audio) throw new ApiError(422, 'no_audio', 'this asset has no audio to analyse');
   return asset;
@@ -1434,7 +1434,7 @@ async function measureAndAttach(store: Store, actor: string, projectId: string, 
   // Measuring can take a while: the asset may be gone, or the result corrected by hand, since it started.
   assertAnalysable(store, projectId, a);
   const r = store.commit({ projectId, actor, label: a.kind === 'scenes' ? 'Find scene cuts' : 'Find beats', allowInternal: true, ops: [{ op: 'attach_analysis', args: { assetId: a.assetId, kind: a.kind, createdAt: new Date().toISOString(), ...args } }] });
-  return { revision: r.revision, summary: r.summary, ...analysisView(store.getProject(projectId).doc.analyses[a.assetId]!) };
+  return { revision: r.revision, summary: r.summary, ...analysisView(own(store.getProject(projectId).doc.analyses, a.assetId)!) };
 }
 /** Measure scene cuts or beats from the source file and attach the result to the project as editable data (inside the request). */
 export async function analyzeAsset(store: Store, gov: Governance, principal: Principal, projectId: string, a: z.infer<typeof AnalyzeBody> & { assetId: string }) {
@@ -1463,7 +1463,7 @@ export type MeasurementKind = 'silences' | 'loudness' | 'voice' | 'colour' | typ
 /** Start a silence, loudness, voice (ADR-0013), colour-match (ADR-0014) or shorts-candidates (ADR-0018) measurement as a durable job of type `analysis`. It changes nothing in the project; its output carries the same object the in-request route returns. */
 export function startMeasurementJob(store: Store, principal: Principal, projectId: string, kind: MeasurementKind, options: unknown): JobRow {
   const p = store.getProject(projectId); // 404 before any job exists
-  if (kind === 'silences' && !p.doc.assets[(options as { assetId: string }).assetId]) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
+  if (kind === 'silences' && !own(p.doc.assets, (options as { assetId: string }).assetId)) throw new ApiError(404, 'asset_not_found', 'asset not found in this project');
   if (kind === 'voice' && !findClip(p.doc, (options as { clipId: string }).clipId)) throw new ApiError(404, 'not_found', 'clip not found in this project', { clipId: (options as { clipId: string }).clipId });
   const job = store.createJob(projectId, 'analysis', principal.actor, { kind, options, projectRevision: p.revision });
   void runAnalysisJob(store, job.id);

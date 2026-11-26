@@ -4,6 +4,7 @@
  * so every master edit reaches every variant and overrides (keyed by clip id) survive those edits.
  */
 import { ANIMATABLE, type ProjectDocument, type SafeArea } from './schema.ts';
+import { own } from './own.ts';
 import type { AudienceChange } from './audienceContract.ts';
 import { applyAudience } from './audience.ts';
 
@@ -21,7 +22,7 @@ export const findProfile = (id: string) => FORMAT_PROFILES.find((p) => p.id === 
 
 /** The document a variant renders: the master with the variant's frame, fill mode and overrides applied. Pure; the master is not changed. */
 export function projectVariant(doc: ProjectDocument, variantId: string, report?: AudienceChange[]): ProjectDocument {
-  const v = doc.variants?.[variantId];
+  const v = own(doc.variants, variantId);
   if (!v) throw new Error(`variant ${variantId} not found`);
   const out = structuredClone(doc);
   out.settings.width = v.width;
@@ -45,7 +46,7 @@ export function projectVariant(doc: ProjectDocument, variantId: string, report?:
   if (v.phraseText)
     for (const tr of Object.values(out.transcripts ?? {}))
       for (const seg of tr.segments) {
-        const text = v.phraseText[seg.id];
+        const text = own(v.phraseText, seg.id); // a phrase may be called "constructor": only the format's own wording counts
         if (text === undefined) continue;
         seg.text = text; seg.words = []; seg.timing = 'segment'; // the word timing described the master wording
       }

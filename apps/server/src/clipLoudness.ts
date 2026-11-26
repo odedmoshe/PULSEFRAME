@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import * as T from '@pulseframe/time';
-import { LOUDNESS_MATCH, medianLufs, SEND_API_REFUSALS, SEND_REFUSALS, timeOriginSeconds, type ClipLoudnessResult, type ClipLoudnessRow } from '@pulseframe/core';
+import { LOUDNESS_MATCH, medianLufs, own, SEND_API_REFUSALS, SEND_REFUSALS, timeOriginSeconds, type ClipLoudnessResult, type ClipLoudnessRow } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan, type PlannedAudioClip } from '@pulseframe/engine';
 import { measureLoudness, mixToRaw } from './audiomix.ts';
 import { heavy } from './analysis.ts';
@@ -50,7 +50,7 @@ const under = (t: T.RationalTime, lim: { num: number; den: number }) => T.lt(t, 
 export async function measureClipLoudness(store: Store, projectId: string, body: ClipLoudnessBodyT, isCanceled: () => boolean = () => false): Promise<ClipLoudnessResult> {
   const stored = store.getProject(projectId);
   const seqId = body.sequenceId;
-  if (seqId !== undefined && !stored.doc.sequences[seqId]) throw new ApiError(404, 'not_found', `sequence ${seqId} not found`, { sequenceId: seqId }, 'Name a sequence of this project, or leave sequenceId out for the main edit.');
+  if (seqId !== undefined && !own(stored.doc.sequences, seqId)) throw new ApiError(404, 'not_found', `sequence ${seqId} not found`, { sequenceId: seqId }, 'Name a sequence of this project, or leave sequenceId out for the main edit.');
   const doc = outputDoc(stored.doc, { sequenceId: seqId });
   const seq = doc.sequences[doc.mainSequenceId]!;
   const plan = audioPlan(doc);

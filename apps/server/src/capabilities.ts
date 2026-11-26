@@ -13,7 +13,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as T from '@pulseframe/time';
-import { findClip, ownSceneCuts, sourceEnd, speedOf, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { findClip, own, ownSceneCuts, sourceEnd, speedOf, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import {
   BUILTIN_CAPABILITIES, CapabilityError, ComfyUIAdapter, expectedOutputSize, importComfyWorkflow, ImportError, LOCAL_TOOLS, logicDigest, ProviderError, publicationBlockers, resolveGraph, resolveParams,
   type Blocker, type CapabilityDescriptor, type ComfyDescriptor, type LocalToolDescriptor, type PixelSize, type ProviderAdapter, type Readiness,
@@ -461,7 +461,7 @@ export class Capabilities implements CapabilityService {
     // Media inputs are project assets. Bind a content-addressed name now; the bytes are staged when the job runs.
     const sources = resolved.media.map((m) => {
       if (m.nodeId === null || m.input === null) throw new ApiError(422, 'dangling_binding', `parameter "${m.name}" is not bound to a field of the graph`, { parameter: m.name });
-      const a = Object.hasOwn(doc.assets, m.assetId) ? doc.assets[m.assetId] : undefined;
+      const a = own(doc.assets, m.assetId);
       if (!a) throw new ApiError(404, 'asset_not_found', `asset ${m.assetId} is not in this project`, { parameter: m.name });
       if (a.kind !== m.type || !a.image) throw new ApiError(422, 'incompatible', `parameter "${m.name}" needs an ${m.type} asset; ${m.assetId} is ${a.kind}`, { parameter: m.name });
       if (d.limits.maxPixels && a.image.width * a.image.height > d.limits.maxPixels) throw new ApiError(422, 'input_too_large', `source is ${a.image.width}x${a.image.height}; this capability is qualified up to ${d.limits.maxPixels} pixels`, { parameter: m.name });

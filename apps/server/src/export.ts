@@ -18,7 +18,7 @@ import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulse
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
 import { assembleChecks, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type ExportFinding, type PictureChecks, type SizeFitFault, type SizeFitManifest, type SizeFitOutput, type SoundChecks } from '@pulseframe/core';
 import { cropFitsPaper, printFit, STILL_EXCLUSIVE_OPTIONS, STILL_EXPORT_BUILT, STILL_TRIED_MAX_PIXELS, stillDocument, STILLS_REFUSALS, StillExportSchema, StillsRefusal, sourceTimeOfFrame, type Asset, type StillCrop, type StillOutput } from '@pulseframe/core';
-import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, OUTPUT_WARNINGS, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, own, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, OUTPUT_WARNINGS, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, PictureCheck, soundEnd, type AudioPlan, type FlashCells, type PlannedAudioClip } from '@pulseframe/engine';
 import { mixRoomBytes, renderMix, type MixResult } from './audiomix.ts';
@@ -424,7 +424,7 @@ export class Exporter {
     // runs its voice, which reads the clip's source from before the range. That source is pinned and checked like any clip's file.
     if (sound) for (const c of sound.plan.clips) if (c.voice && !drawn.has(c.clipId) && sounds(c, sound.a, sound.b)) used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1);
     const assets = [...used].flatMap(([id, clips]) => {
-      const a = Object.hasOwn(doc.assets, id) ? doc.assets[id] : undefined;
+      const a = own(doc.assets, id);
       if (!a) { blockers.push({ code: 'missing_media', message: `colour table ${id} named by an effect is not in the project library`, ids: [id] }); return []; }
       if (!blobPresent(this.store, a)) blockers.push({ code: 'missing_media', message: `source media for "${a.name}" is not available to the render worker`, ids: [id], hint: MISSING_MEDIA_HINT });
       return [{ id, contentHash: a.contentHash, byteSize: a.byteSize, kind: a.kind, clips }];

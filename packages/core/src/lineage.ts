@@ -8,6 +8,7 @@
 import * as T from '@pulseframe/time';
 import type { ProjectDocument, Transcript } from './schema.ts';
 import { sha256Hex } from './sha256.ts';
+import { own } from './own.ts';
 
 /** Longest chain followed; deeper chains stop there (no project should come close). */
 export const MAX_LINEAGE_DEPTH = 8;
@@ -20,7 +21,7 @@ export interface Lineage { rootAssetId: string; /** Root-asset time of this asse
 export function timeLineage(doc: ProjectDocument, assetId: string): Lineage {
   const chain = [assetId];
   let offset: T.RationalTime = T.ZERO;
-  let cur = doc.assets[assetId];
+  let cur = own(doc.assets, assetId); // the id may come from a caller: an inherited name starts no chain
   while (cur && chain.length <= MAX_LINEAGE_DEPTH) {
     const der = cur.provenance.derived;
     const parentId = der?.sourceAssetIds[0];
@@ -212,7 +213,7 @@ export function masterTextOf(doc: ProjectDocument, id: string): string | null {
 
 /** Segment/cue ids whose current master text hash differs from translation.sources (including ids whose phrase or cue is gone). */
 export function staleTranslations(doc: ProjectDocument, variantId: string): string[] {
-  const tr = doc.variants?.[variantId]?.translation;
+  const tr = own(doc.variants, variantId)?.translation;
   if (!tr) return [];
   return Object.entries(tr.sources).filter(([id, hash]) => { const text = masterTextOf(doc, id); return text === null || sha256Hex(text) !== hash; }).map(([id]) => id);
 }
@@ -227,7 +228,7 @@ export function readingLength(text: string): number {
  * Durations are the master's (phrase-timed): a phrase's own length in its source, a cue's length on the timeline.
  */
 export function readingSpeedIssues(doc: ProjectDocument, variantId: string, limits: Record<string, number>): { id: string; cps: number; limit: number }[] {
-  const v = doc.variants?.[variantId];
+  const v = own(doc.variants, variantId);
   const lang = v?.language ?? v?.translation?.to;
   if (!v || !lang) return [];
   const limit = limits[lang] ?? limits[lang.split('-')[0]!];
