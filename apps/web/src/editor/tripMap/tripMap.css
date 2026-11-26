@@ -1,0 +1,30 @@
+/* «מפת טיול» dialog (wave 8 tripmap W3). Logical properties only: the chrome is RTL in Hebrew; the map canvas has no direction. */
+.pf-trip-body { display: flex; flex-direction: column; gap: 14px; }
+.pf-trip-h { display: block; font-weight: 600; margin-block-end: 4px; }
+.pf-trip-note { margin: 4px 0; font-size: 0.9em; }
+.pf-trip-input { min-inline-size: 0; inline-size: 100%; min-block-size: 32px; padding-inline: 8px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); color: var(--pf-text); font: inherit; }
+.pf-trip-input[aria-invalid='true'] { border-color: var(--pf-danger, currentColor); }
+.pf-trip-short { inline-size: 7ch; }
+.pf-trip-search { position: relative; }
+.pf-trip-list { position: absolute; inset-inline: 0; z-index: 2; margin: 2px 0 0; padding: 0; list-style: none; max-block-size: 260px; overflow: auto; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface); }
+.pf-trip-list[hidden] { display: none; }
+.pf-trip-list li { padding: 6px 10px; cursor: pointer; }
+.pf-trip-list li.is-active, .pf-trip-list li:hover { background: var(--pf-surface-2); outline: 1px solid var(--pf-frame); outline-offset: -1px; }
+.pf-trip-stops { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pf-trip-mode { padding-block: 2px; padding-inline-start: 28px; }
+.pf-trip-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto auto auto; align-items: center; gap: 6px; }
+.pf-trip-xy { grid-column: 2 / -1; font-size: 0.85em; }
+.pf-trip-ib { display: inline-flex; align-items: center; justify-content: center; inline-size: 32px; block-size: 32px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); color: var(--pf-text); cursor: pointer; }
+.pf-trip-ib[aria-pressed='true'] { background: var(--pf-frame); color: var(--pf-on-frame, #fff); }
+.pf-trip-ib:disabled { opacity: 0.4; cursor: not-allowed; }
+.pf-trip-ib:focus-visible, .pf-trip-pick:focus-visible { outline: 2px solid var(--pf-frame); outline-offset: 2px; }
+.pf-trip-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.pf-trip-check { display: inline-flex; align-items: center; gap: 6px; }
+.pf-trip-picker { border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); padding: 10px; }
+.pf-trip-pick { position: relative; inline-size: 100%; max-inline-size: 640px; aspect-ratio: 16 / 9; direction: ltr; background: #000; }
+.pf-trip-canvas { inline-size: 100%; block-size: 100%; display: block; cursor: crosshair; }
+.pf-trip-cross { position: absolute; inline-size: 22px; block-size: 22px; margin: -11px 0 0 -11px; pointer-events: none; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 2px #000; }
+.pf-trip-pickbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pf-trip-error { color: var(--pf-danger, inherit); font-weight: 600; }
+.pf-trip-problems { margin: 0; padding-inline-start: 18px; }
+.pf-trip-honest p { margin: 2px 0; font-size: 0.85em; }
