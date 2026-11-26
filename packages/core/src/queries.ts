@@ -2,6 +2,7 @@ import { pearlsSummary } from './sourceRanges.ts';
 import { sequenceList } from './sequences.ts';
 import * as T from '@pulseframe/time';
 import { drawnSummary } from './drawn.ts';
+import { livingPictures } from './living.ts';
 import type { Asset, MediaClip, ProjectDocument } from './schema.ts';
 import { clipEnd, sequenceDuration } from './validate.ts';
 import { timelineMarkers } from './cleanup.ts';
@@ -98,6 +99,8 @@ export function summarize(doc: ProjectDocument) {
     // marked ranges («פנינים», wave 7): counts only, and only when the project has any (no label ever: labels are family notes)
     ...(doc.sourceRanges ? { pearls: pearlsSummary(doc) } : {}),
     events: Object.values(doc.events ?? {}).map((e) => { const shown = eventDisplayName(doc, e, 'en'); return { id: e.id, name: e.name, shownAs: shown.name, nameKind: shown.kind, files: e.assetIds.length, afterSunset: e.afterSunset, edited: e.origin.edited }; }),
+    // «תמונה חיה» (wave 8 living): one line per living picture of the main edit, only when there is one
+    ...livingPictures(doc),
   };
 }
 

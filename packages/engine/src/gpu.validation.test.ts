@@ -672,7 +672,9 @@ describe('static WGSL check of the passes (not a compiler: see checkWgsl)', () =
     for (const [type, fx] of Object.entries(g.GPU_EFFECTS)) {
       const before = fake.shaderModules.length;
       const strip = { key: `k-${type}`, size: 2, width: 4, height: 2, data: new Uint8Array(4 * 2 * 4) };
-      await g.gpuEffect(type, fx.lut ? { [fx.lut]: 'a1' } : {}, picture, fakeContext().ctx, { ...env, luts: new Map([['a1', strip]]) });
+      // a depth pass (wave 8 living) is given a depth strip and the placed box, as a table pass is given its table
+      const depth = { key: `depth:k-${type}`, width: 4, height: 2, data: new Uint8Array(4 * 2 * 4) };
+      await g.gpuEffect(type, fx.lut ? { [fx.lut]: 'a1' } : {}, picture, fakeContext().ctx, { ...env, luts: new Map([['a1', strip]]), ...(fx.depth ? { depth, box: { cx: env.width / 2, cy: env.height / 2, w: env.width, h: env.height, rotation: 0, scale: 1 } } : {}) });
       const code = fake.shaderModules.slice(before).find((c) => c.includes('fn effect('));
       expect(code, type).toBeDefined();
       expect(() => checkWgsl(code!), type).not.toThrow();

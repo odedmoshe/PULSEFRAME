@@ -10,7 +10,7 @@ import {
   adjustmentRefusal, applyTransaction, CALM_OFF_EFFECTS, ClipDepthSchema, createProject, curveShape, depthGridSize, depthKey, depthProblems, describeCatalog,
   EFFECTS, findClip, findEffect, GPU_EFFECT_IDS, LIVING_BUILT, LIVING_EFFECT, LIVING_MAX_RATE, LIVING_MAX_SHIFT, LIVING_PEAK_SLOPE, LIVING_SPAN,
   livingComfort, livingLongEnough, livingMaxAmount, livingSteps, livingUnavailable, MAX_DEPTH_NUMBERS, NOT_ANIMATABLE, OpError, opOnlyEffect,
-  animatableParams, v1Shape, validateProject, type ClipDepth, type EffectInstance, type MediaClip, type OpCall, type ProjectDocument,
+  animatableParams, depthGrid, diffEntities, restoreEntities, v1Shape, validateProject, type ClipDepth, type EffectInstance, type MediaClip, type OpCall, type ProjectDocument,
 } from './index.ts';
 import { interpret } from './commandBar/index.ts';
 import { DEPTH, f, livingDoc, R, refused, tx, withLiving } from './living.testFixture.ts';
@@ -117,17 +117,130 @@ describe('set_clip_depth (lead-built) and set_living_picture (W1)', () => {
     const e = refused(withLiving(s.doc, s.clip), [{ op: 'set_clip_depth', args: { clipId: s.clip, depth: null } }]);
     expect([e.code, why(e), e.message]).toEqual(['incompatible', 'living_needs_depth', 'remove the living picture first, then its depth']);
   });
-  it('set_living_picture refuses notBuilt and changes nothing until W1 builds it', () => {
+  it('set_living_picture is built (LIVING_BUILT): the op no longer refuses notBuilt', () => {
     const s = livingDoc();
-    expect(LIVING_BUILT).toBe(false);
-    const e = refused(s.doc, [{ op: 'set_living_picture', args: { clipId: s.clip } }]);
-    expect([e.code, why(e)]).toEqual(['unknown_op', 'living_not_built']);
+    expect(LIVING_BUILT).toBe(true);
+    expect(tx(s.doc, [{ op: 'set_living_picture', args: { clipId: s.clip } }], false).results[0]!.output).toMatchObject({ move: 'push', amount: 0.5, maxAmount: 1, replacedMotion: [] });
   });
-  it.todo('W1 set_living_picture: refusals in the header order (notPhoto, rotated, tooShort, needsDepth, depthInvalid, tooFast with max = livingMaxAmount, 16 effects); remove keeps the depth');
-  it.todo('W1 set_living_picture: one transaction writes the depth, the instance and travel keys 0 → 1 at frame-aligned clip-local times; one undo restores the clip exactly (entity diff empty)');
-  it.todo('W1 set_living_picture: replaces a Ken Burns or pan move (motion.move.*) in the same transaction and lists it in output.replacedMotion (C3); an entrance, an exit, a loop and hand keys stay');
-  it.todo('W1 set_living_picture on a clip that has a living picture updates that one (at most one per clip)');
-  it.todo('W1 depthGrid: golden SHA-256 of the ramp, the flat base with one dab, and 64 strokes at the caps; integer only (same bytes twice)');
+  it('W1 set_living_picture: refusals in the header order (notPhoto, rotated, tooShort, needsDepth, depthInvalid, tooFast with max = livingMaxAmount, 16 effects); remove keeps the depth', () => {
+    const s = livingDoc();
+    const live = (args: Record<string, unknown>, doc: ProjectDocument = s.doc) => refused(doc, [{ op: 'set_living_picture', args: { clipId: s.clip, ...args } }]);
+    expect(refused(s.doc, [{ op: 'set_living_picture', args: { clipId: 'clp_none' } }]).code).toBe('not_found');
+    expect(why(refused(s.doc, [{ op: 'set_living_picture', args: { clipId: s.video, depth: DEPTH } }]))).toBe('living_not_photo');
+    // rotated comes before too short: a rotated 20-frame photo is refused rotated
+    const short = tx(s.doc, [{ op: 'trim_clip', args: { clipId: s.clip, edge: 'end', to: f(20) } }]).doc;
+    const rotShort = tx(short, [{ op: 'set_clip_transform', args: { clipId: s.clip, transform: { rotation: 5 } } }]).doc;
+    expect(why(live({}, rotShort))).toBe('living_rotated');
+    const rotKeys = tx(s.doc, [{ op: 'set_keyframe', args: { clipId: s.clip, property: 'rotation', time: f(10), value: 0 } }]).doc;
+    expect(why(live({}, rotKeys))).toBe('living_rotated');
+    expect(why(live({}, short))).toBe('living_too_short');
+    // too short comes before needs depth: clip2 has no depth
+    const short2 = tx(s.doc, [{ op: 'trim_clip', args: { clipId: s.clip2, edge: 'end', to: f(170) } }]).doc;
+    expect(why(refused(short2, [{ op: 'set_living_picture', args: { clipId: s.clip2 } }]))).toBe('living_too_short');
+    const nd = refused(s.doc, [{ op: 'set_living_picture', args: { clipId: s.clip2 } }]);
+    expect([nd.code, why(nd)]).toEqual(['incompatible', 'living_needs_depth']);
+    const bad = refused(s.doc, [{ op: 'set_living_picture', args: { clipId: s.clip2, depth: { ...DEPTH, strokes: [{ layer: 'near', size: 10, pts: [1, 2, 3] }] }, amount: 1, move: 'slide' } }]);
+    expect([bad.code, why(bad)]).toEqual(['invalid_args', 'depth_invalid']); // invalid depth before too fast
+    // too fast: a 2-second clip at amount 1 → max = livingMaxAmount (60 frames, push, ease-in-out: 0.43)
+    const two = tx(s.doc, [{ op: 'trim_clip', args: { clipId: s.clip, edge: 'end', to: f(60) } }]).doc;
+    const fast = live({ amount: 1 }, two);
+    expect([fast.code, why(fast), fast.details.max, fast.message]).toEqual(['out_of_bounds', 'living_too_fast', livingMaxAmount(60, R, 'push', 'ease-in-out'), 'this clip is too short for that amount; the highest amount that fits it: 0.43']);
+    expect(why(live({ amount: 0.6, move: 'slide' }))).toBe('living_too_fast'); // 150 frames: slide fits 0.55
+    expect(live({ amount: 1, curve: 'gentle' }, two).details.max).toBe(livingMaxAmount(60, R, 'push', 'gentle'));
+    // the default amount is lowered to the cap, never refused
+    expect(tx(two, [{ op: 'set_living_picture', args: { clipId: s.clip } }], false).results[0]!.output).toMatchObject({ amount: 0.43, maxAmount: 0.43 });
+    // 16 effects: add_effect's sentence
+    let full = s.doc;
+    for (let i = 0; i < 16; i++) full = tx(full, [{ op: 'add_effect', args: { clipId: s.clip, type: 'blur.gaussian' } }]).doc;
+    expect(live({}, full).message).toBe('a clip can carry at most 16 effects');
+    // remove: drops the instance and its keys, keeps the depth; with none there it changes nothing
+    const on = tx(s.doc, [{ op: 'set_living_picture', args: { clipId: s.clip } }], false).doc;
+    const off = tx(on, [{ op: 'set_living_picture', args: { clipId: s.clip, remove: true } }], false);
+    const c = findClip(off.doc, s.clip)!.clip as MediaClip;
+    expect([c.effects, c.depth]).toEqual([undefined, DEPTH]);
+    expect(tx(s.doc, [{ op: 'set_living_picture', args: { clipId: s.clip, remove: true } }], false).results[0]!.affectedIds).toEqual([]);
+    // remove is not refused on a rotated or short clip (nothing else is checked)
+    expect(tx(tx(on, [{ op: 'set_clip_transform', args: { clipId: s.clip, transform: { rotation: 5 } } }]).doc, [{ op: 'set_living_picture', args: { clipId: s.clip, remove: true } }], false).doc).toBeTruthy();
+  });
+  it('W1 set_living_picture: one transaction writes the depth, the instance and travel keys 0 → 1 at frame-aligned clip-local times; one undo restores the clip exactly (entity diff empty)', () => {
+    const s = livingDoc();
+    const flat: ClipDepth = { v: 1, base: { kind: 'flat' }, strokes: [{ layer: 'near', size: 200, pts: [500, 500] }] };
+    const r = tx(s.doc, [{ op: 'set_living_picture', args: { clipId: s.clip2, depth: flat, move: 'slide', amount: 0.5, curve: 'linear' } }], false);
+    const c = findClip(r.doc, s.clip2)!.clip as MediaClip;
+    expect(c.depth).toEqual(flat);
+    expect(c.effects!.length).toBe(1);
+    const fx = c.effects![0]!;
+    expect([fx.type, fx.enabled, fx.params]).toEqual([LIVING_EFFECT, true, { move: 'slide', amount: 0.5, travel: 0 }]);
+    expect(fx.keyframes!.travel).toEqual([{ time: T.frameTime(0, R), value: 0, easing: 'linear' }, { time: T.frameTime(149, R), value: 1, easing: 'linear' }]);
+    expect(r.results[0]!.output).toEqual({ effectId: fx.id, move: 'slide', amount: 0.5, maxAmount: livingMaxAmount(150, R, 'slide', 'linear'), replacedMotion: [] });
+    expect(livingComfort(fx, 150, R).ok).toBe(true);
+    expect(validateProject(r.doc)).toEqual([]);
+    const changes = diffEntities(s.doc, r.doc);
+    expect(changes.map((x) => x.id)).toEqual([s.clip2]);
+    const back = structuredClone(r.doc);
+    restoreEntities(back, changes.map((x) => ({ id: x.id, state: x.before })));
+    expect(diffEntities(s.doc, back)).toEqual([]);
+  });
+  it('W1 set_living_picture: replaces a Ken Burns or pan move (motion.move.*) in the same transaction and lists it in output.replacedMotion (C3); an entrance, an exit, a loop and hand keys stay', () => {
+    const s = livingDoc();
+    const live = (doc: ProjectDocument) => tx(doc, [{ op: 'set_living_picture', args: { clipId: s.clip } }], false);
+    for (const [presetId, amount, props] of [['motion.move.ken-burns-in', undefined, ['scale']], ['motion.move.ken-burns-out', 0.4, ['scale']], ['motion.move.pan-left', 0.7, ['scale', 'x']], ['motion.move.push-in-tilt', 0.5, ['scale', 'rotation']]] as const) {
+      const kb = tx(s.doc, [{ op: 'apply_motion_preset', args: { clipId: s.clip, presetId, ...(amount !== undefined ? { amount } : {}) } }]).doc;
+      const startScale = findClip(kb, s.clip)!.clip.keyframes!.scale![0]!.value;
+      const r = live(kb);
+      expect(r.results[0]!.output!.replacedMotion, presetId).toEqual([presetId]);
+      const c = findClip(r.doc, s.clip)!.clip;
+      expect(c.keyframes, presetId).toBeUndefined();
+      expect(c.transform.scale, presetId).toBeCloseTo(startScale, 12); // the value at the clip start stays
+      for (const p of props) expect(c.transform[p], `${presetId} ${p}`).toBeCloseTo(findClip(kb, s.clip)!.clip.keyframes![p]![0]!.value, 12);
+      // one undo brings the move back
+      const back = structuredClone(r.doc);
+      restoreEntities(back, diffEntities(kb, r.doc).map((x) => ({ id: x.id, state: x.before })));
+      expect(diffEntities(kb, back)).toEqual([]);
+    }
+    // a move that starts tilted (pull-back-tilt starts at 2°) leaves the clip rotated: refused, nothing changed
+    const tilt = tx(s.doc, [{ op: 'apply_motion_preset', args: { clipId: s.clip, presetId: 'motion.move.pull-back-tilt' } }]).doc;
+    expect(why(refused(tilt, [{ op: 'set_living_picture', args: { clipId: s.clip } }]))).toBe('living_rotated');
+    // kept: an entrance, an exit, a loop, hand keys, a move made for another length (the clip was trimmed after it)
+    const keep: OpCall[][] = [
+      [{ op: 'apply_motion_preset', args: { clipId: s.clip, presetId: 'motion.in.zoom-in' } }],
+      [{ op: 'apply_motion_preset', args: { clipId: s.clip, presetId: 'motion.out.fade' } }],
+      [{ op: 'apply_motion_preset', args: { clipId: s.clip, presetId: 'motion.loop.breathe' } }],
+      [{ op: 'set_keyframe', args: { clipId: s.clip, property: 'scale', time: f(0), value: 1 } }, { op: 'set_keyframe', args: { clipId: s.clip, property: 'scale', time: f(150), value: 1.18 } }],
+      [{ op: 'apply_motion_preset', args: { clipId: s.clip, presetId: 'motion.move.ken-burns-in' } }, { op: 'trim_clip', args: { clipId: s.clip, edge: 'end', to: f(120) } }],
+      [{ op: 'apply_motion_preset', args: { clipId: s.clip, presetId: 'motion.move.ken-burns-in' } }, { op: 'set_keyframe', args: { clipId: s.clip, property: 'scale', time: f(75), value: 1.05 } }],
+    ];
+    for (const ops of keep) {
+      const before = tx(s.doc, ops).doc;
+      const r = live(before);
+      expect(r.results[0]!.output!.replacedMotion, JSON.stringify(ops)).toEqual([]);
+      expect(findClip(r.doc, s.clip)!.clip.keyframes, JSON.stringify(ops)).toEqual(findClip(before, s.clip)!.clip.keyframes);
+    }
+    // the hand-key twin of Ken Burns is the same keys: recognised only because they ARE the preset's keys (same easing)
+    const twin = tx(s.doc, [{ op: 'replace_clip_keyframes', args: { clipId: s.clip, property: 'scale', keys: [{ time: f(0), value: 1, easing: 'ease-in-out' }, { time: f(150), value: 1.18, easing: 'linear' }] } }]).doc;
+    expect(live(twin).results[0]!.output!.replacedMotion).toEqual(['motion.move.ken-burns-in']);
+  });
+  it('W1 set_living_picture on a clip that has a living picture updates that one (at most one per clip)', () => {
+    const s = livingDoc();
+    const a = tx(s.doc, [{ op: 'set_living_picture', args: { clipId: s.clip, move: 'slide', amount: 0.3, curve: 'gentle' } }], false);
+    const id = a.results[0]!.output!.effectId;
+    const d1 = tx(a.doc, [{ op: 'add_effect', args: { clipId: s.clip, type: 'blur.gaussian' } }]).doc;
+    const b = tx(d1, [{ op: 'set_living_picture', args: { clipId: s.clip, amount: 0.4 } }], false);
+    const c = findClip(b.doc, s.clip)!.clip;
+    expect(c.effects!.map((e) => e.type)).toEqual([LIVING_EFFECT, 'blur.gaussian']); // same place, same id
+    expect(c.effects![0]!.id).toBe(id);
+    expect(c.effects![0]!.params).toMatchObject({ move: 'slide', amount: 0.4 }); // the move it had is kept
+    expect(c.effects![0]!.keyframes!.travel![0]!.easing).toBe('gentle'); // and its curve
+    // a bypassed one is switched on again
+    const off = tx(b.doc, [{ op: 'update_effect', args: { clipId: s.clip, effectId: id, enabled: false } }]).doc;
+    const on = tx(off, [{ op: 'set_living_picture', args: { clipId: s.clip, move: 'push' } }], false);
+    const fx = findClip(on.doc, s.clip)!.clip.effects!.filter((e) => e.type === LIVING_EFFECT);
+    expect(fx.map((e) => [e.id, e.enabled, e.params.move, e.params.amount])).toEqual([[id, true, 'push', 0.4]]);
+    expect(validateProject(on.doc)).toEqual([]);
+  });
+  it('W1 depthGrid: golden SHA-256 of the ramp, the flat base with one dab, and 64 strokes at the caps; integer only (same bytes twice) — depthGrid.test.ts', () => {
+    expect(depthGrid(DEPTH, { width: 640, height: 360 }).data.length).toBe(256 * 144);
+  });
 });
 
 describe('every existing path that adds or updates effects (verifier C4, C5, C6)', () => {

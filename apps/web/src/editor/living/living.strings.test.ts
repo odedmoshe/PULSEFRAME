@@ -27,3 +27,25 @@ describe('living strings (seed)', () => {
     }
   });
 });
+
+describe('living strings (integration): every key the surfaces ask for is in the i18n dictionary, and the reasons a living picture is not shown are worded', () => {
+  it('every living./depth. key used by the editor surfaces is a dictionary key in both languages (no local strings)', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const dir = path.resolve(import.meta.dirname, '..');
+    const files = [...fs.readdirSync(path.join(dir, 'living')).map((f) => path.join(dir, 'living', f)), path.join(dir, 'craft', 'PasteAttributesDialog.tsx'), path.join(dir, 'InspectorObject.tsx')].filter((f) => /\.tsx?$/.test(f) && !/\.test\./.test(f));
+    const used = new Set<string>();
+    for (const f of files) for (const m of fs.readFileSync(f, 'utf8').matchAll(/\(\s*'((?:living|depth)\.[A-Za-z_.]+)'/g)) used.add(m[1]!);
+    expect(used.size).toBeGreaterThan(20);
+    expect([...used].filter((k) => !Object.hasOwn(LIVING_HE, k) || !Object.hasOwn(LIVING_EN, k)).sort()).toEqual([]);
+  });
+  it('livingReasonText: each reason the compositor gives is said in the interface language, with the next step', async () => {
+    const { LIVING_UNAVAILABLE_WHY } = await import('@pulseframe/engine');
+    const { livingReasonText } = await import('./living.strings.ts');
+    expect(livingReasonText(LIVING_UNAVAILABLE_WHY.no_provider, 'he')).toBe('אין כרטיס מסך זמין, ולכן התמונה החיה לא מוצגת. פתחו את העורך בדפדפן שתומך ב־WebGPU');
+    expect(livingReasonText('the drawn depth could not be made: grid too large', 'he')).toBe('לא הצלחנו להכין את העומק שצויר, ולכן התמונה החיה לא מוצגת. ציירו את העומק שוב («ציירו עומק»)');
+    expect(livingReasonText(LIVING_UNAVAILABLE_WHY.no_depth, 'he')).toBe(LIVING_HE['living.unavailable.no_depth']);
+    expect(livingReasonText(LIVING_UNAVAILABLE_WHY.rotated, 'en')).toBe(LIVING_EN['living.unavailable.rotated']);
+    expect(livingReasonText('colour table x was not supplied to this view', 'he')).toBe('colour table x was not supplied to this view'); // not a living reason: unchanged
+  });
+});

@@ -18,8 +18,10 @@ import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulse
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
 import { assembleChecks, explainFindings, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type ExportFinding, type PictureChecks, type SizeFitFault, type SizeFitManifest, type SizeFitOutput, type SoundChecks } from '@pulseframe/core';
 import { cropFitsPaper, printFit, STILL_EXCLUSIVE_OPTIONS, STILL_EXPORT_BUILT, STILL_TRIED_MAX_PIXELS, stillDocument, STILLS_REFUSALS, StillExportSchema, StillsRefusal, sourceTimeOfFrame, type Asset, type StillCrop, type StillOutput } from '@pulseframe/core';
+import { livingUnavailable } from '@pulseframe/core';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, OUTPUT_WARNINGS, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
+import { LIVING_UNAVAILABLE_WHY } from '@pulseframe/engine';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, PictureCheck, soundEnd, type AudioPlan, type FlashCells, type PlannedAudioClip } from '@pulseframe/engine';
 import { mixRoomBytes, renderMix, type MixResult } from './audiomix.ts';
 import { limiter } from './analysis.ts';
@@ -228,6 +230,11 @@ export interface Manifest {
   /** «שמירת התמונה» (wave 8 cover): the picture the still's document draws 1:1 (the stored file's own pixels) and the crop cut from it afterwards (= output size). */
   still?: { source: { width: number; height: number }; crop: StillCrop };
 }
+/** The next step for a living picture that cannot be drawn (export plan blocker `living_unavailable`). */
+const LIVING_PLAN_HINT = {
+  no_depth: 'Draw the depth (set_clip_depth), or remove the living picture (set_living_picture with remove: true).',
+  rotated: 'Set the rotation back to 0 (set_clip_transform), or remove the living picture (set_living_picture with remove: true).',
+} as const;
 /** `hint`: the fix for this blocker when it has one of its own; the refusal then offers it instead of the generic advice. */
 export interface Blocker { code: string; message: string; ids: string[]; hint?: string; /** size_fit_too_small only: the smallest target that works for this film (bytes) */ minBytes?: number }
 
@@ -450,6 +457,10 @@ export class Exporter {
         if (next?.type === 'media' && next.transition) end = T.add(end, T.frameTime(next.transition.frames, frameRate));
         if (!T.lt(c.start, to) || !T.lt(from, end)) continue; // outside the exported range
         if (c.type === 'media') { used.set(c.assetId, (used.get(c.assetId) ?? 0) + 1); drawn.add(c.id); }
+        // «תמונה חיה» (wave 8 living, verifier C6): an enabled living picture that cannot be drawn (no drawn depth, a rotated picture)
+        // is never drawn flat; the export and the still stop here, naming the clip, instead of the render page refusing mid-way.
+        const livingWhy = c.type === 'media' && !tr.hidden ? livingUnavailable(c) : null;
+        if (livingWhy) blockers.push({ code: 'living_unavailable', message: `the living picture (depth.living) on clip ${c.id} cannot be drawn: ${LIVING_UNAVAILABLE_WHY[livingWhy]}`, ids: [c.id], hint: LIVING_PLAN_HINT[livingWhy] });
         for (const fx of c.effects ?? []) if (fx.enabled) {
           fxUsed.set(fx.type, (fxUsed.get(fx.type) ?? 0) + 1);
           // A colour table named by a colour-table effect is source material of the render like any clip's file.

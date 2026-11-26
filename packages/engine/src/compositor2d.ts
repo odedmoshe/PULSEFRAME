@@ -6,8 +6,8 @@
  * Text is shaped by the browser engine (HarfBuzz inside Chromium) using a bundled, pinned font file.
  */
 import * as T from '@pulseframe/time';
-import { contentTransform, expm, hasTextLook } from '@pulseframe/core';
-import { gpuTransition, isGpuTransition, lutIdOf, takeUnavailable, type DepthStrip, type LutStrip } from './gpu.ts';
+import { contentTransform, expm, hasTextLook, LIVING_EFFECT, livingUnavailable, type Clip } from '@pulseframe/core';
+import { gpuTransition, isGpuTransition, LIVING_UNAVAILABLE_WHY, lutIdOf, takeUnavailable, type DepthStrip, type LutStrip } from './gpu.ts';
 import { ADJUST_PASS_SLOT, type AdjustLayer, type DrawnLayer, type ImageLayer, type PictureLayer, type PlacedLayer, type RenderGraph, type TextLayer, type VideoLayer } from './evaluate.ts';
 import { drawnPainter, drawnUnready, noPainterId, prepareDrawn } from './drawnPainters.ts';
 import { visualOrder, wordDir, wrapWords, type CaptionLayer } from './captions.ts';
@@ -387,6 +387,15 @@ function paintDrawn(c: Ctx2D, g: RenderGraph, layer: DrawnLayer, note?: TextNote
   if (unready) { note?.(noPainterId(layer.drawn.kind), unready); return; }
   withTransform(c, g, layer, () => paint(c, layer.drawn, { width: g.width, height: g.height, clipTime: layer.clipTime, localFrame: layer.localFrame, fps: layer.fps, note: (id, why) => note?.(id, why) }));
 }
+/**
+ * Core livingUnavailable read on a layer (wave 8 living): a layer carries its clip's depth (evaluate) and its transform at this frame,
+ * not the clip's keys, so the clip is seen as it stands at this frame: rotation keys that give 0 here draw; any other rotation is
+ * refused. Only a photo layer can carry a depth. null = it can be drawn.
+ */
+export function livingLayerUnavailable(layer: { kind: string; transform: { rotation: number }; depth?: ImageLayer['depth'] }): 'no_depth' | 'rotated' | null {
+  const clip = { type: 'media', depth: layer.kind === 'image' ? layer.depth : undefined, transform: layer.transform, effects: [{ type: LIVING_EFFECT, enabled: true }] } as unknown as Clip;
+  return livingUnavailable(clip);
+}
 /** A layer with no picture to fetch: a title or a drawn overlay. */
 const unpictured = (l: { kind: string }): l is TextLayer | DrawnLayer => l.kind === 'text' || l.kind === 'drawn';
 /**
@@ -535,6 +544,20 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
       if (strip) luts.set(id, strip); else lutReasons.set(id, `colour table ${id} is not available`);
     } catch (e) { lutReasons.set(id, `colour table ${id} could not be loaded: ${String((e as Error)?.message ?? e).slice(0, 200)}`); }
   };
+  // «תמונה חיה» (wave 8 living): the drawn depth of every layer with an enabled living picture, asked for with the pictures and the
+  // colour tables. Core livingUnavailable decides first (no depth, rotated); a depth the view cannot give is null with its reason.
+  // Either way the pass is then reported unavailable with that reason (preview notice; still and export refuse), never drawn flat (C6).
+  const depths = new Map<number, { strip: DepthStrip | null; why?: string }>();
+  const loadDepth = async (i: number, layer: Exclude<RenderGraph['layers'][number], CaptionLayer | AdjustLayer>) => {
+    const why = livingLayerUnavailable(layer);
+    if (why) { depths.set(i, { strip: null, why: LIVING_UNAVAILABLE_WHY[why] }); return; }
+    if (!frames.depth) { depths.set(i, { strip: null, why: LIVING_UNAVAILABLE_WHY.no_provider }); return; }
+    try {
+      const strip = await frames.depth(layer as ImageLayer);
+      depths.set(i, strip ? { strip } : { strip: null, why: LIVING_UNAVAILABLE_WHY.no_depth });
+    } catch (e) { depths.set(i, { strip: null, why: `the drawn depth could not be made: ${String((e as Error)?.message ?? e).slice(0, 200)}` }); }
+  };
+  const depthRequests = g.layers.map((l, i) => (l.kind !== 'caption' && l.kind !== 'adjust' && (l.effects ?? []).some((e) => e.type === LIVING_EFFECT) ? loadDepth(i, l) : null));
   // Every picture of the frame is asked for at once: first each layer's own (in layer order), then the pictures of the time
   // taps (ADR-0011), so that when a frame needs more decoders than the pool may open, it is a time effect that is left out
   // (and reported), never a layer. A tap showing a source frame that an earlier layer or tap of this frame already asked
@@ -557,7 +580,7 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
   })));
   // drawn kinds that load data once per page (drawnPainters.ts prepareDrawn) are prepared with the pictures
   const drawnKinds = g.layers.flatMap((l) => [...(l.kind === 'drawn' ? [l.drawn.kind] : []), ...(l.kind !== 'caption' && l.kind !== 'adjust' && l.time ? l.time.taps.flatMap((t) => (t.layer.kind === 'drawn' ? [t.layer.drawn.kind] : [])) : [])]);
-  const [images, tapImages] = await Promise.all([Promise.all(requests), Promise.all(tapRequests.map((t) => (t ? Promise.all(t) : null))), Promise.all([...luts.keys()].map(loadLut)), drawnKinds.length ? prepareDrawn(drawnKinds) : null]);
+  const [images, tapImages] = await Promise.all([Promise.all(requests), Promise.all(tapRequests.map((t) => (t ? Promise.all(t) : null))), Promise.all([...luts.keys()].map(loadLut)), Promise.all(depthRequests), drawnKinds.length ? prepareDrawn(drawnKinds) : null]);
   /** Time effects of this frame that could not be drawn faithfully (a tap picture was missing), with why. */
   const timeLeftOut = new Map<string, string>();
   /** Title looks this browser could not draw (ADR-0012: 'text.tracking', 'text.glow', 'text.blur'), with why. */
@@ -595,7 +618,8 @@ async function drawPinned(ctx: Ctx2D, g: RenderGraph, frames: FrameProvider, opt
     if (!hasLook) { placeLayer(ctx, g, layer, img ?? null, textNote); continue; } // fast path: identical to drawing without the look system
     const t = layer.transform;
     const box: LayerBox = { cx: g.width / 2 + t.x * g.width, cy: g.height / 2 + t.y * g.height, w, h, rotation: t.rotation, scale: t.scale };
-    const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), local: layer.local ?? 0, box, beat: g.beat ?? null, luts, lutReasons };
+    const living = depths.get(i);
+    const env = { width: g.width, height: g.height, frameIndex: g.frameIndex, seconds: T.toSeconds(g.time), local: layer.local ?? 0, box, beat: g.beat ?? null, luts, lutReasons, ...(living ? { depth: living.strip, ...(living.why ? { depthReason: living.why } : {}) } : {}) };
     let buf = scratch(1, g.width, g.height);
     const taps = layer.time?.taps, tapImgs = tapImages[i];
     const lost = taps ? taps.findIndex((_, k) => tapWhy.has(`${i}:${k}`)) : -1;

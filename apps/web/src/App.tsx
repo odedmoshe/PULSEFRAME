@@ -26,6 +26,7 @@ import { Splitter } from './editor/Splitter.tsx';
 import { StageHeader } from './editor/StageHeader.tsx';
 import { StatusBar } from './editor/StatusBar.tsx';
 import { Transport } from './editor/Transport.tsx';
+import { livingReasonText } from './editor/living/living.strings.ts';
 import { isTyping, shortcutAllowed, spaceBelongsToControl, takenFromBrowser } from './editor/shortcutGate.ts';
 import { Editor, EditorContext, useEditorState } from './editor/store.ts';
 import { toastOf } from './editor/undoToast.ts';
@@ -163,7 +164,7 @@ function PreviewNotice() {
       </div>}
       {ids.length > 0 && <>
         <p>{NOTICE_STRINGS[state.lang].without}</p>
-        <ul>{ids.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong> — <bdi dir="ltr">{reasons[id]}</bdi></li>)}</ul>
+        <ul>{ids.map((id) => <li key={id}><strong><bdi>{findEffect(id)?.name[state.lang] ?? id}</bdi></strong> — {id === 'depth.living' ? <bdi>{livingReasonText(reasons[id]!, state.lang)}</bdi> : <bdi dir="ltr">{reasons[id]}</bdi>}</li>)}</ul>
       </>}
       {soundIds.length > 0 && <div data-testid="audio-fx-unavailable">
         <p>{t('sound.fx.unavailable.title')}</p>

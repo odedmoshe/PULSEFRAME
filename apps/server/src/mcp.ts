@@ -40,6 +40,7 @@ import { useLibraryItemFor } from './library/routes.ts';
 import { MADE_JOB_TYPE, MadeRenderRequestSchema } from '@pulseframe/core';
 import { createMadeService, type MadeService } from './made/routes.ts';
 import { notBuiltMadeRunner } from './made/contract.ts';
+import { findClip, livingPictures, livingSummaryLine, type ProjectDocument as LivingDoc } from '@pulseframe/core';
 import { SOURCE_JOB_TYPE, SourceImportBodySchema, SourceLinkBodySchema, SourceSearchQuerySchema, SEARCHABLE_SOURCES } from '@pulseframe/core';
 import { notBuiltSourcesRuntime, type SourcesRuntime } from './sources/contract.ts';
 import { NotesQuerySchema, ShotsQuerySchema, StartUnderstandBodySchema, UNDERSTAND_JOB_TYPE, UNDERSTAND_LIMITS } from '@pulseframe/core';
@@ -151,7 +152,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     server.registerTool('list_proposals', { description: 'Proposals on a project with their status (open, accepted, rejected, stale) and what they would change. The in-editor language assistant\'s proposals are the owner\'s own and are not listed for an agent credential.', inputSchema: z.object({ projectId: pid, status: z.enum(['open', 'accepted', 'rejected', 'stale']).optional() }), annotations: ro }, ({ projectId, status }) =>
       run('observe', () => { read(projectId); return { proposals: proposalsFor(principal, gov.listProposals(projectId, status)).map(({ ops: _o, changes, ...p }) => ({ ...p, changedIds: changes.map((c) => c.id) })) }; }));
     server.registerTool('describe_moment', { description: 'Everything active at one exact frame: picture/text layers with their source frame, and audio clips. Use before and after an edit to check its effect.', inputSchema: z.object({ projectId: pid, frameIndex: z.number().int().min(0), sequenceId: sid }), annotations: ro }, ({ projectId, frameIndex, sequenceId }) =>
-      run('observe', () => { const p = read(projectId); return { revision: p.revision, ...describeMoment(outputDoc(p.doc, { sequenceId }), T.frameTime(frameIndex, p.doc.settings.frameRate)), ...peopleNote(principal, p.doc) }; }));
+      run('observe', () => { const p = read(projectId); const doc = outputDoc(p.doc, { sequenceId }); return { revision: p.revision, ...withLivingLines(doc, describeMoment(doc, T.frameTime(frameIndex, p.doc.settings.frameRate))), ...peopleNote(principal, p.doc) }; }));
     server.registerTool('get_transcript', { description: 'Read the transcript of a media asset: phrases and words with ids and SOURCE times. Use the word ids with delete_transcript_range to cut speech by text, and phrase ids with correct_transcript.', inputSchema: z.object({ projectId: pid, assetId: z.string(),
       // paging (wave 8 autonomy C11): all optional; without them the whole transcript as before
       fromSeconds: z.number().min(0).optional().describe('Only phrases that end after this SOURCE second'), toSeconds: z.number().positive().optional().describe('Only phrases that start before this SOURCE second'),
@@ -485,4 +486,19 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
   return Object.assign(serve, { close, /** createApp hands over the assistant's job controls, so cancel_job and POST /jobs/:jobId/cancel share one cancel. */ bindAssistant(a: AssistantJobControls) { assistantJobs = a; },
     serveAs, forgetAs, /** index.ts binds W1's run service; routes and tools read it per request */ bindAgent(a: AgentRunService) { agentService = a; }, agentService: () => agentService,
     /** createApp hands over the made routes' service and the runner's cancel (made/routes.ts registerMadeRoutes) */ bindMade(service: MadeService, cancel?: (jobId: string, actor: string) => unknown) { madeBound = { service, ...(cancel ? { cancel } : {}) }; } });
+}
+
+/**
+ * «תמונה חיה» (wave 8 living): one line per living picture for agents — "living picture: push, amount 0.5; depth: drawn (3 strokes, …)"
+ * (core livingSummaryLine). get_summary shows them under `livingPictures` through core summarize (only when the main edit has one);
+ * describe_moment adds `living` to the layer of such a clip. A description of the document: nobody has looked at it.
+ */
+export const livingSummary = (doc: LivingDoc) => livingPictures(doc);
+export function withLivingLines<M extends { layers: readonly object[] }>(doc: LivingDoc, moment: M): M {
+  return { ...moment, layers: moment.layers.map((l) => {
+    const id = (l as { clipId?: unknown }).clipId;
+    const clip = typeof id === 'string' ? findClip(doc, id)?.clip : undefined;
+    const line = clip ? livingSummaryLine(clip) : null;
+    return line ? { ...l, living: line } : l;
+  }) };
 }

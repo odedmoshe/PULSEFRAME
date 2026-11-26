@@ -16,7 +16,7 @@
  */
 type C2D = OffscreenCanvasRenderingContext2D;
 export interface GpuStatus { available: boolean; reason: string; adapter: { vendor: string | null; architecture: string | null; software: boolean } | null }
-import type { BeatPosition, GradeCurves } from '@pulseframe/core';
+import type { BeatPosition, DepthGrid, GradeCurves } from '@pulseframe/core';
 /**
  * A colour table as a pass samples it: core's `lutStrip` (RGBA8, width = size*size, height = size; pixel (r + b*size, g) holds
  * entry (r, g, b)) plus `key`, which is unique per content (the asset's content hash) and names its texture on the device.
@@ -38,7 +38,7 @@ export interface EffectBox { cx: number; cy: number; w: number; h: number; rotat
  */
 export interface GpuEffectExtra { curves?: GradeCurves }
 /** The second texture a pass reads at binding 3: a colour table (color.lut), or the 256×1 table of a grade's curves (key = core gradeCurvesKey, rgba = gradeCurveTablesRgba). */
-type PassAux = { kind: 'lut'; strip: LutStrip } | { kind: 'curve'; key: string; rgba: Uint8Array };
+type PassAux = { kind: 'lut'; strip: LutStrip } | { kind: 'curve'; key: string; rgba: Uint8Array } | { kind: 'depth'; strip: DepthStrip };
 interface EffectEnv {
   width: number; height: number;
   /**
@@ -90,6 +90,7 @@ export function smoothNoise(seed: number, t: number): number {
  * frame height) at a moment. The shader only applies them, so the picture can be checked against these numbers.
  */
 import { BEAT_WINDOW_SECONDS, GRADE_CURVE_TABLE_SIZE, MAX_GRADE_CURVE_TEXTURES } from '@pulseframe/core';
+import { depthGridSize, LIVING_FOCUS, LIVING_MAX_SHIFT, livingMoveOf, livingSteps } from '@pulseframe/core';
 /**
  * For an effect set to follow the music: how far the moment is into the current hit (`phase`: 0 on the hit, rising to 1
  * just before the next), the seconds between the two hits (`period`) and the seconds since the hit (`since`). Null when
@@ -660,6 +661,59 @@ export const GPU_EFFECTS: Record<string, GpuEffect> = {
       let o = mix(c, clamp(crt, vec3f(0.0), vec3f(1.0)), P.b.x);
       return vec4f(o * s.a * inside, mix(s0.a, s.a, inside));`,
   },
+  // «תמונה חיה» (wave 8 living; living-plan §4.1 as corrected by living-verify C2, C7, C14 e): a still photo moved in depth by the
+  // owner's drawn nearness (env.depth, binding 3). livingModel below is the same arithmetic in JavaScript (its proof model).
+  // Twelve numbers (livingParams): a = picture centre and 1/half-size in uv; b = the visible rectangle (picture ∩ frame, inset) in
+  // picture-local units; c = (slide: the horizontal shift, push: the zoom; focus f; K steps; overscan S). The move is told by f:
+  // push keeps the far plane still (f = 0), slide turns about the middle (f = 0.5), core LIVING_FOCUS.
+  // For every output pixel q it solves s = m(q − s·d), m = nearness − f, by K samples of s from the largest down, stopping at the
+  // first crossing: the nearest surface wins. A smooth crossing is refined linearly; a jump in nearness (a depth edge, a gap that
+  // opens) takes the far side, so the background is stretched across the gap; nothing is invented there.
+  // Privacy regions are drawn before effects (look.ts, compositor2d.ts drawPinned; verifier C14 f): this pass only moves pixels
+  // that are already hidden, it never brings back what a region covers.
+  'depth.living': {
+    depth: true,
+    wide: true,
+    params: (p, env) => livingParams(p, env),
+    wgsl: `
+      let s0 = textureSampleLevel(src, smp, uv, 0.0);
+      let hs = vec2f(1.0) / P.a.zw;
+      let q0 = (uv - P.a.xy) / hs * 0.5 + vec2f(0.5);
+      // outside the picture's own rectangle: the layer as it is (the picture keeps its rectangle)
+      if (q0.x < 0.0 || q0.x > 1.0 || q0.y < 0.0 || q0.y > 1.0 || s0.a <= 0.0) { return s0; }
+      let lo = P.b.xy;
+      let hi = P.b.zw;
+      let cv = (lo + hi) * 0.5;
+      let q = cv + (q0 - cv) / P.c.w;
+      let f = P.c.y;
+      var d = vec2f(P.c.x, 0.0);
+      if (f < 0.25) { d = (q - vec2f(0.5)) * P.c.x; }
+      let kn = i32(P.c.z);
+      let dk = 1.0 / f32(kn - 1);
+      var sHi = -f + f32(kn - 1) * dk;
+      var mHi = near(q - d * sHi) - f;
+      var s = sHi;
+      for (var k = kn - 2; k >= 0; k--) {
+        let sLo = -f + f32(k) * dk;
+        let mLo = near(q - d * sLo) - f;
+        let rLo = sLo - mLo;
+        if (rLo <= 0.0) {
+          let rHi = sHi - mHi;
+          if (abs(mHi - mLo) <= 2.0 * dk) {
+            var t = 0.0;
+            if (rHi - rLo > 0.0) { t = -rLo / (rHi - rLo); }
+            s = sLo + (sHi - sLo) * t;
+          } else { s = sHi; }
+          break;
+        }
+        sHi = sLo;
+        mHi = mLo;
+      }
+      let p = clamp(q - d * s, lo, hi);
+      let c = textureSampleLevel(src, smp, P.a.xy + (p - vec2f(0.5)) * 2.0 * hs, 0.0);
+      if (c.a <= 0.0) { return s0; }
+      return vec4f(c.rgb / c.a * s0.a, s0.a);`,
+  },
 };
 export const isGpuEffect = (type: string) => type in GPU_EFFECTS;
 /** The id of the colour table an effect instance names, or '' when it names none (or is not a table effect). */
@@ -944,6 +998,38 @@ const shaderOf = (body: string, aux: 'none' | 'lut' | 'curve' = 'none') => `${VE
   }
   // straight alpha out: the result is read back as ordinary image data
   @fragment fn f(i: V) -> @location(0) vec4f { let c = effect(i.uv); if (c.a <= 0.0) { return vec4f(0.0); } return vec4f(c.rgb / c.a, c.a); }`;
+/**
+ * The WGSL of a pass that reads a depth grid (GpuEffect.depth; wave 8 living): twelve numbers (`P.c`), the grid at binding 3 as
+ * `depth`, and `near(p)`: the nearness at picture-local p by the pass's own f32 bilinear over textureLoad (never the hardware
+ * sampler, whose sub-texel weights are not specified), texel centres at (i + 0.5)/size, edges clamped. livingModel's `nearAt` is
+ * the same arithmetic. Its own template, so the text of every other pass (shaderOf) is unchanged.
+ */
+const depthShaderOf = (body: string) => `${VERTEX}
+  struct Params { a: vec4f, b: vec4f, c: vec4f }
+  @group(0) @binding(0) var src: texture_2d<f32>;
+  @group(0) @binding(1) var smp: sampler;
+  @group(0) @binding(2) var<uniform> P: Params;
+  @group(0) @binding(3) var depth: texture_2d<f32>;
+  fn near(p: vec2f) -> f32 {
+    let dim = vec2f(textureDimensions(depth));
+    let g = p * dim - vec2f(0.5);
+    let g0 = floor(g);
+    let t = g - g0;
+    let mx = vec2i(dim) - vec2i(1);
+    let i0 = clamp(vec2i(g0), vec2i(0), mx);
+    let i1 = clamp(vec2i(g0) + vec2i(1), vec2i(0), mx);
+    let n00 = textureLoad(depth, vec2i(i0.x, i0.y), 0).r;
+    let n10 = textureLoad(depth, vec2i(i1.x, i0.y), 0).r;
+    let n01 = textureLoad(depth, vec2i(i0.x, i1.y), 0).r;
+    let n11 = textureLoad(depth, vec2i(i1.x, i1.y), 0).r;
+    let top = n00 + (n10 - n00) * t.x;
+    let bot = n01 + (n11 - n01) * t.x;
+    return top + (bot - top) * t.y;
+  }
+  fn effect(uv: vec2f) -> vec4f {${body}
+  }
+  // straight alpha out: the result is read back as ordinary image data
+  @fragment fn f(i: V) -> @location(0) vec4f { let c = effect(i.uv); if (c.a <= 0.0) { return vec4f(0.0); } return vec4f(c.rgb / c.a, c.a); }`;
 /** The fixed shader of the adapter check, and the pixels it must give at (0,0) and (540,960) of a 1080x1920 target. */
 const REFERENCE = { wgsl: `${VERTEX}
   @fragment fn f(i: V) -> @location(0) vec4f { let p = i.pos; var c = vec3f(0); for (var k = 0; k < 16; k++) { c += 0.0625 * (0.5 + 0.5 * sin(vec3f(p.x, p.y, p.x + p.y) * 0.01 * f32(k + 1))); } return vec4f(c, 1); }`, first: [133, 133, 138, 255], middle: [116, 128, 133, 255] };
@@ -1022,6 +1108,7 @@ export function gpuEffect(type: string, params: Record<string, unknown>, src: Of
   if (!fx) { skipped.add(type); return Promise.resolve(false); }
   // A grade with curves (wave 8 grade): its own pipeline `fx:color.grade+curves`; a grade without curves runs the unchanged one below.
   if (type === 'color.grade' && extra?.curves) return gradeWithCurves(params, extra.curves, src, dst, env);
+  if (fx.depth) return livingPass(type, fx, params, src, dst, env); // «תמונה חיה» (wave 8 living): the layer's depth at binding 3
   if (!fx.lut) return runPass(type, `fx:${type}`, () => shaderOf(fx.wgsl), fx.params(params, env), src, null, dst, env);
   const id = lutIdOf(type, params);
   // No table chosen: the picture as it is. That is what the effect means with its default parameters, so it is not a missing effect.
@@ -1077,6 +1164,24 @@ function lutTexture(s: State, strip: LutStrip): any {
   let tex = s.luts.get(strip.key);
   if (tex) return tex;
   if (strip.width !== strip.size * strip.size || strip.height !== strip.size || strip.data.length !== strip.width * strip.height * 4) throw new Error('the colour table strip has the wrong dimensions');
+  if (s.luts.size >= MAX_LUT_TEXTURES) { for (const t of s.luts.values()) t.destroy(); s.luts.clear(); }
+  tex = s.device.createTexture({ size: [strip.width, strip.height], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ });
+  s.device.queue.writeTexture({ texture: tex }, strip.data, { bytesPerRow: strip.width * 4, rowsPerImage: strip.height }, [strip.width, strip.height]);
+  s.luts.set(strip.key, tex);
+  return tex;
+}
+/**
+ * A raw-bytes data texture (wave 8 living: a depth strip, RGBA8 with nearness in R), made by the colour table's path (writeTexture:
+ * no premultiplication, no colour conversion), kept in the same map as the colour tables and sharing their bound of
+ * MAX_LUT_TEXTURES. Its key starts with `depth:` (core depthKey), so it can never be a colour table's content hash (C14 g); a
+ * texture of that key with other dimensions is made again.
+ */
+function dataTexture(s: State, strip: DepthStrip): any {
+  let tex = s.luts.get(strip.key);
+  if (tex && tex.width === strip.width && tex.height === strip.height) return tex;
+  if (!strip.key.startsWith('depth:')) throw new Error('a depth strip key must start with depth:');
+  if (!(strip.width >= 1 && strip.height >= 1) || strip.data.length !== strip.width * strip.height * 4) throw new Error('the depth strip has the wrong dimensions');
+  if (tex) { tex.destroy(); s.luts.delete(strip.key); }
   if (s.luts.size >= MAX_LUT_TEXTURES) { for (const t of s.luts.values()) t.destroy(); s.luts.clear(); }
   tex = s.device.createTexture({ size: [strip.width, strip.height], format: 'rgba8unorm', usage: 0x02 /* COPY_DST */ | 0x04 /* TEXTURE_BINDING */ });
   s.device.queue.writeTexture({ texture: tex }, strip.data, { bytesPerRow: strip.width * 4, rowsPerImage: strip.height }, [strip.width, strip.height]);
@@ -1145,7 +1250,7 @@ async function runPass(type: string, key: string, shader: () => string, numbers:
       const p = new Float32Array(12);
       p.set(numbers.slice(0, 12));
       device.queue.writeBuffer(s.uniforms, 0, p);
-      const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : aux?.kind === 'lut' ? [{ binding: 3, resource: lutTexture(s, aux.strip).createView() }] : aux?.kind === 'curve' ? [{ binding: 3, resource: curveTexture(s, aux.key, aux.rgba).createView() }] : [])] });
+      const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: z.source.createView() }, { binding: 1, resource: s.sampler }, { binding: 2, resource: { buffer: s.uniforms } }, ...(second ? [{ binding: 3, resource: z.source2.createView() }] : aux?.kind === 'lut' ? [{ binding: 3, resource: lutTexture(s, aux.strip).createView() }] : aux?.kind === 'curve' ? [{ binding: 3, resource: curveTexture(s, aux.key, aux.rgba).createView() }] : aux?.kind === 'depth' ? [{ binding: 3, resource: dataTexture(s, aux.strip).createView() }] : [])] });
       const enc = device.createCommandEncoder();
       const pass = enc.beginRenderPass({ colorAttachments: [{ view: z.target.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] });
       pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.draw(3); pass.end();
@@ -1251,27 +1356,151 @@ export function pageTurnSource(s: number, p: number): { face: 'front' | 'back' |
   return top <= 1 ? { face: 'back', at: top } : { face: 'front', at: s };
 }
 
-// ---- depth.living («תמונה חיה», wave 8 living): the contract of the pass; bodies are W2's ----
-/** W2 sets this when the pass, its texture path and livingModel are built and match on the software adapter. */
-export const LIVING_PASS_BUILT: boolean = false;
+// ---- depth.living («תמונה חיה», wave 8 living): the pass's numbers, its geometry, its texture and its JavaScript model ----
+/**
+ * Set when the pass, its texture path and livingModel are built and the pass matched the model on the software adapter (W2: the
+ * WGSL compiled and the coordinate photo decoded to livingModel's sources, one run; see the W2 report). The editor's block needs it.
+ */
+export const LIVING_PASS_BUILT: boolean = true;
 export class LivingPassNotBuilt extends Error { readonly code = 'living_not_built'; constructor(readonly fn: string) { super(`${fn}: the living picture's pass is not built in this build yet`); } }
 /**
- * The visible rectangle of a placed picture in picture-local units q ∈ [0,1]² (verifier C2): the picture's rectangle cut to the
- * frame, inset half a depth texel; null when nothing of the picture is in the frame. Rotation ≠ 0 is not supported (cut: the
- * compositor reports such a clip unavailable, core livingUnavailable). The overscan S and the clamp of the sample point use it.
+ * Which way «גלישה הצידה» slides. A project stores no reading direction, and the editor reads right to left (Hebrew), so the end
+ * of reading is the LEFT: the view moves leftward, i.e. over the clip what is near moves to the right against what is far
+ * (d grows from −A to +A along +x; the output at q shows the picture from q − s·d). A later per-project direction flips this sign.
  */
-export function livingVisibleRect(box: EffectBox, frame: { width: number; height: number }, grid: { width: number; height: number }): { x0: number; y0: number; x1: number; y1: number } | null {
-  void box; void frame; void grid;
-  throw new LivingPassNotBuilt('livingVisibleRect');
+export const LIVING_SLIDE_SIGN = 1;
+/** Why a living picture is not drawn (English; the editor's words are i18n living.unavailable.*). Never drawn flat (C6). */
+export const LIVING_UNAVAILABLE_WHY = {
+  no_depth: 'The living picture has no drawn depth, so it is not shown. Draw the depth',
+  rotated: 'The picture is rotated, so the living picture is not shown. Set the rotation back to 0',
+  no_provider: 'this view cannot load a drawn depth, so the living picture is not shown',
+} as const;
+/** A core DepthGrid (one byte per cell, 255 = near) as the strip the pass samples: RGBA8, nearness in R, the rest 0. `key` must start with `depth:` (core depthKey). */
+export function depthStrip(grid: DepthGrid, key: string): DepthStrip {
+  if (!key.startsWith('depth:')) throw new Error('a depth strip key must start with depth:');
+  if (grid.data.length !== grid.width * grid.height) throw new Error('the depth grid has the wrong size');
+  const data = new Uint8Array(grid.width * grid.height * 4);
+  for (let i = 0; i < grid.data.length; i++) data[i * 4] = grid.data[i]!;
+  return { key, width: grid.width, height: grid.height, data };
 }
 /**
- * The JavaScript model of the pass (ADR-0008 decision 4; precedents crtMap, digicamTone): for an output pixel at frame uv, the
- * frame uv the pass samples the colour from, in the shader's arithmetic order with Math.fround, or null outside the picture (the pass
- * returns the layer's own pixel there). Same inputs as the pass: the twelve numbers of `params`, the grid (core depthGrid) and the
- * search of plan §4.1 as corrected (K from the grid, C7; iterate from the largest s down and stop at the first crossing; at a depth
- * edge take the far side). It matches the GPU within tolerance, not bit for bit (f32 on the device, C14 e).
+ * The visible rectangle of a placed picture in picture-local units q ∈ [0,1]² (verifier C2): the picture's rectangle cut to the
+ * frame, inset half a depth texel (and at least half an output pixel); null when nothing of the picture is in the frame, or when the
+ * picture is rotated (not supported: the compositor reports such a clip unavailable first, core livingUnavailable). The overscan S
+ * and the clamp of the sample point use it, so a photo larger than the frame (Ken Burns up to 1.18) never samples past the frame.
+ */
+export function livingVisibleRect(box: EffectBox, frame: { width: number; height: number }, grid: { width: number; height: number }): { x0: number; y0: number; x1: number; y1: number } | null {
+  if (box.rotation !== 0) return null;
+  const hw = box.w * box.scale, hh = box.h * box.scale;
+  if (!(hw > 0 && hh > 0) || !(grid.width >= 1 && grid.height >= 1)) return null;
+  const left = box.cx - hw / 2, top = box.cy - hh / 2;
+  const ix0 = Math.max(left, 0), ix1 = Math.min(left + hw, frame.width), iy0 = Math.max(top, 0), iy1 = Math.min(top + hh, frame.height);
+  const ex = Math.max(0.5 / grid.width, 0.5 / hw), ey = Math.max(0.5 / grid.height, 0.5 / hh);
+  const r = { x0: (ix0 - left) / hw + ex, x1: (ix1 - left) / hw - ex, y0: (iy0 - top) / hh + ey, y1: (iy1 - top) / hh - ey };
+  return r.x1 > r.x0 && r.y1 > r.y0 ? r : null;
+}
+/**
+ * The twelve numbers of the pass (GpuEffect.wide) for an instance's parameters (move, amount, travel at this frame) and the layer:
+ * a = (box centre in uv; 1/half-width, 1/half-height in uv), b = the visible rectangle (livingVisibleRect), c = (slide: the signed
+ * horizontal shift in picture-x units, push: the zoom; focus; K; overscan S). A = amount · LIVING_MAX_SHIFT of the frame height:
+ * slide d = A·(2u − 1) along x (LIVING_SLIDE_SIGN); push zoom = A·u / the picture's half-diagonal, so the corner moves by A·u.
+ * K = core livingSteps of the largest relative shift of the WHOLE move (u at its end) in depth-grid texels (C7): a ratio of picture
+ * sizes, so the same at every output size and constant over the clip; S likewise (the slide's largest excursion, max(f, 1−f)·A).
+ * Without a box or a grid (a caller that has none) the frame and core depthGridSize stand in, so the numbers are always defined.
+ */
+export function livingParams(p: Record<string, unknown>, env: Pick<EffectEnv, 'width' | 'height' | 'box' | 'depth'>): number[] {
+  const W = env.width, H = env.height;
+  const box: EffectBox = env.box ?? { cx: W / 2, cy: H / 2, w: W, h: H, rotation: 0, scale: 1 };
+  const grid = env.depth ?? depthGridSize({ width: box.w, height: box.h });
+  const move = livingMoveOf(p);
+  const amount = Math.min(1, Math.max(0, n(p.amount, 0.5))), u = Math.min(1, Math.max(0, n(p.travel, 0)));
+  const f = LIVING_FOCUS[move];
+  const hw = box.w * box.scale, hh = box.h * box.scale;
+  const A = amount * LIVING_MAX_SHIFT * H; // frame px
+  const vis = livingVisibleRect(box, { width: W, height: H }, grid) ?? { x0: 0, y0: 0, x1: 1, y1: 1 };
+  let c0: number, texels: number, S = 1;
+  if (move === 'slide') {
+    const full = A / hw; // picture-x units at |2u − 1| = 1
+    c0 = LIVING_SLIDE_SIGN * full * (2 * u - 1);
+    texels = full * grid.width;
+    const reach = Math.max(f, 1 - f) * full, wv = vis.x1 - vis.x0;
+    S = wv - 2 * reach > wv / 2 ? wv / (wv - 2 * reach) : 2;
+  } else {
+    const halfDiagonal = Math.hypot(hw, hh) / 2;
+    const zoomFull = A / halfDiagonal;
+    c0 = zoomFull * u;
+    texels = zoomFull * 0.5 * Math.hypot(grid.width, grid.height);
+    // push moves every point toward the picture's centre (p = c + (q − c)(1 − s·zoom), s ∈ [0, 1]): no overscan
+  }
+  return [box.cx / W, box.cy / H, W / (hw / 2), H / (hh / 2), vis.x0, vis.y0, vis.x1, vis.y1, c0, f, livingSteps(texels), S];
+}
+/** The last numbers the living pass sent (diagnostics for proof check 19 only; at most 64, cleared when read; nothing stored). */
+const livingSent: number[][] = [];
+export function takeLivingNumbers(): number[][] { return livingSent.splice(0); }
+(globalThis as { __pfLivingNumbers?: () => number[][] }).__pfLivingNumbers = takeLivingNumbers;
+function livingPass(type: string, fx: GpuEffect, params: Record<string, unknown>, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
+  const strip = env.depth ?? null, box = env.box;
+  const why = !box || box.rotation !== 0 ? LIVING_UNAVAILABLE_WHY.rotated : !strip ? env.depthReason ?? LIVING_UNAVAILABLE_WHY.no_depth : null;
+  if (why || !strip || !box) {
+    // as for a colour table that was not supplied: without an adapter the adapter is the reason given
+    if (state && !skippedWhy.has(type)) skippedWhy.set(type, why ?? LIVING_UNAVAILABLE_WHY.no_depth);
+    skipped.add(type);
+    return Promise.resolve(false);
+  }
+  // nothing of the picture is in the frame: there is nothing to move
+  if (!livingVisibleRect(box, env, strip)) { dst.drawImage(src, 0, 0); return Promise.resolve(true); }
+  const numbers = fx.params(params, env);
+  if (livingSent.length >= 64) livingSent.shift();
+  livingSent.push(numbers);
+  return runPass(type, `fx:${type}`, () => depthShaderOf(fx.wgsl), numbers, src, null, dst, env, { kind: 'depth', strip });
+}
+/** Nearness 0..1 at picture-local p: the pass's near() in f32 (bilinear over texel centres, edges clamped). */
+function nearAt(px: number, py: number, grid: { width: number; height: number; data: Uint8Array }): number {
+  const F = Math.fround, stride = grid.data.length === grid.width * grid.height * 4 ? 4 : 1;
+  const gx = F(F(px * grid.width) - 0.5), gy = F(F(py * grid.height) - 0.5);
+  const fx0 = Math.floor(gx), fy0 = Math.floor(gy);
+  const tx = F(gx - fx0), ty = F(gy - fy0);
+  const cl = (v: number, m: number) => Math.min(m, Math.max(0, v));
+  const x0 = cl(fx0, grid.width - 1), x1 = cl(fx0 + 1, grid.width - 1), y0 = cl(fy0, grid.height - 1), y1 = cl(fy0 + 1, grid.height - 1);
+  const at = (x: number, y: number) => F(grid.data[(y * grid.width + x) * stride]! / 255);
+  const n00 = at(x0, y0), n10 = at(x1, y0), n01 = at(x0, y1), n11 = at(x1, y1);
+  const top = F(n00 + F(F(n10 - n00) * tx)), bot = F(n01 + F(F(n11 - n01) * tx));
+  return F(top + F(F(bot - top) * ty));
+}
+/**
+ * The JavaScript model of the pass (ADR-0008 decision 4; precedents crtMap, digicamTone): for an output pixel at frame uv, the frame
+ * uv the pass samples the colour from, in the shader's arithmetic order with Math.fround, or null outside the picture (the pass
+ * returns the layer's own pixel there). Same inputs as the pass: the twelve numbers (livingParams) and the grid (core depthGrid,
+ * one byte per cell, or a DepthStrip's RGBA bytes). It matches the GPU within tolerance, not bit for bit (C14 e): at a depth edge
+ * the choice between the refined crossing and the far side can flip between adapters.
  */
 export function livingModel(uv: readonly [number, number], numbers: readonly number[], grid: { width: number; height: number; data: Uint8Array }): [number, number] | null {
-  void uv; void numbers; void grid;
-  throw new LivingPassNotBuilt('livingModel');
+  const F = Math.fround;
+  const [ax, ay, az, aw, bx0, by0, bx1, by1, cx, f, kf, S] = Array.from({ length: 12 }, (_, i) => F(numbers[i] ?? 0));
+  const hsx = F(1 / az!), hsy = F(1 / aw!);
+  const q0x = F(F(F(F(uv[0]) - ax!) / hsx) * 0.5 + 0.5), q0y = F(F(F(F(uv[1]) - ay!) / hsy) * 0.5 + 0.5);
+  if (q0x < 0 || q0x > 1 || q0y < 0 || q0y > 1) return null;
+  const cvx = F(F(bx0! + bx1!) * 0.5), cvy = F(F(by0! + by1!) * 0.5);
+  const qx = F(cvx + F(F(q0x - cvx) / S!)), qy = F(cvy + F(F(q0y - cvy) / S!));
+  let dx = cx!, dy = 0;
+  if (f! < 0.25) { dx = F(F(qx - 0.5) * cx!); dy = F(F(qy - 0.5) * cx!); }
+  const kn = Math.trunc(kf!);
+  const dk = F(1 / (kn - 1));
+  const m = (s: number) => F(nearAt(F(qx - F(dx * s)), F(qy - F(dy * s)), grid) - f!);
+  let sHi = F(-f! + F((kn - 1) * dk)), mHi = m(sHi), s = sHi;
+  for (let k = kn - 2; k >= 0; k--) {
+    const sLo = F(-f! + F(k * dk)), mLo = m(sLo), rLo = F(sLo - mLo);
+    if (rLo <= 0) {
+      const rHi = F(sHi - mHi);
+      if (Math.abs(F(mHi - mLo)) <= F(2 * dk)) {
+        let t = 0;
+        if (F(rHi - rLo) > 0) t = F(-rLo / F(rHi - rLo));
+        s = F(sLo + F(F(sHi - sLo) * t));
+      } else s = sHi;
+      break;
+    }
+    sHi = sLo; mHi = mLo;
+  }
+  const px = Math.min(bx1!, Math.max(bx0!, F(qx - F(dx * s)))), py = Math.min(by1!, Math.max(by0!, F(qy - F(dy * s))));
+  return [F(ax! + F(F(F(px - 0.5) * 2) * hsx)), F(ay! + F(F(F(py - 0.5) * 2) * hsy))];
 }

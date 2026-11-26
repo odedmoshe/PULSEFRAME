@@ -93,7 +93,8 @@ export interface VideoLayer extends LayerLook {
 /** A still picture. Same placement rules as video; one decoded image for the whole clip. */
 /**
  * `depth` (wave 8 living, core livingContract.ts): the clip's drawn depth, copied as stored, so the frame key (canonical JSON of the
- * graph) covers every stroke with no change to FrameInputs. Type only in the pre-pass; W2 copies it in evaluate (living-plan §3.4).
+ * graph) covers every stroke with no change to FrameInputs (barePicture copies it; absent when the clip has none, so every graph
+ * without a depth is unchanged).
  */
 export interface ImageLayer extends LayerLook { kind: 'image'; clipId: string; trackId: string; assetId: string; sourceWidth: number; sourceHeight: number; transform: Transform; depth?: ClipDepth }
 export interface TextLayer extends LayerLook { kind: 'text'; clipId: string; trackId: string; text: string; style: TextStyle; transform: Transform; /** Letter/word/line animation with where this frame is in the clip (seconds from its start, and the clip's length). */ animation?: TextAnimation & { local: number; total: number; fps: number } }
@@ -182,7 +183,7 @@ function barePicture(doc: ProjectDocument, track: Track, clip: Extract<Clip, { t
   if (!asset) return null;
   const sourceTime = pictureSourceAt(clip, time, T.frameTime(1, doc.settings.frameRate)); // a reversed clip mirrors the frame order here, for preview, stills and export alike
   if (asset.kind === 'image' && asset.image)
-    return { kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time) };
+    return { kind: 'image', clipId: clip.id, trackId: track.id, assetId: asset.id, sourceWidth: asset.image.width, sourceHeight: asset.image.height, transform: transformAt(clip, time), ...(clip.depth ? { depth: clip.depth } : {}) }; // «תמונה חיה»: the drawn depth as stored, so the frame key covers every stroke
   if (!asset.video) return null;
   const rate = asset.video.frameRate;
   // Frames are counted from the first picture in the file. When that picture does not sit at time 0, it is shown that many
