@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-26T07:18:52.891Z",
+  "ranAt": "2026-11-26T14:20:03.055Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -59,7 +59,7 @@
       "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
       "ok": true,
       "detail": {
-        "peakDbShown": -1
+        "peakDbShown": 0
       }
     },
     {
@@ -276,7 +276,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
         "keys": [
           [
             40,
@@ -344,9 +344,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 290,
-        "wantEnd": 284,
-        "gotEnd": 284,
+        "pictureEnd": 245,
+        "wantEnd": 239,
+        "gotEnd": 239,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.99,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
-        "back1": -0.98,
+        "back1": -0.87,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 0.99,
+        "playSpeed": 1.01,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.98,
+        "shuttleSpeed": 1.95,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_60376268720",
-          "clp_60376268721"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1"
         ],
         "afterAB": [
-          "clp_60376268720",
-          "clp_60376268721"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1"
         ],
         "afterAdd": [
-          "clp_60376268720",
-          "clp_60376268721",
-          "clp_60376268722"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1",
+          "clp_90b1f43f9b2"
         ],
         "midEscape": [
-          "clp_60376268721"
+          "clp_90b1f43f9b1"
         ],
         "afterEscape": [
-          "clp_60376268720",
-          "clp_60376268721",
-          "clp_60376268722"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1",
+          "clp_90b1f43f9b2"
         ],
         "afterEscapeUp": [
-          "clp_60376268720",
-          "clp_60376268721",
-          "clp_60376268722"
+          "clp_90b1f43f9b0",
+          "clp_90b1f43f9b1",
+          "clp_90b1f43f9b2"
         ]
       }
     },
@@ -615,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 16/1799",
+        "valueText": "עוקב קדימה 19/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -908,18 +908,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_60cec11c480",
-          "ast_e1a5314ab80",
-          "ast_92d448d86f0",
-          "ast_a6a8c2892a0",
-          "ast_fb4b5484a30"
+          "ast_49b3d56dec0",
+          "ast_d0d63c8bfd0",
+          "ast_b9b0d8ef1e0",
+          "ast_3c1c30947d0",
+          "ast_ee709cbe3c0"
         ],
         "order1": [
-          "ast_60cec11c480",
-          "ast_a6a8c2892a0",
-          "ast_e1a5314ab80",
-          "ast_92d448d86f0",
-          "ast_fb4b5484a30"
+          "ast_49b3d56dec0",
+          "ast_3c1c30947d0",
+          "ast_d0d63c8bfd0",
+          "ast_b9b0d8ef1e0",
+          "ast_ee709cbe3c0"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -943,7 +943,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-26T07:13:22.767Z",
+          "createdAt": "2026-11-26T14:07:43.331Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1138,7 +1138,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_b45ac5e9c20",
+        "victim": "clp_a3696f1b870",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1211,7 +1211,7 @@
         "statusText": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "want": "הפעימה בפריים 60 (⁦00:00:02:00⁩)",
         "statusRole": "status",
-        "describedBy": "_r_3d_",
+        "describedBy": "_r_3t_",
         "announced": 1,
         "onVelocity": "transition-velocity",
         "opt3": {
@@ -1263,8 +1263,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_a89f46c1d30",
-          "seq_a89f46c1d37"
+          "seq_2ebb7e8f770",
+          "seq_2ebb7e8f777"
         ],
         "revisions": 1,
         "transactions": [
@@ -1274,7 +1274,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_a89f46c1d30",
+          "seq": "seq_2ebb7e8f770",
           "selected": "true"
         }
       }
@@ -1283,8 +1283,8 @@
       "name": "shorts, the canvas of the active short is 720:1280 (9:16) within 1 px",
       "ok": true,
       "detail": {
-        "w": 308.25,
-        "h": 548
+        "w": 360,
+        "h": 640
       }
     },
     {
@@ -1305,9 +1305,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_a89f46c1d30"
+          "seq": "seq_2ebb7e8f770"
         },
-        "secondTab": "seq_a89f46c1d30",
+        "secondTab": "seq_2ebb7e8f770",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1328,37 +1328,37 @@
         "bar": [
           {
             "id": "workspace-pro",
-            "top": 10,
+            "top": 59,
             "checked": "false"
           },
           {
             "id": "workspace-color",
-            "top": 10,
+            "top": 59,
             "checked": "false"
           },
           {
             "id": "workspace-sound",
-            "top": 10,
+            "top": 59,
             "checked": "false"
           },
           {
             "id": "workspace-captions",
-            "top": 10,
+            "top": 59,
             "checked": "false"
           },
           {
             "id": "workspace-deliver",
-            "top": 10,
+            "top": 59,
             "checked": "false"
           },
           {
             "id": "workspace-shorts",
-            "top": 10,
+            "top": 59,
             "checked": "false"
           },
           {
             "id": "workspace-perform",
-            "top": 10,
+            "top": 59,
             "checked": "true"
           }
         ]
@@ -1612,7 +1612,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_ibdximLHpJU",
+          "id": "prj_3Eotm5YDtDs",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1622,7 +1622,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_Qr7jrCQCzfY",
+          "id": "prj_xHZzO9mUqME",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1809,11 +1809,11 @@
       "detail": {
         "planRows": [
           {
-            "id": "clp_0e3ec83ef40",
+            "id": "clp_3c11e0a08a0",
             "text": "send-quiet.wav · +9.1 dB"
           },
           {
-            "id": "clp_b8a749463a0",
+            "id": "clp_4251e10ad60",
             "text": "send-loud.wav · −9.1 dB"
           }
         ],
@@ -1826,11 +1826,11 @@
       "detail": {
         "resRows": [
           {
-            "id": "clp_0e3ec83ef40",
+            "id": "clp_3c11e0a08a0",
             "by": ""
           },
           {
-            "id": "clp_b8a749463a0",
+            "id": "clp_4251e10ad60",
             "by": ""
           }
         ],
@@ -1956,7 +1956,7 @@
       "ok": true,
       "detail": {
         "empty": 1,
-        "row": "גרסה לבדיקה 26.11.2026, 7:18 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
+        "row": "גרסה לבדיקה 26.11.2026, 14:19 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
       }
     },
     {
@@ -2045,14 +2045,14 @@
       "ok": true,
       "detail": {
         "first": [
-          "ast_1f747505cb0",
-          "ast_0db01578cd0",
-          "ast_b1c750420b0"
+          "ast_2751a064f60",
+          "ast_c039784e060",
+          "ast_555341c64b0"
         ],
         "moved": [
-          "ast_0db01578cd0",
-          "ast_1f747505cb0",
-          "ast_b1c750420b0"
+          "ast_c039784e060",
+          "ast_2751a064f60",
+          "ast_555341c64b0"
         ]
       }
     },
@@ -2137,7 +2137,7 @@
       "ok": true,
       "detail": {
         "n": 1,
-        "asset": "ast_86fea630a20",
+        "asset": "ast_534cdc17930",
         "start": "1/2",
         "end": "1/1",
         "sources": "transcript"

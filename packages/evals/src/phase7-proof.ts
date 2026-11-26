@@ -268,6 +268,8 @@ async function main() {
     const reordered = await until((c) => c.effects?.[0]?.type === 'color.grayscale');
     await page.locator('[data-testid=effect-row][data-effect-type="blur.gaussian"] [data-testid=effect-enabled]').click();
     const bypass = await until((c) => c.effects?.find((e: any) => e.type === 'blur.gaussian')?.enabled === false);
+    if ((await page.getByTestId('section-blend').getAttribute('data-open')) === 'false') await page.locator('[data-testid=section-blend] .pf-section-toggle').click(); // the blend card starts closed (wave 8D integration)
+    if (!(await page.getByTestId('blend-mode').isVisible())) await page.getByTestId('cc-adv-blend').click(); // the full list sits under «מתקדם» of the blend card (wave 8D P6)
     await page.getByTestId('blend-mode').selectOption('screen');
     await page.getByTestId('mask-enabled').click();
     await until((c) => !!c.mask);

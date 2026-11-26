@@ -60,8 +60,13 @@
 .pf-insp .insp-object { flex: 1 1 auto; min-block-size: 0; display: flex; flex-direction: column; }
 .pf-insp .insp-tabs { flex: none; margin: 0 var(--pf-sp-4) var(--pf-sp-2); gap: 0; }
 /* seven tabs in a 332px column: each is as wide as its own word, so no label is cut */
-.pf-insp .insp-tabs .pf-tab { flex: 1 1 auto; padding-inline: 3px; }
-.pf-insp .insp-tabs .pf-tab-label { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* a tab is never narrower than its word: when the eight do not fit the column the strip scrolls (no cut label, no ellipsis) */
+.pf-insp .insp-tabs { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.pf-insp .insp-tabs::-webkit-scrollbar { display: none; }
+.pf-insp .insp-tabs .pf-tab { flex: 1 0 auto; min-inline-size: auto; padding-inline: 3px; }
+.pf-insp .insp-tabs .pf-tab-label { max-inline-size: none; overflow: visible; text-overflow: clip; }
+/* the wide windows give the column its token width (--pf-inspector: 372 px from 1800 px), where the eight words fit side by side */
+@media (min-width: 1800px) { .app:has(> .inspector) { --pf-shell-inspector: var(--pf-inspector); } }
 .pf-insp .insp-tabpanel:not([hidden]) { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; padding: 0 var(--pf-sp-5) var(--pf-sp-5); scrollbar-width: thin; }
 .pf-insp .insp-tabpanel[hidden] { display: none; }
 .pf-insp[data-view='all'] .insp-object { display: block; }
@@ -133,15 +138,15 @@
 .pf-insp input[type='color'] { block-size: var(--pf-h-sm); padding: 2px; border: 0; border-radius: var(--pf-r-sm); background: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-control); }
 
 /* check boxes */
-.pf-insp input[type='checkbox'] { appearance: none; flex: none; position: relative; inline-size: 16px; block-size: 16px; margin: 0; border-radius: var(--pf-r-xs); background: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-control); cursor: pointer; }
-.pf-insp input[type='checkbox']:checked { background: var(--pf-frame); box-shadow: none; }
+.pf-insp input[type='checkbox'] { appearance: none; flex: none; position: relative; inline-size: 24px; block-size: 24px; box-sizing: border-box; border: 4px solid transparent; background-clip: padding-box; /* 16 px drawn, 24 px target */ margin: 0; border-radius: var(--pf-r-xs); background-color: var(--pf-surface-2); box-shadow: inset 0 0 0 1px var(--pf-line-control); cursor: pointer; }
+.pf-insp input[type='checkbox']:checked { background-color: var(--pf-frame); box-shadow: none; }
 .pf-insp input[type='checkbox']:checked::after { content: ''; position: absolute; inset: 3px; background: var(--pf-frame-ink); clip-path: polygon(8% 52%, 22% 38%, 40% 58%, 78% 16%, 92% 30%, 40% 88%); }
 .pf-insp input[type='checkbox']:disabled { opacity: .5; cursor: not-allowed; }
 .pf-insp input[type='checkbox']:focus-visible, .pf-insp input[type='radio']:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
 .pf-insp input[type='radio'] { accent-color: var(--pf-frame); margin: 0; }
 
 /* sliders: a 4px rail filled to the value (the --v property, set by the inspector), a round knob with a frame ring */
-.pf-insp input[type='range'] { appearance: none; -webkit-appearance: none; block-size: 22px; margin: 0; padding: 0; background: transparent; cursor: pointer; --v: 0%; accent-color: var(--pf-frame); }
+.pf-insp input[type='range'] { appearance: none; -webkit-appearance: none; block-size: 24px; margin: 0; padding: 0; background: transparent; cursor: pointer; --v: 0%; accent-color: var(--pf-frame); }
 .pf-insp input[type='range']::-webkit-slider-runnable-track { block-size: 4px; border-radius: 4px; background: linear-gradient(to right, var(--pf-frame) var(--v), var(--pf-surface-4) var(--v)); }
 .pf-insp [dir='rtl'] input[type='range']:not([dir='ltr'])::-webkit-slider-runnable-track, .pf-insp:dir(rtl) input[type='range']:not([dir='ltr'])::-webkit-slider-runnable-track { background: linear-gradient(to left, var(--pf-frame) var(--v), var(--pf-surface-4) var(--v)); }
 .pf-insp input[type='range'].is-bipolar::-webkit-slider-runnable-track, .pf-insp input[type='range'][dir='ltr']::-webkit-slider-runnable-track {
@@ -305,7 +310,7 @@
 .pf-insp .mix-strip[data-muted='true'] > strong { color: var(--pf-text-disabled); border-color: var(--pf-text-disabled); }
 .pf-insp .mix-fader { display: grid; grid-template-rows: minmax(0, 1fr) auto; justify-items: center; gap: var(--pf-sp-3); min-block-size: 0; }
 /* a standing fader: physical sizes on purpose (in a vertical writing mode the logical ones swap) */
-.pf-insp input[type='range'].pf-vrange { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 100%; min-height: 72px; }
+.pf-insp input[type='range'].pf-vrange { writing-mode: vertical-lr; direction: rtl; width: 24px; height: 100%; min-height: 72px; }
 .pf-insp input[type='range'].pf-vrange::-webkit-slider-runnable-track { width: 4px; height: 100%; block-size: auto; background: linear-gradient(to top, var(--pf-k-voice) var(--v), var(--pf-surface-4) var(--v)); }
 .pf-insp input[type='range'].pf-vrange::-webkit-slider-thumb { width: 22px; height: 12px; margin: 0; margin-left: -9px; border-radius: 3px; box-shadow: 0 0 0 1px var(--pf-surface-1), 0 2px 5px color-mix(in srgb, black 50%, transparent); }
 .pf-insp input[type='range'].pf-vrange::-moz-range-track { width: 4px; height: 100%; }

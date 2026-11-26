@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { boxToScreen, edgeProxies, handlePoints, layerBox, overlapsOnTrack, pxToFrameTime, rotationFromDrag, scaleFromDrag, screenDeltaToFrameFraction, snapTime, markerSnapCandidates, type LayerBox, type ViewRect } from './interactions.math.ts';
 import { barGrid, barLabelEvery, beatSnapTargets, CATALOG_DRAG_PREFIX, catalogDragFrom, catalogDragType, cutsOf, laneOrder, rulerLabel, rulerStep, signedTimecode, snapToTargets, splitterHeight } from './interactions.math.ts';
-import { capPlacement, cutRoom, labelsUnder, pickSpoken, SPOKEN_CHIP_PAD_PX, TL_USUAL_SOUND } from './interactions.math.ts';
+import { capPlacement, COLLAPSED_LANE_PX, cutRoom, labelsUnder, laneCollapsed, pickSpoken, splitterKey, SPOKEN_CHIP_PAD_PX, tlUsual, TL_USUAL, TL_USUAL_PORTRAIT, TL_USUAL_SOUND } from './interactions.math.ts';
 
 const s = (v: number) => T.rt(v, 1);
 
@@ -395,7 +395,35 @@ describe('the playhead timecode on the ruler', () => {
 
 describe('the timeline in Sound mode', () => {
   it('is never shorter than its lanes (the last sound lane was cut at 1440x900), and leaves the viewer its room', () => {
-    expect(TL_USUAL_SOUND).toMatch(/max\(52dvh, var\(--pf-tl-natural/);
+    // the preferred value is the lanes' own height and the only upper bound is what the viewer must keep
+    expect(TL_USUAL_SOUND).toMatch(/^clamp\(248px, var\(--pf-tl-natural/);
     expect(TL_USUAL_SOUND).toMatch(/calc\(100dvh - 260px\)\)$/);
+  });
+});
+
+describe('the timeline leaves the picture its room (DESIGN_REVIEW §6)', () => {
+  it('starts at most 30% of the window tall for a tall film, 38% for a wide one, as tall as its lanes below that', () => {
+    expect(tlUsual({ width: 1080, height: 1920 }, false)).toBe(TL_USUAL_PORTRAIT);
+    expect(TL_USUAL_PORTRAIT).toBe('clamp(200px, var(--pf-tl-natural, 30dvh), 30dvh)');
+    expect(tlUsual({ width: 1920, height: 1080 }, false)).toBe(TL_USUAL);
+    expect(tlUsual({ width: 1080, height: 1080 }, false)).toBe(TL_USUAL);
+    expect(TL_USUAL).toBe('clamp(200px, var(--pf-tl-natural, 38dvh), 38dvh)');
+    expect(tlUsual(null, false)).toBe(TL_USUAL);
+    expect(tlUsual({ width: 1080, height: 1920 }, true)).toBe(TL_USUAL_SOUND);
+  });
+  it('remembers a chosen height per film shape', () => {
+    expect(splitterKey({ width: 1080, height: 1920 })).toBe('pf.tl.height.portrait.v1');
+    expect(splitterKey({ width: 1920, height: 1080 })).toBe('pf.tl.height.landscape.v1');
+    expect(splitterKey(undefined)).toBe('pf.tl.height.landscape.v1');
+  });
+  it('collapses a lane only when it is empty, not the main track, not opened and nothing is dragged', () => {
+    const base = { role: 'v2' as const, clips: 0, followsTranscript: false, opened: false, dragging: false };
+    expect(laneCollapsed(base)).toBe(true);
+    expect(laneCollapsed({ ...base, role: 'v1' })).toBe(false);
+    expect(laneCollapsed({ ...base, clips: 1 })).toBe(false);
+    expect(laneCollapsed({ ...base, followsTranscript: true })).toBe(false);
+    expect(laneCollapsed({ ...base, opened: true })).toBe(false);
+    expect(laneCollapsed({ ...base, dragging: true })).toBe(false);
+    expect(COLLAPSED_LANE_PX).toBeLessThanOrEqual(12);
   });
 });

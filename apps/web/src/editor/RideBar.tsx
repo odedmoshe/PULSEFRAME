@@ -18,6 +18,8 @@ import * as T from '@pulseframe/time';
 import { findClip, previousAdjacent, transitionDef, velocityLimit, type Clip } from '@pulseframe/core';
 import { Menu, Tooltip, cx, type MenuItem } from '../ds/index.ts';
 import { rovingNext } from '../ds/logic.ts';
+import { isolate } from '../ds/util.tsx';
+import { crowdedNext } from './rideRoom.ts';
 import { COMMANDS, chordLabel } from './commands.ts';
 import { DEFAULT_TRANSITION, defaultTransitionFrames, TransitionGlyph, useSelectedCut } from './CutChip.tsx';
 import { IconBeatLock } from './icons.tsx';
@@ -70,26 +72,47 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
   const cutOf = useSelectedCut();
   const root = useRef<HTMLDivElement>(null);
   const [left, setLeft] = useState<number | null>(null);
+  // the worded bar's own width: when it is wider than the room between the toolbar's two ends, the bar shows icons only
+  // (every action keeps its name for assistive technology and in its tooltip; the toolbar beside it carries the words)
+  const [tight, setTight] = useState(false);
+  const natural = useRef(0);
+  // the room the toolbar gained by crowding (rideRoom.ts), measured once after it crowded
+  const crowd = useRef<{ before: number; gained: number | null } | null>(null);
   const sel = state.selection;
   const clips = useMemo(() => (doc ? sel.map((id) => findClip(doc, id)).filter((f): f is NonNullable<typeof f> => !!f) : []), [doc, sel]);
   const one = clips.length === 1 ? clips[0]! : null;
   const cut = one && cutOf === one.clip.id && one.clip.type === 'media' && one.track.kind === 'video' ? one : null;
   const mode: 'cut' | 'clip' | 'many' | 'none' = cut ? 'cut' : clips.length > 1 ? 'many' : one ? 'clip' : 'none';
 
+  // other actions: measure their worded width again
+  useLayoutEffect(() => { setTight(false); }, [mode, state.lang, sel.length, one?.clip.id]);
   // centred on the selection, clamped to the room the toolbar leaves between its two ends
   useLayoutEffect(() => {
     const el = root.current, zone = el?.parentElement;
     if (!el || !zone) return;
     const place = () => {
       const z = zone.getBoundingClientRect(), tl = zone.closest('.timeline')?.getBoundingClientRect(), w = el.offsetWidth;
+      // scrollWidth: the bar's own width even where max-inline-size holds its box to the room (its content then runs past it)
+      if (!el.classList.contains('is-tight')) natural.current = Math.max(w, el.scrollWidth);
+      const wantTight = natural.current > z.width;
+      setTight((was) => (was === wantTight ? was : wantTight));
       const want = anchor === null || !tl ? z.width / 2 : anchor + tl.left - z.left;
       setLeft(Math.round(Math.max(0, Math.min(Math.max(0, z.width - w), want - w / 2))));
+      // even icons only, the bar is wider than its room: the toolbar's worded buttons keep only their icons (timeline.css)
+      const bar = zone.closest<HTMLElement>('.tl-bar');
+      if (bar && el.classList.contains('is-tight') && !el.classList.contains('is-idle')) {
+        const was = bar.dataset.crowded === 'true';
+        if (was && crowd.current && crowd.current.gained === null) crowd.current.gained = z.width - crowd.current.before;
+        const next = crowdedNext({ crowded: was, need: el.scrollWidth, room: z.width, gained: crowd.current?.gained ?? null });
+        if (next && !was) { crowd.current = { before: z.width, gained: null }; bar.dataset.crowded = 'true'; }
+        else if (!next && was) { crowd.current = null; delete bar.dataset.crowded; }
+      } else if (bar && el.classList.contains('is-idle') && bar.dataset.crowded) { crowd.current = null; delete bar.dataset.crowded; }
     };
     place();
     const ro = new ResizeObserver(place);
     ro.observe(zone); ro.observe(el);
     return () => ro.disconnect();
-  }, [anchor, mode, state.lang, sel.length, one?.clip.id]);
+  }, [anchor, mode, state.lang, sel.length, one?.clip.id, tight]);
 
   // one tab stop: Tab enters the bar at the action that last had the focus (the first one otherwise); the arrows move inside
   const stop = useRef(0);
@@ -157,7 +180,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     const canTransition = isPicture && !!previousAdjacent(one!.track, clip!);
     if (mode === 'clip' && clip) {
       const len = lengthLabel(s, T.frameIndexAt(clip.duration, rate), rate, grid);
-      chip = <span className={`ride-chip${len.musical ? ' is-musical' : ''}`} data-testid="ride-length">{len.musical && <AudioLines size={13} strokeWidth={1.75} aria-hidden="true" />}<bdi className="num">{len.text}</bdi></span>;
+      chip = <span className={`ride-chip${len.musical ? ' is-musical' : ''}`} data-testid="ride-length">{len.musical && <AudioLines size={13} strokeWidth={1.75} aria-hidden="true" />}{isolate(len.text) /* digits in .num, the unit outside (D12) */}</span>;
     } else if (mode === 'many') {
       chip = <span className="ride-chip" data-testid="ride-length"><bdi className="num">{s.nSelected(clips.length)}</bdi></span>;
     }
@@ -198,7 +221,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     );
   }
   return (
-    <div ref={root} className={`ride${none ? ' is-idle' : ''}`} role="toolbar" aria-label={s.ride} aria-orientation="horizontal" data-testid="timeline-actions" data-mode={mode} dir={state.lang === 'he' ? 'rtl' : 'ltr'}
+    <div ref={root} className={`ride${none ? ' is-idle' : ''}${tight ? ' is-tight' : ''}`} role="toolbar" aria-label={s.ride} aria-orientation="horizontal" data-testid="timeline-actions" data-mode={mode} dir={state.lang === 'he' ? 'rtl' : 'ltr'}
       style={left === null ? { visibility: 'hidden' } : { left }} onKeyDown={onKey}
       onFocusCapture={(e) => { const i = [...(root.current?.querySelectorAll<HTMLElement>('button') ?? [])].indexOf(e.target as HTMLElement); if (i >= 0) { stop.current = i; rove(); } }}>
       {chip}

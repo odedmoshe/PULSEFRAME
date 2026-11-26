@@ -3,8 +3,9 @@ const he = {
   // top bar
   logo: 'PULSEFRAME Studio', projectMenu: 'פרויקטים', rename: 'שינוי שם הפרויקט',
   saved: 'נשמר', saving: 'שומר…', offline: 'לא מחובר · השינויים ממתינים', conflict: 'התנגשות · נטען מחדש', retrySave: 'ניסיון חוזר',
-  modeLabel: 'מצב עבודה', modes: { pro: 'עריכה', color: 'מראה', sound: 'סאונד', captions: 'כתוביות', deliver: 'מסירה', shorts: 'קטעים קצרים', perform: 'הופעה' },
-  cmdPlaceholder: 'מה עושים? פקודה, אפקט, מעבר — או בקשה לעוזר', cmdOpen: 'פתיחת חיפוש הפקודות',
+  keys: { title: 'קיצורי מקלדת', play: 'ניגון ועצירה', split: 'פיצול בסמן', delete: 'מחיקה', undo: 'ביטול', range: 'תחילת וסוף טווח', frames: 'פריים אחורה / קדימה', palette: 'חיפוש פקודה', modes: 'מעבר בין המצבים', all: 'כל הקיצורים' },
+  modeLabel: 'מצב עבודה', modeIs: (m: string) => `מצב: ${m}`, modes: { pro: 'עריכה', color: 'מראה', sound: 'סאונד', captions: 'כתוביות', deliver: 'מסירה', shorts: 'קטעים קצרים', perform: 'הופעה' },
+  cmdPlaceholder: 'מה עושים? פקודה, אפקט, מעבר — או בקשה לעוזר', cmdShort: 'חיפוש פקודה', cmdOpen: 'פתיחת חיפוש הפקודות',
   presence: 'נוכחים בפרויקט', owner: 'את/ה', agent: 'העוזר', agentMenu: 'העוזר',
   agentReady: 'מוכן ומחכה', agentPaused: 'מושהה', pauseAgent: 'השהיית העוזר', resumeAgent: 'חידוש העוזר', undoAgent: 'ביטול כל השינויים שלו', undoAgentWhy: 'עדיין לא זמין',
   undoTip: 'ביטול', redoTip: 'ביצוע מחדש', language: 'שפת הממשק',
@@ -62,8 +63,9 @@ export type ChromeStrings = typeof he;
 const en: ChromeStrings = {
   logo: 'PULSEFRAME Studio', projectMenu: 'Projects', rename: 'Rename project',
   saved: 'Saved', saving: 'Saving…', offline: 'Offline · changes are waiting', conflict: 'Conflict · reloaded', retrySave: 'Try again',
-  modeLabel: 'Work mode', modes: { pro: 'Edit', color: 'Look', sound: 'Sound', captions: 'Captions', deliver: 'Deliver', shorts: 'Shorts', perform: 'Perform' },
-  cmdPlaceholder: 'What now? A command, an effect, a transition — or ask the assistant', cmdOpen: 'Open the command search',
+  keys: { title: 'Keyboard shortcuts', play: 'Play and stop', split: 'Split at the playhead', delete: 'Delete', undo: 'Undo', range: 'Range start and end', frames: 'Frame back / forward', palette: 'Find a command', modes: 'Switch modes', all: 'All shortcuts' },
+  modeLabel: 'Work mode', modeIs: (m: string) => `Mode: ${m}`, modes: { pro: 'Edit', color: 'Look', sound: 'Sound', captions: 'Captions', deliver: 'Deliver', shorts: 'Shorts', perform: 'Perform' },
+  cmdPlaceholder: 'What now? A command, an effect, a transition — or ask the assistant', cmdShort: 'Find a command', cmdOpen: 'Open the command search',
   presence: 'People in this project', owner: 'You', agent: 'Assistant', agentMenu: 'Assistant',
   agentReady: 'Ready and waiting', agentPaused: 'Paused', pauseAgent: 'Pause the assistant', resumeAgent: 'Resume the assistant', undoAgent: 'Undo all its changes', undoAgentWhy: 'Not available yet',
   undoTip: 'Undo', redoTip: 'Redo', language: 'Interface language',

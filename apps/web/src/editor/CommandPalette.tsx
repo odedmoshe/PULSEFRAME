@@ -246,7 +246,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                       >
                         <span className="pf-pal-names">
                           <span className="pf-pal-label" lang={lang}>{label(c)}</span>
-                          {label(c, other) !== label(c) && <span className="pf-pal-alt" lang={other}>{label(c, other)}</span>}
+                          {lang !== 'he' && label(c, other) !== label(c) && <span className="pf-pal-alt" lang={other}>{label(c, other)}</span>}
                           {!ok && <span className="pf-pal-unavail">{t('palette.unavailable')}</span>}
                         </span>
                         {chordCell(c)}
@@ -264,7 +264,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                       <span className="pf-pal-names">
                         <Sparkles size={14} strokeWidth={1.75} aria-hidden="true" className="pf-pal-ic" />
                         <span className="pf-pal-label" lang={lang}>{c[lang]}</span>
-                        {c[other] !== c[lang] && <span className="pf-pal-alt" lang={other}>{c[other]}</span>}
+                        {lang !== 'he' && c[other] !== c[lang] && <span className="pf-pal-alt" lang={other}>{c[other]}</span>}
                       </span>
                       <span className="pf-pal-kind">{c.kind === 'effect' ? C.palEffect : c.kind === 'transition' ? C.palTransition : C.palLook}</span>
                     </div>
@@ -318,7 +318,7 @@ function PaletteDialog({ keymap }: { keymap: Keymap }) {
                       <tr key={c.id} data-command-id={c.id} data-custom={custom || undefined}>
                         <th scope="row" className="pf-pal-cell-name">
                           <span className="pf-pal-label" lang={lang}>{label(c)}</span>
-                          {label(c, other) !== label(c) && <span className="pf-pal-alt" lang={other}>{label(c, other)}</span>}
+                          {lang !== 'he' && label(c, other) !== label(c) && <span className="pf-pal-alt" lang={other}>{label(c, other)}</span>}
                         </th>
                         <td>{isCapturing ? <span className="pf-pal-capture" role="status">{t('shortcuts.press')}</span> : chordCell(c)}{custom && <span className="pf-pal-custom" aria-hidden="true"> ●</span>}</td>
                         <td className="pf-pal-cell-action">

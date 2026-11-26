@@ -1,7 +1,7 @@
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
-  AudioLines, Captions, Clapperboard, Film, Layers, Link2, MapPin, Metronome, Mic, MousePointer2, Music, Pencil, Plus, Rewind, Scissors, Shapes, Snowflake, Sparkles, TrendingUp, Type, Zap,
+  AudioLines, Captions, ChevronsUpDown, Clapperboard, Film, Layers, Mic, Music, Pencil, Plus, Rewind, Shapes, Snowflake, Sparkles, TrendingUp, Type, Zap,
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import {
@@ -10,9 +10,8 @@ import {
 } from '@pulseframe/core';
 import { duckEnvelope, flashSchedule, speechRanges } from '@pulseframe/engine';
 import type { Key, Lang } from '@pulseframe/i18n';
-import { api, readSnapBeats, writeSnapBeats } from '../api.ts';
+import { api, readSnapBeats } from '../api.ts';
 import { ClipVisuals } from '../ClipVisuals.tsx';
-import { IconButton, Seg, Tooltip } from '../ds/index.ts';
 import { focusNow } from '../ds/focus.ts';
 import { VolumeLine } from './VolumeLine.tsx';
 import { KeyStrip } from './KeyStrip.tsx';
@@ -21,12 +20,14 @@ import { useTimelineDrag, type TimelineGhost } from './TimelineDrag.tsx';
 import { COMMANDS, chordLabel } from './commands.ts';
 import { useMarquee } from './TimelineMarquee.tsx';
 import { TimelineZoom, useWheelZoom } from './TimelineZoom.tsx';
-import { BAR_ICON_COMPONENTS, IconBeatLock, IconHide, IconLock, IconMainMagnet, IconMute, IconRippleDelete, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
+import { BAR_ICON_COMPONENTS, IconBeatLock, IconHide, IconLock, IconMainMagnet, IconMute, IconShow, IconSound, IconTarget, IconUnlock } from './icons.tsx';
 import { soundTailsFor } from './AudioFxBlock.tsx';
 import { CutChip, cutSelection, useSelectedCut } from './CutChip.tsx';
 import { PulseStrip, TempoHead, type PulseModel } from './PulseStrip.tsx';
 import { RideBar } from './RideBar.tsx';
-import { barGrid, capPlacement, catalogDragFrom, cutRoom, cutsOf, labelsUnder, laneOrder, lastAtOrBefore, pickSpoken, rulerLabel, rulerStep, signedTimecode, type SpokenChip, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
+import { SnapSwitch, ToolbarActions, ToolbarMoreMenu } from './TimelineToolbar.tsx';
+import { barGrid, capPlacement, catalogDragFrom, COLLAPSED_LANE_PX, cutRoom, cutsOf, FIT_ON_OPEN_MAX_S, labelsUnder, laneCollapsed, laneOrder, lastAtOrBefore, pickSpoken, rulerLabel, rulerStep, signedTimecode, type SpokenChip, type BarGrid, type CatalogDragItem, type Lane, type LaneRole } from './interactions.math.ts';
+import { fitPps } from './zoom.math.ts';
 import { TL_STRINGS, type TlStrings } from './timeline.strings.ts';
 import { assetHasBeats, timelineTempo } from './pulse.logic.ts';
 import { assetDisplayName } from './assetLabel.ts';
@@ -43,8 +44,14 @@ import './templates.css';
 import './timeline.css';
 import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
 import { ImpactTick } from './musicfit/ImpactTick.tsx';
+import { PlayheadGrab } from './scrub/PlayheadGrab.tsx';
+import { useScrub } from './scrub/useScrub.ts';
+import { RangeFlags, RangeTint } from './range/RangeMarks.tsx';
+import { ClipSound } from './clipwave/ClipSound.tsx';
 
 const MAX_MARKERS = 3000;
+/** Below this width of the timeline the worded toolbar (≈ 948 px), the zoom group (≈ 410) and the ride bar (≈ 380) do not fit in one row (timeline.css data-narrow). */
+const TOOLBAR_NARROW_PX = 1760;
 type MediaClip = Extract<Clip, { type: 'media' }>;
 
 /** «N · label» of a multicam tag: N is the angle's place among the group's picture angles (a sound angle has the mark ♪). */
@@ -83,7 +90,8 @@ function laneHeight(m: Metrics, role: LaneRole, mode: Mode): number {
   const h = m.lane[role];
   if (mode === 'sound' && (role === 'a1' || role === 'a2')) return Math.round(h * 1.9);
   if (mode === 'sound' && role === 'a3') return Math.round(h * 1.6);
-  if (mode === 'captions' && (role === 'c' || role === 'a1')) return Math.round(h * 1.6);
+  // the caption lane is taller in Captions mode; the voice lane keeps its height (DESIGN_REVIEW §6.4: it was 31 px of the picture's room)
+  if (mode === 'captions' && role === 'c') return Math.round(h * 1.6);
   return h;
 }
 const CLIP_PAD = 3; // space above and below a clip inside its lane
@@ -248,7 +256,7 @@ function PlayheadCap({ pps, beatSeconds, markerFrames }: { pps: number; beatSeco
   return (
     <>
       {lit && <i className={`pulse-now${editor.player?.playing ? ' playing' : ''}`} key={i} data-testid="pulse-now" style={{ left: beatSeconds[i]! * pps }} aria-hidden="true" />}
-      <div className="playhead-cap" style={{ left: at * pps }} aria-hidden="true"><bdi ref={code} className="num">{text}</bdi></div>
+      <div className="playhead-cap" style={{ left: at * pps }} aria-hidden="true"><bdi ref={code} className="num">{text}</bdi><PlayheadGrab where="cap" /></div>
     </>
   );
 }
@@ -337,6 +345,8 @@ interface LaneProps {
   selection: string[]; ghostSel: ReadonlySet<string>; cutPending: string[]; ghost: TimelineGhost | null; tails: ReadonlyMap<string, { seconds: number; cut: boolean }>;
   grid: BarGrid | null; heldLights: ReadonlySet<string>; selectedCut: string | null; dropClip: string | null; dropCut: string | null; anchorClip: string | null;
   blade: boolean; empty: boolean; onMenu: (clipId: string, x: number, y: number) => void;
+  /** An empty lane drawn as a thin strip (view state only): a click opens it. */
+  collapsed: boolean; onOpen: (trackId: string) => void;
   /** Assets whose stored file is missing on disk (state.missingMedia): their clips get the missing-file look, as a clip whose asset is gone. */
   missingMedia: readonly string[];
 }
@@ -365,7 +375,9 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
   }, [doc, tr, pps, clipH]);
 
   return (
-    <div className={`track ${tr.kind} lane-${lane.role}${tr.locked ? ' locked' : ''}${tr.hidden || tr.muted ? ' off' : ''}`} style={{ height }} data-lane={lane.role} data-locked={tr.locked ? 'true' : undefined} data-off={tr.hidden || tr.muted ? 'true' : undefined}
+    <div className={`track ${tr.kind} lane-${lane.role}${tr.locked ? ' locked' : ''}${tr.hidden || tr.muted ? ' off' : ''}${p.collapsed ? ' is-collapsed' : ''}`} style={{ height }} data-lane={lane.role} data-locked={tr.locked ? 'true' : undefined} data-off={tr.hidden || tr.muted ? 'true' : undefined}
+      data-collapsed={p.collapsed ? 'true' : undefined} title={p.collapsed ? s.laneCollapsed(`${lane.code} · ${trackTitle(s, lane, p.flavour)}`) : undefined}
+      onClick={p.collapsed ? () => p.onOpen(tr.id) : undefined}
       role="list" aria-label={`${t(`track.${tr.kind}` as Key)} ${tr.name}`} data-track-id={tr.id}>
       <TrackHead lane={lane} flavour={p.flavour} lang={lang} target={p.target} tempo={p.tempo} />
       <div className="track-lane">
@@ -374,10 +386,12 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
             <Plus size={15} strokeWidth={1.75} aria-hidden="true" /><strong>{s.dropFirst}</strong><span>{s.dropFirstOr}</span>
           </div>
         )}
-        {ghost && tr.clips.some((c) => c.id === ghost.clipId) && (
-          <div className={`clip-ghost${ghost.invalid ? ' invalid' : ''}${ghost.snappedTo ? ' snapped' : ''}`} data-testid="clip-ghost" data-mode={ghost.mode} style={{ left: ghost.leftPx, width: ghost.widthPx, top: CLIP_PAD, height: clipH }}>
-            <span className={`trim-chip at-${ghost.mode === 'trim-start' || ghost.mode === 'move' ? 'start' : 'end'}`} data-testid="trim-chip" dir={lang === 'he' ? 'rtl' : 'ltr'}>
-              <bdi className="num">{signedTimecode(ghost.deltaFrames, rate)}</bdi><span aria-hidden="true">·</span><span>{s.frames(Math.abs(ghost.deltaFrames))}</span>
+        {ghost && ghost.trackId === tr.id && (
+          <div className={`clip-ghost${ghost.invalid ? ' invalid' : ''}${ghost.snappedTo ? ' snapped' : ''}`} data-testid="clip-ghost" data-mode={ghost.mode} data-track-id={ghost.trackId} style={{ left: ghost.leftPx, width: ghost.widthPx, top: CLIP_PAD, height: clipH }}>
+            <span className={`trim-chip at-${ghost.mode === 'trim-start' || ghost.mode === 'move' ? 'start' : 'end'}${ghost.refusal ? ' is-refused' : ''}`} data-testid="trim-chip" dir={lang === 'he' ? 'rtl' : 'ltr'} role={ghost.refusal ? 'status' : undefined}>
+              {ghost.refusal
+                ? <span data-testid="clip-ghost-refusal">{ghost.refusal}</span>
+                : <><bdi className="num">{signedTimecode(ghost.deltaFrames, rate)}</bdi><span aria-hidden="true">·</span><span>{s.frames(Math.abs(ghost.deltaFrames))}</span></>}
             </span>
           </div>
         )}
@@ -445,6 +459,7 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
                 {asset && asset.kind !== 'image' && (tr.kind === 'video' || tr.kind === 'audio') && (
                   <ClipVisuals projectId={doc.id} asset={asset} kind={tr.kind} sourceIn={(c as MediaClip).sourceIn} duration={c.type === 'media' && c.freeze ? T.frameTime(1, rate) : toSourceSpan(c, c.duration) /* the stretch of SOURCE shown, so thumbnails and waveform follow the clip speed; a freeze frame shows one picture */} widthPx={width} heightPx={clipH} reverse={c.type === 'media' && !!c.reverse} tintKey={kind} />
                 )}
+                <ClipSound projectId={doc.id} clip={c} asset={asset} trackKind={tr.kind} laneHeight={height} clipHeight={clipH} widthPx={width} missing={missing} />
                 {/* the marked moment and the join of a shortened song (wave 7 musicfit): once builder C has built it */}
                 {MUSICFIT_UI_BUILT && <ImpactTick doc={doc} clip={c} pps={pps} />}
                 <span className="clip-plate">
@@ -511,6 +526,7 @@ export function Timeline() {
   const { containerProps, ghost } = useTimelineDrag({ disabled: tool === 'blade' });
   const { marqueeProps, box } = useMarquee(editor);
   const wheelZoomRef = useWheelZoom();
+  const scrub = useScrub();
   const [snapBeats, setSnapBeats] = useState(readSnapBeats);
   const [ruler, setRuler] = useState(readRuler);
   const [metrics, setMetrics] = useState(DEFAULT_METRICS);
@@ -539,8 +555,35 @@ export function Timeline() {
 
   const tracks = doc?.sequences[doc.mainSequenceId]?.tracks;
   const lanes = useMemo(() => (tracks ? laneOrder(tracks) : []), [tracks]);
-  const heights = useMemo(() => lanes.map((l) => laneHeight(metrics, l.role, mode)), [lanes, metrics, mode]);
   const empty = !!tracks && tracks.every((tr) => tr.clips.length === 0);
+
+  // Empty lanes are drawn as thin strips (DESIGN_REVIEW §6.1; view state, never stored): those the project had when it
+  // opened. A lane added while it is open, a lane the viewer clicks and every lane while something is dragged over the
+  // timeline are drawn whole.
+  const [lanesSeen, setLanesSeen] = useState<{ docId: string | null; atOpen: ReadonlySet<string>; opened: ReadonlySet<string> }>({ docId: null, atOpen: new Set(), opened: new Set() });
+  useEffect(() => {
+    if (!doc || !tracks) return;
+    setLanesSeen((was) => (was.docId === doc.id ? was : { docId: doc.id, atOpen: new Set(tracks.map((tr) => tr.id)), opened: new Set() }));
+  }, [doc, tracks]);
+  const openLane = useCallback((id: string) => setLanesSeen((was) => ({ ...was, opened: new Set([...was.opened, id]) })), []);
+  const dragging = drop !== null || ghost !== null;
+  const collapsed = useMemo(() => lanes.map((l) => laneCollapsed({
+    role: l.role, clips: l.track.clips.length, followsTranscript: l.track.kind === 'caption' && l.track.caption?.mode === 'transcript',
+    // a lane the project did not have when it opened was just added: it is shown whole
+    opened: lanesSeen.docId !== doc?.id || !lanesSeen.atOpen.has(l.track.id) || lanesSeen.opened.has(l.track.id), dragging,
+  })), [lanes, lanesSeen, doc?.id, dragging]);
+  const collapsedIds = lanes.filter((_, i) => collapsed[i]).map((l) => l.track.id);
+  const heights = useMemo(() => lanes.map((l, i) => (collapsed[i] ? COLLAPSED_LANE_PX : laneHeight(metrics, l.role, mode))), [lanes, collapsed, metrics, mode]);
+
+  // a short film is shown whole on the ruler when it opens (DESIGN_REVIEW I5); the zoom the viewer chooses after that stays
+  const fitted = useRef<string | null>(null);
+  const filmS = doc ? T.toSeconds(editor.duration) : 0;
+  useEffect(() => {
+    const sc = scrollEl.current;
+    if (!doc || fitted.current === doc.id || !sc || !(sc.clientWidth > 0)) return;
+    fitted.current = doc.id;
+    if (filmS > 0 && filmS < FIT_ON_OPEN_MAX_S) { editor.set({ pxPerSecond: fitPps(filmS, sc.clientWidth, editor.getState().pxPerSecond, head) }); sc.scrollLeft = 0; }
+  }, [doc, filmS, editor, head, view.width]);
 
   // the height the lanes need, for the splitter's default (Splitter.tsx): the timeline is as tall as its lanes
   useLayoutEffect(() => {
@@ -765,23 +808,25 @@ export function Timeline() {
   return (
     <section ref={root} id="pf-timeline" className="timeline pf-ds" dir="ltr" aria-label={t('timeline')} data-mode={mode} data-tool={tool} style={pulse.bpm ? ({ '--pf-bpm': Math.round(pulse.bpm) } as React.CSSProperties) : undefined}>
       {/* The toolbar is one row of fixed height, so the lanes below it get exactly the height that is left (timeline.css). It mirrors with the interface; the lanes never do. */}
-      <div className="tl-bar" dir={uiDir} role="group" aria-label={s.toolbar}>
+      <div className="tl-bar" dir={uiDir} role="group" aria-label={s.toolbar} data-narrow={view.width > 0 && view.width < TOOLBAR_NARROW_PX ? 'true' : undefined}>
         <div className="tl-tools">
-          <Seg label={s.tools} size="sm" iconOnly value={tool} onChange={setTool} className="tl-tool"
-            options={[{ value: 'select', label: s.toolSelect, ariaLabel: `${s.toolSelect} (V)`, icon: <MousePointer2 size={15} strokeWidth={1.75} aria-hidden="true" />, testId: 'tl-tool-select' }, { value: 'blade', label: s.toolBlade, ariaLabel: `${s.toolBlade} (C)`, icon: <Scissors size={15} strokeWidth={1.75} aria-hidden="true" />, testId: 'tl-tool-blade' }]} />
-          <span className="tl-sep" aria-hidden="true" />
-          <IconButton size="sm" className="tl-magnet" data-testid="tl-magnet" label={s.magnet} pressed={!!behaviour?.mainMagnet} disabledReason={!doc ? s.needClip : canBehave ? undefined : s.magnetSoon} icon={<IconMainMagnet size={16} />} onClick={() => setBehaviour({ mainMagnet: !behaviour?.mainMagnet })} />
-          <IconButton size="sm" className="tl-ripple" data-testid="tl-ripple" label={s.ripple} pressed={!!behaviour?.rippleDelete} disabledReason={!doc ? s.needClip : canBehave ? undefined : s.magnetSoon} icon={<IconRippleDelete size={16} />} onClick={() => setBehaviour({ rippleDelete: !behaviour?.rippleDelete })} />
-          <Tooltip label={s.snapBeats}>
-            <button type="button" role="switch" aria-checked={snapBeats} aria-label={s.snapBeats} className={`pf-btn pf-btn-ghost pf-btn-sm pf-iconbtn tl-snap${snapBeats ? ' is-on' : ''}`} data-testid="snap-beats" onClick={() => { setSnapBeats(!snapBeats); writeSnapBeats(!snapBeats); }}><Metronome size={16} strokeWidth={1.75} aria-hidden="true" /></button>
-          </Tooltip>
-          <span className="tl-sep" aria-hidden="true" />
           <ToolbarActions s={s} />
         </div>
         <div className="tl-ride-zone"><RideBar anchor={anchor} grid={pulse.grid} /></div>
         <div className="tl-view">
-          <Seg label={s.rulerMode} size="sm" value={rulerMode} onChange={(v) => { setRuler(v); try { localStorage.setItem(RULER_KEY, v); } catch { /* the choice lasts for this visit */ } }} className="tl-ruler-mode"
-            options={[{ value: 'time', label: s.rulerTime, testId: 'tl-ruler-time' }, { value: 'bars', label: s.rulerBars, disabled: !hasBeats, testId: 'tl-ruler-bars' }]} />
+          {collapsedIds.length > 0 && (
+            <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm tl-act tl-empty-lanes" data-testid="tl-empty-lanes" title={s.emptyLanesShow} aria-label={`${s.emptyLanesShow}: ${s.emptyLanes(collapsedIds.length)}`}
+              onClick={() => { for (const id of collapsedIds) openLane(id); }}>
+              <ChevronsUpDown size={15} strokeWidth={1.75} aria-hidden="true" /><span className="pf-btn-label">{s.emptyLanes(collapsedIds.length)}</span>
+            </button>
+          )}
+          {/* beat snapping stands on the row once beats exist; before that it is in «עוד» with the analysis */}
+          {hasBeats && <SnapSwitch s={s} on={snapBeats} set={setSnapBeats} />}
+          <ToolbarMoreMenu s={s} m={{
+            tool, setTool, behaviour, canBehave, setBehaviour, snapBeats, setSnapBeats, hasBeats, rulerMode,
+            setRuler: (v) => { setRuler(v); try { localStorage.setItem(RULER_KEY, v); } catch { /* the choice lasts for this visit */ } },
+            analyse: !hasBeats ? <TempoHead lang={lang} bpm={pulse.bpm} hasBeats={false} canAnalyse={!!pulse.analysable} analysing={analysing} onAnalyse={analyse} /> : null,
+          }} />
           <TimelineZoom pps={pps} lang={lang} />
         </div>
       </div>
@@ -789,11 +834,12 @@ export function Timeline() {
       <div className="tl-film" dir={uiDir}><FilmBar lang={lang} /><StoryBar lang={lang} /><GrowingBar lang={lang} /></div>
       {menu && <ClipMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
       <div className="tl-scroll" ref={setScroller} {...containerProps} onPointerDownCapture={() => { kbdNav.current = false; }} onFocusCapture={(e) => { if ((e.target as HTMLElement).classList?.contains('clip') && (e.target as HTMLElement).matches(':focus-visible')) kbdNav.current = true; }}>
-        <div className="tl-inner" style={{ width: innerWidth, '--tl-head': `${head}px`, '--tl-step': `${step * pps}px` } as React.CSSProperties} {...marqueeProps} onKeyDown={onLanesKey}
+        <div className="tl-inner" data-pps={pps} style={{ width: innerWidth, '--tl-head': `${head}px`, '--tl-step': `${step * pps}px` } as React.CSSProperties} {...marqueeProps} onKeyDown={onLanesKey}
           onDragOver={onDragOver} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(null); }} onDrop={onDrop}>
-          <div className="tl-top">
+          <div className="tl-top" data-beats={hasBeats ? 'true' : 'none'}>
             <div className="tl-corner">
-              <TempoHead lang={lang} bpm={pulse.bpm} hasBeats={hasBeats} canAnalyse={!!pulse.analysable} analysing={analysing} onAnalyse={analyse} />
+              {/* the measured tempo heads the Pulse Strip; until the beat is analysed the strip has no row and the action is on the toolbar */}
+              {hasBeats && <TempoHead lang={lang} bpm={pulse.bpm} hasBeats canAnalyse={!!pulse.analysable} analysing={analysing} onAnalyse={analyse} />}
               <span className="tl-add-track" role="group" aria-label={t('track.add')} dir={uiDir}>
                 <Plus size={12} strokeWidth={2} aria-hidden="true" />
                 {(['video', 'audio', 'text', 'adjustment'] as const).map((k) => {
@@ -804,7 +850,7 @@ export function Timeline() {
             </div>
             <div className="tl-top-lanes">
               <PulseStrip model={pulse.model} pps={pps} lang={lang} onSeekFrame={(f) => editor.seek(f)} truncatedTitle={t('timeline.markers.truncated')} />
-              <div className="ruler" data-testid="ruler" data-mode={rulerMode} onPointerDown={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; editor.seek(Math.max(0, Math.round(((x / pps) * rate.num) / rate.den))); }}>
+              <div className="ruler" data-testid="ruler" data-mode={rulerMode} onPointerDown={scrub.onRulerDown}>
                 {rulerMode === 'time'
                   ? Array.from({ length: Math.floor(Math.max(totalSeconds + 80 / pps, (view.width - head) / pps) / step) + 1 }, (_, i) => <span key={i} className="num" style={{ left: i * step * pps }}>{rulerLabel(i * step, step)}</span>)
                   : pulse.model.beats.filter((b) => b.n !== null && (b.n - 1) % labelsEvery === 0).map((b) => <span key={b.frame} className="num" style={{ left: b.s * pps }}>{b.n}</span>)}
@@ -815,6 +861,7 @@ export function Timeline() {
                     {m.label && <bdi>{m.label}</bdi>}
                   </button>
                 ))}
+                <RangeFlags pps={pps} />
               </div>
               <div className="tl-flash" data-testid="flash-lane" role="img" aria-label={s.flashLane}>
                 {flashRanges.map((r, i) => <i key={i} data-testid="flash-risk" style={{ left: r.from * pps, width: Math.max(3, (r.to - r.from) * pps) }} title={s.flashRisk(rulerLabel(r.from, 1), rulerLabel(r.to, 1), String(r.perSecond))} />)}
@@ -831,7 +878,7 @@ export function Timeline() {
               tempo={lane.track.kind === 'audio' && flavours.get(lane.track.id) === 'music' ? pulse.bpm : null}
               selection={selection} ghostSel={ghostSel} cutPending={state.cutPending} ghost={ghost} tails={tails} grid={pulse.grid} heldLights={heldLights} selectedCut={selectedCut}
               dropClip={drop?.kind === 'catalog' && drop.on?.type === 'clip' ? drop.on.clipId : null} dropCut={drop?.kind === 'catalog' && drop.on?.type === 'cut' ? drop.on.clipId : null}
-              anchorClip={anchorClip} blade={tool === 'blade'} empty={empty} onMenu={onMenu} missingMedia={state.missingMedia} />
+              anchorClip={anchorClip} blade={tool === 'blade'} empty={empty} onMenu={onMenu} missingMedia={state.missingMedia} collapsed={collapsed[i]!} onOpen={openLane} />
           ))}
           {drop?.kind === 'asset' && <div className="drop-line" data-testid="drop-line" data-frame={drop.frame} style={{ left: head + T.toSeconds(T.frameTime(drop.frame, rate)) * pps }} aria-hidden="true"><span className="num">{shortTimecode(drop.frame, rate)}</span></div>}
           {dropTip && drop?.kind === 'catalog' && <div className={`drop-tip${dropTip.ok ? '' : ' no'}`} data-testid="drop-tip" role="status" dir={uiDir} style={{ left: Math.max(head + 8, drop.x + 14), top: drop.y + 18 }}>{dropTip.text}</div>}
@@ -847,28 +894,13 @@ export function Timeline() {
               <span>{g.kind === 'agent' ? t('actor.agent') : g.actor}{g.label ? ` · ${g.label}` : ''}</span>
             </div>
           ))}
+          <RangeTint pps={pps} head={head} />
           <MarkerSlot markers={userMarkers} pps={pps} head={head} />
           <PlayheadLine pps={pps} head={head} />
         </div>
       </div>
       <BeatAnnouncer grid={pulse.grid} s={s} />
     </section>
-  );
-}
-
-/** The toolbar's own actions: link, split at the playhead, a marker. They follow the playhead, so they listen to the player themselves. */
-function ToolbarActions({ s }: { s: TlStrings }) {
-  const { editor, state } = useEditorState();
-  void state.tick;
-  const cmd = (id: string) => COMMANDS.find((c) => c.id === id)!;
-  const can = (id: string) => { const c = cmd(id); return !!state.doc && (!c.enabled || c.enabled(editor)); };
-  const keys = (id: string) => { const k = cmd(id).keys[0]; return k ? chordLabel(k).split('+') : undefined; };
-  return (
-    <>
-      <IconButton size="sm" data-testid="tl-link" label={s.link} disabledReason={can('edit.link') ? undefined : s.linkNeed} icon={<Link2 size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('edit.link').run(editor)} />
-      <IconButton size="sm" data-testid="tl-split" label={s.split} keys={keys('edit.split')} disabledReason={can('edit.split') ? undefined : s.splitNeed} icon={<Scissors size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('edit.split').run(editor)} />
-      <IconButton size="sm" data-testid="tl-marker" label={s.marker} keys={keys('marker.add')} disabledReason={can('marker.add') ? undefined : s.markerThere} icon={<MapPin size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void cmd('marker.add').run(editor)} />
-    </>
   );
 }
 

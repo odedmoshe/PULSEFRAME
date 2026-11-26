@@ -12,6 +12,7 @@ import path from 'node:path';
 import { chromium, type Page } from 'playwright';
 import * as T from '@pulseframe/time';
 import { startServer } from '@pulseframe/server';
+import { openModes } from './editor-ui.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const argv = process.argv.slice(2);
@@ -228,7 +229,7 @@ async function main() {
         const page = await ctx.newPage();
         const tag = (x: string) => `${vp}-${theme}-x-${x}`;
         const open = async (pid: string) => { await page.goto(`${s.ownerUrl}&project=${pid}`); await page.waitForTimeout(2500); };
-        await attempt(tag('owner'), async () => { await open(own); metrics[tag('owner-details')] = await page.evaluate(details); await page.getByTestId('workspace-captions').click(); await page.waitForTimeout(900); metrics[tag('owner-captions-details')] = await page.evaluate(details); await page.getByTestId('workspace-sound').click(); await page.waitForTimeout(900); metrics[tag('owner-sound-details')] = await page.evaluate(details); await page.getByTestId('workspace-pro').click(); });
+        await attempt(tag('owner'), async () => { await open(own); metrics[tag('owner-details')] = await page.evaluate(details); await openModes(page); await page.getByTestId('workspace-captions').click(); await page.waitForTimeout(900); metrics[tag('owner-captions-details')] = await page.evaluate(details); await openModes(page); await page.getByTestId('workspace-sound').click(); await page.waitForTimeout(900); metrics[tag('owner-sound-details')] = await page.evaluate(details); await openModes(page); await page.getByTestId('workspace-pro').click(); });
         await attempt(tag('clip'), async () => { await open(v169); await page.locator(`.clip[data-clip-id="${clip169}"]`).first().click(); await page.waitForTimeout(800); metrics[tag('169-clip-details')] = await page.evaluate(details); });
         await attempt(tag('gallery'), async () => { await page.getByTestId('rail-effects').click(); await page.waitForTimeout(500); await page.getByTestId('gallery-open').first().click(); await page.waitForTimeout(3000); await shot(page, tag('21-effects-gallery')); await esc(page); });
         await attempt(tag('elements'), async () => { await page.getByTestId('rail-elements').click(); await page.waitForTimeout(3000); await shot(page, tag('22-elements-3s')); });
@@ -265,18 +266,18 @@ async function main() {
       const open = async (pid: string | null) => { await page.goto(pid ? `${s.ownerUrl}&project=${pid}` : s.ownerUrl); await page.waitForTimeout(2500); };
       await attempt(tag('welcome'), async () => { await open(empty); await shot(page, tag('01-empty-project')); });
       await attempt(tag('916-edit'), async () => { await open(v916); await shot(page, tag('02-916-edit-nosel')); await page.locator(`.clip[data-clip-id="${clip916}"]`).first().click(); await page.waitForTimeout(700); await shot(page, tag('03-916-edit-clip')); await esc(page); });
-      await attempt(tag('916-captions'), async () => { await page.getByTestId('workspace-captions').click(); await page.waitForTimeout(900); await shot(page, tag('04-916-captions')); });
-      await attempt(tag('owner'), async () => { await open(own); await page.getByTestId('workspace-captions').click(); await page.waitForTimeout(800); const sp = page.getByTestId('inspector-tab-speech'); if (await sp.count()) await sp.first().click(); await page.waitForTimeout(900); await shot(page, tag('04b-owner-captions-transcript')); await page.getByTestId('workspace-pro').click(); await page.waitForTimeout(800); await shot(page, tag('04c-owner-edit')); });
+      await attempt(tag('916-captions'), async () => { await openModes(page); await page.getByTestId('workspace-captions').click(); await page.waitForTimeout(900); await shot(page, tag('04-916-captions')); });
+      await attempt(tag('owner'), async () => { await open(own); await openModes(page); await page.getByTestId('workspace-captions').click(); await page.waitForTimeout(800); const sp = page.getByTestId('inspector-tab-speech'); if (await sp.count()) await sp.first().click(); await page.waitForTimeout(900); await shot(page, tag('04b-owner-captions-transcript')); await openModes(page); await page.getByTestId('workspace-pro').click(); await page.waitForTimeout(800); await shot(page, tag('04c-owner-edit')); });
       await attempt(tag('169-edit'), async () => { await open(v169); await shot(page, tag('05-169-edit-nosel')); await page.locator(`.clip[data-clip-id="${clip169}"]`).first().click(); await page.waitForTimeout(700); await shot(page, tag('06-169-edit-clip')); await esc(page); });
       await attempt(tag('busy'), async () => { await open(busy); await shot(page, tag('07-busy-timeline')); });
       await attempt(tag('export'), async () => { await open(v916); await page.getByTestId('export').click(); await page.getByTestId('export-sheet').waitFor({ timeout: 10000 }); await shot(page, tag('08-export-sheet')); await esc(page); });
       if (full) {
         // every mode and every tab of its side panels, on the 9:16 project with nothing selected and with the clip selected
         await open(v916);
-        const modes = await page.locator('[data-testid^=workspace-]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')!).filter((t) => t !== 'workspace-switch'));
+        const modes = await page.locator('[data-testid^=workspace-]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')!).filter((t) => t !== 'workspace-switch' && t !== 'workspace-menu'));
         for (const m of modes) {
           await attempt(tag(m), async () => {
-            await page.getByTestId(m).click(); await page.waitForTimeout(900);
+            await openModes(page); await page.getByTestId(m).click(); await page.waitForTimeout(900);
             await shot(page, tag(`10-${m}`));
             const tabs = page.locator('.app > .inspector [role=tab], .app > .library [role=tablist]:not(.pf-rail-list) [role=tab]');
             const count = await tabs.count();
@@ -289,7 +290,7 @@ async function main() {
             }
           });
         }
-        await page.getByTestId('workspace-pro').click();
+        await openModes(page); await page.getByTestId('workspace-pro').click();
         // the rail's categories (media, audio, …, effects gallery, templates drawer, AI)
         for (const cat of ['media', 'audio', 'text', 'captions', 'effects', 'transitions', 'looks', 'elements', 'templates', 'ai']) {
           await attempt(tag(`rail-${cat}`), async () => { await page.getByTestId(`rail-${cat}`).click(); await page.waitForTimeout(1200); await shot(page, tag(`20-rail-${cat}`)); });

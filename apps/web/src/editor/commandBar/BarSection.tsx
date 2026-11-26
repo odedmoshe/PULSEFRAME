@@ -64,7 +64,7 @@ function Section({ slot, query, activeKey, onHover, optionDomId }: BarSectionPro
             {...(example ? { 'data-testid': TID.nearest, 'data-intent': example.intent, 'data-example': 'true' } : nearest ? { 'data-testid': TID.nearest, 'data-command-id': (e.target as { commandId: string }).commandId } : { 'data-testid': TID.choice, 'data-index': i })}
             onMouseMove={() => e.key !== activeKey && onHover(e.key)} onClick={() => act(e)}
           >
-            <span className="pf-pal-names"><span className="pf-pal-label" lang={lang}><bdi dir="auto">{label}</bdi></span>{alt && alt !== label && <span className="pf-pal-alt" lang={lang === 'he' ? 'en' : 'he'}>{alt}</span>}</span>
+            <span className="pf-pal-names"><span className="pf-pal-label" lang={lang}><bdi dir="auto">{label}</bdi></span>{lang !== 'he' && alt && alt !== label && <span className="pf-pal-alt" lang="he">{alt}</span>}</span>
           </div>
         );
       })}

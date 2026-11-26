@@ -331,10 +331,39 @@ export function catalogDragFrom(types: readonly string[]): CatalogDragItem | nul
 
 // ---- the splitter between the viewer and the timeline ----
 /** The timeline's height after a splitter move: at least `min`, and never so tall that the viewer above keeps less than `keepAbove`. */
-/** The timeline's usual height in the shell (CSS), as tall as its lanes (--pf-tl-natural, set by Timeline.tsx) within bounds. */
-export const TL_USUAL = 'clamp(248px, var(--pf-tl-natural, var(--pf-tl-h, 38dvh)), 48dvh)';
-/** In Sound mode: 52% of the window, or what the taller sound lanes need, whichever is more; the viewer keeps 260 px. */
-export const TL_USUAL_SOUND = 'clamp(248px, max(52dvh, var(--pf-tl-natural, 0px)), calc(100dvh - 260px))';
+/**
+ * The timeline's usual height in the shell (CSS): as tall as its lanes (--pf-tl-natural, set by Timeline.tsx, which counts
+ * collapsed empty lanes at their strip height), within bounds that leave the picture the most room (DESIGN_REVIEW §6.5):
+ * at most 30% of the window for a film taller than wide, 38% otherwise; the lanes scroll inside when they need more.
+ */
+export const TL_USUAL_PORTRAIT = 'clamp(200px, var(--pf-tl-natural, 30dvh), 30dvh)';
+export const TL_USUAL = 'clamp(200px, var(--pf-tl-natural, 38dvh), 38dvh)';
+/**
+ * In Sound mode: as tall as the taller sound lanes need, never shorter (the last sound lane was cut at 1440x900), and no
+ * longer a fixed 52% when they need less; the viewer keeps 260 px.
+ */
+export const TL_USUAL_SOUND = 'clamp(248px, var(--pf-tl-natural, 45dvh), calc(100dvh - 260px))';
+/** The usual height for this film and mode. */
+export function tlUsual(a: { width: number; height: number } | null | undefined, sound: boolean): string {
+  if (sound) return TL_USUAL_SOUND;
+  return a && a.height > a.width ? TL_USUAL_PORTRAIT : TL_USUAL;
+}
+/** Where a height the viewer chose with the splitter is remembered: one per film shape, so a height chosen for a wide film does not shrink a tall one. */
+export function splitterKey(a: { width: number; height: number } | null | undefined): string {
+  return a && a.height > a.width ? 'pf.tl.height.portrait.v1' : 'pf.tl.height.landscape.v1';
+}
+/** The height an empty lane is drawn at while it is collapsed (view state only; DESIGN_REVIEW §6.1). */
+export const COLLAPSED_LANE_PX = 10;
+/**
+ * Whether a lane is drawn collapsed: it holds nothing (no clips; a caption track that follows the transcript is never
+ * empty), it is not the main track (which carries the first-clip hint), the viewer has not opened it, and nothing is being
+ * dragged over the timeline (a drag opens every lane, so anything can be dropped on any of them).
+ */
+export function laneCollapsed(a: { role: LaneRole; clips: number; followsTranscript: boolean; opened: boolean; dragging: boolean }): boolean {
+  return a.role !== 'v1' && a.clips === 0 && !a.followsTranscript && !a.opened && !a.dragging;
+}
+/** Films shorter than this are shown whole on the ruler when they open (DESIGN_REVIEW I5). */
+export const FIT_ON_OPEN_MAX_S = 180;
 export function splitterHeight(wanted: number, a: { min: number; available: number; keepAbove: number }): number {
   const max = Math.max(a.min, a.available - a.keepAbove);
   return Math.round(Math.min(max, Math.max(a.min, wanted)));

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { api, ApiFailure, type BackupStatus, type GcResult, type ProjectListItem, type StorageReport } from '../api.ts';
 import { useEditorState } from './store.ts';
+import { PROJECTS_STRINGS } from './projects.strings.ts';
 import { isOwnerActor, ownerArchiveHref } from './library/library.logic.ts';
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
@@ -16,7 +17,7 @@ export function formatBytes(n: number): string {
 }
 
 function StoragePanel() {
-  const { t } = useEditorState();
+  const { t, state } = useEditorState();
   const [rep, setRep] = useState<StorageReport | null>(null);
   const [dry, setDry] = useState<GcResult | null>(null);
   const [done, setDone] = useState<GcResult | null>(null);
@@ -48,7 +49,7 @@ function StoragePanel() {
           <dd dir="ltr">{rep.unreferenced.files} {t('storage.files')} · {formatBytes(rep.unreferenced.bytes)}{rep.unreferenced.tooNewToJudge ? ` · ${rep.unreferenced.tooNewToJudge} ${t('storage.tooNew')}` : ''}</dd>
         </dl>
       )}
-      {rep?.rule && <p className="muted" dir="auto">{t('storage.rule')}: {rep.rule}</p>}
+      {rep?.rule && <p className="muted" dir="auto">{t('storage.rule')}: {PROJECTS_STRINGS[state.lang].rule}</p>}
       <div className="row">
         <button type="button" className="ghost" disabled={busy} onClick={() => void check()} data-testid="storage-gc-check">{t('storage.check')}</button>
         {dry?.wouldRemove && <button type="button" className="ghost danger" disabled={busy || dry.wouldRemove.files === 0} onClick={() => void apply()} data-testid="storage-gc-apply">{t('storage.apply')}</button>}

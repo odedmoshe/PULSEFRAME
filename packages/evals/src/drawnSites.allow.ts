@@ -201,4 +201,5 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/core/src/qcChecks.ts", snippet: "if (c.type === 'text' && c.animat", class: 'words', note: "a title's in/out animation explains a fade; a drawn clip has none" },
   { file: "packages/evals/src/agent-proof.server.ts", snippet: "c) => c.id === titleId && c.type === 'text' && (c as {", class: 'proof', note: "agent proof reads the title it made" },
   { file: "apps/web/src/editor/made/MadeClipDialog.tsx", snippet: "{...(f.kind === 'text' ? { type: '", class: 'n/a', note: "a made page's field kind (text / colour / number), not a clip branch" },
+  { file: "packages/evals/src/timeline-basics-proof.ts", snippet: "t doc()).find((c: any) => c.type === 'text').id;", class: 'proof', note: "timeline proof reads the title it made" },
 ];

@@ -24,6 +24,7 @@ import { TEACH_CHANGES_SELECTION, TEACH_COMMANDS } from './teach/teach.commands.
 import { PEARLS_COMMANDS } from './pearls/pearls.commands.ts';
 import { MUSICFIT_COMMANDS } from './musicfit/musicFit.commands.ts';
 import { INK_COMMANDS } from './ink/ink.commands.ts';
+import { RANGE_COMMANDS, clearRange, rangeMarked } from './range/range.commands.ts';
 
 export interface Command {
   id: string;
@@ -39,6 +40,11 @@ export interface Command {
   /** Default bindings, e.g. 'Space', 'Shift+ArrowRight', 'Mod+KeyZ' (Mod = Ctrl or Cmd). */
   keys: string[];
   enabled?(e: Editor): boolean;
+  /**
+   * Where its KEYS act (wave 8D: I, O and X only while the focus is on the timeline, the stage or nowhere, so a panel or the
+   * source viewer keeps its own I and O). Buttons and the palette ignore it: `enabled` alone decides whether they can run it.
+   */
+  keysHere?(): boolean;
   run(e: Editor): void | Promise<unknown>;
 }
 
@@ -384,7 +390,8 @@ export const COMMANDS: Command[] = [
   { id: 'edit.selectAll', label: 'cmd.selectAll', group: 'edit', keys: ['Mod+KeyA'], enabled: (e) => !!e.doc, run: (e) => e.selectAll() },
   { id: 'edit.selectNext', label: 'cmd.selectNext', group: 'edit', keys: ['Alt+ArrowDown'], run: selectAdjacent(1) },
   { id: 'edit.selectPrev', label: 'cmd.selectPrev', group: 'edit', keys: ['Alt+ArrowUp'], run: selectAdjacent(-1) },
-  { id: 'edit.deselect', label: 'cmd.deselect', group: 'edit', keys: ['Escape'], enabled: (e) => !e.recordingSwitches && (!!sel(e) || e.getState().cutPending.length > 0) && !e.getState().paletteOpen, run: (e) => { e.clearCut(); e.select(null); } },
+  // Escape first clears the timeline's range marks when there are any (wave 8D P5; one chord, one command), then the selection
+  { id: 'edit.deselect', label: 'cmd.deselect', group: 'edit', keys: ['Escape'], enabled: (e) => !e.recordingSwitches && (!!sel(e) || e.getState().cutPending.length > 0 || rangeMarked(e)) && !e.getState().paletteOpen, run: (e) => { if (clearRange(e)) return; e.clearCut(); e.select(null); } },
   { id: 'edit.addText', label: 'text.add', group: 'edit', keys: ['KeyT'], run: (e) => e.addText() },
   // An adjustment layer over the whole edit (ADR-0016): empty until an effect is added to it in the Look panel (it is selected).
   { id: 'edit.addAdjustment', label: 'cmd.addAdjustment', group: 'edit', keys: [], enabled: (e) => !!e.doc && T.lt(T.ZERO, editEnd(e.doc)), run: (e) => e.addWholeEditAdjustment() },
@@ -442,6 +449,8 @@ export const COMMANDS: Command[] = [
   ...MUSICFIT_COMMANDS,
   // «ציור חי» (wave 8 ink): the mode's Shift+D, empty until W3 builds the mode
   ...INK_COMMANDS,
+  // range marks and range cut on the timeline (wave 8D P5): I, O, X (range/range.commands.ts); Escape clears the marks through edit.deselect
+  ...RANGE_COMMANDS,
   // «תא הבדיקה» (wave 8 booth): «פתיחת תא הבדיקה», owner's own session only (booth/booth.commands.ts; empty until builder W3)
   ...BOOTH_COMMANDS,
   // «שמירת הסרט כתבנית» (wave 8 owntemplate): owner's own session only (owntemplate/ownTemplate.commands.ts; empty until builder W3)

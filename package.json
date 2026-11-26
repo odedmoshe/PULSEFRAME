@@ -127,6 +127,7 @@
     "booth:ingest": "tsx tools/booth/ingest.ts",
     "proof:stills": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/stills-proof.ts",
     "proof:owntemplate": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/owntemplate-proof.ts",
+    "proof:timeline-basics": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/timeline-basics-proof.ts",
     "kit:check": "tsx --import ./packages/evals/src/proof-mode.ts packages/evals/src/kit-check.ts"
   },
   "devDependencies": {

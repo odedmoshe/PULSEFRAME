@@ -1,0 +1,15 @@
+/* Range marks (wave 8D P5 b): two flags on the ruler and the marked stretch tinted over every lane. Our tokens only. */
+.timeline.pf-ds .ruler .range-flag { position: absolute; inset-block: 2px; z-index: 5; /* over the playhead cap's grab area (z 3), which is often on the same frame */ display: inline-flex; align-items: center; padding: 0 6px; border: 0; border-radius: var(--pf-r-xs);
+  background: var(--pf-frame); color: var(--pf-frame-ink); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); line-height: 1; white-space: nowrap; cursor: ew-resize; touch-action: none; }
+/* the flag's word in the flag's ink (theme.css greys every `.ruler span`, the time labels) */
+.timeline.pf-ds .ruler .range-flag > span { color: inherit; border: 0; padding: 0; }
+.timeline.pf-ds .ruler .range-flag.is-in { border-radius: 0 var(--pf-r-xs) var(--pf-r-xs) 0; box-shadow: inset 2px 0 0 var(--pf-frame-ink); }
+.timeline.pf-ds .ruler .range-flag.is-out { transform: translateX(-100%); border-radius: var(--pf-r-xs) 0 0 var(--pf-r-xs); box-shadow: inset -2px 0 0 var(--pf-frame-ink); }
+.timeline.pf-ds .ruler .range-flag:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 1px; }
+.timeline.pf-ds .ruler .range-flag[data-dragging='true'] { filter: brightness(1.1); }
+.timeline.pf-ds .range-tint { position: absolute; inset-block: 0; z-index: 2; pointer-events: none; background: color-mix(in srgb, var(--pf-frame) 14%, transparent);
+  border-inline: 1px solid color-mix(in srgb, var(--pf-frame) 70%, transparent); }
+@media (forced-colors: active) {
+  .timeline.pf-ds .ruler .range-flag { background: Highlight; color: HighlightText; forced-color-adjust: none; }
+  .timeline.pf-ds .range-tint { background: transparent; border-inline-color: Highlight; }
+}

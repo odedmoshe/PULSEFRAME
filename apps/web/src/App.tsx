@@ -67,7 +67,7 @@ export function App() {
       const typing = isTyping(e.target as HTMLInputElement | null, chord) || spaceBelongsToControl(target && { tagName: target.tagName, isContentEditable: target.isContentEditable, type: (target as HTMLInputElement).type, role: target.getAttribute('role'), hasHref: target.hasAttribute('href'), focusVisible: origin.el === target ? origin.visible : target.matches(':focus-visible') }, chord);
       // a chord may belong to more than one command (the cut's , and . before the keyframe steps): the first that can run now acts
       const bound = keymap.lookupAll(chord);
-      const cmd = bound.find((c) => !c.enabled || c.enabled(editor)) ?? bound[0];
+      const cmd = bound.find((c) => (!c.keysHere || c.keysHere()) && (!c.enabled || c.enabled(editor))) ?? bound[0];
       // Ctrl+S and Ctrl+F belong to the editor while a project is open, whether or not their command may run now (wave 7 craft)
       if (editor.doc && takenFromBrowser(chord, (id) => keymap.keysFor(id))) e.preventDefault();
       if (!cmd) return;

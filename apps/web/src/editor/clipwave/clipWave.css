@@ -1,0 +1,4 @@
+/* A video clip's own sound under its filmstrip (wave 8D P5 d): a darkened band at the bottom of the clip with the wave in the sound colour. */
+.timeline.pf-ds .clip .clip-own-sound { position: absolute; inset-inline: 0; z-index: 0; overflow: hidden; pointer-events: none; border-radius: 0 0 var(--pf-r-clip) var(--pf-r-clip);
+  background: color-mix(in srgb, var(--pf-canvas) 62%, transparent); --k: var(--pf-k-sfx); }
+.timeline.pf-ds .clip .clip-own-sound .clip-visual { color: color-mix(in srgb, var(--k) 88%, transparent); }

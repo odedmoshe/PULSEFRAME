@@ -160,10 +160,10 @@ function Sheet({ editor }: { editor: Editor }) {
 
 // ---------------------------------------------------------------- settings
 /** The choices live above the footer and the body so the primary button can read them. */
-interface Pick { keys: string[]; choices: ExportChoices; dest: Destination['id'] | null; /** what the server's plan says about the target size (the Preview's request fills it) */ fit: FitView; /** a destination openExportSheet was asked to choose, applied by Settings (destinationPick) */ want?: Destination['id'] | null }
+interface Pick { /** the counts of the preflight checks, for the line beside the export button (null until they are counted) */ pre: { blockers: number; warnings: number; notes: number } | null; keys: string[]; choices: ExportChoices; dest: Destination['id'] | null; /** what the server's plan says about the target size (the Preview's request fills it) */ fit: FitView; /** a destination openExportSheet was asked to choose, applied by Settings (destinationPick) */ want?: Destination['id'] | null }
 // a destination is chosen from the start (saving a file on this computer: the original shape, full quality), so the sheet never opens on nothing
 const FIRST = DESTINATIONS.find((d) => d.id === 'computer')!;
-let pick: Pick = { fit: { kind: 'none' }, keys: ['master'], choices: { ...DEFAULT_CHOICES, ...FIRST.choices }, dest: FIRST.id };
+let pick: Pick = { pre: null, fit: { kind: 'none' }, keys: ['master'], choices: { ...DEFAULT_CHOICES, ...FIRST.choices }, dest: FIRST.id };
 const pickListeners = new Set<() => void>();
 const setPick = (p: Partial<Pick>) => { pick = { ...pick, ...p }; for (const l of pickListeners) l(); };
 /** The sheet's current choice of targets and settings (read-only; the tests of openExportSheet read it). */
@@ -305,24 +305,28 @@ function FormatCard({ t, on, onToggle, S, lang }: { t: ExportTarget; on: boolean
   const src = `/api/v1/projects/${doc.id}/frame?index=${editor.frame}${t.variantId ? `&variant=${encodeURIComponent(t.variantId)}` : ''}${t.kind === 'profile' ? '&x=1' : ''}`;
   const name = t.kind === 'master' ? `${S.master} ${t.name[lang].split(' ').slice(-1)[0]}` : t.name[lang];
   const aspectBox = { aspectRatio: `${t.width} / ${t.height}` };
+  const [noPicture, setNoPicture] = useState(false); // a frame that cannot be drawn leaves no grey box (design review I9)
+  useEffect(() => setNoPicture(false), [state.revision, src]);
   return (
     <label className={`pf-xs-fmt${on ? ' is-on' : ''}`} data-testid="export-format" data-key={t.key}>
       <input type="checkbox" checked={on} onChange={onToggle} />
-      <span className="pf-xs-fmt-box" style={aspectBox} aria-hidden="true">
-        {t.kind !== 'profile' ? <FrameImg src={src} cover={t.fit === 'cover'} rev={state.revision} /> : <><FrameImg src={`/api/v1/projects/${doc.id}/frame?index=${editor.frame}`} cover rev={state.revision} /><i /></>}
-      </span>
+      {!noPicture && (
+        <span className="pf-xs-fmt-box" style={aspectBox} aria-hidden="true">
+          {t.kind !== 'profile' ? <FrameImg src={src} cover={t.fit === 'cover'} rev={state.revision} onFail={setNoPicture} /> : <><FrameImg src={`/api/v1/projects/${doc.id}/frame?index=${editor.frame}`} cover rev={state.revision} onFail={setNoPicture} /><i /></>}
+        </span>
+      )}
       <span className="pf-xs-fmt-text"><b>{isolate(name)}</b><span className="num">{t.width}×{t.height}</span>{t.kind === 'profile' && <em>{S.willLink}</em>}</span>
     </label>
   );
 }
 
 /** One server-rendered frame (the render_frame route: the same evaluate + compositor as preview and export), or a quiet box while it loads. */
-function FrameImg({ src, cover, rev }: { src: string; cover?: boolean; rev: number }) {
+function FrameImg({ src, cover, rev, onFail }: { src: string; cover?: boolean; rev: number; /** told when the frame could not be drawn, so a card can leave its picture box out instead of showing a grey one */ onFail?: (failed: boolean) => void }) {
   const [ok, setOk] = useState<'loading' | 'ok' | 'fail'>('loading');
-  useEffect(() => setOk('loading'), [src, rev]);
+  useEffect(() => { setOk('loading'); onFail?.(false); }, [src, rev]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <img src={`${src}&r=${rev}`} alt="" loading="lazy" decoding="async" style={{ objectFit: cover ? 'cover' : 'contain', opacity: ok === 'ok' ? 1 : 0 }} onLoad={() => setOk('ok')} onError={() => setOk('fail')} />
+      <img src={`${src}&r=${rev}`} alt="" loading="lazy" decoding="async" style={{ objectFit: cover ? 'cover' : 'contain', opacity: ok === 'ok' ? 1 : 0 }} onLoad={() => setOk('ok')} onError={() => { setOk('fail'); onFail?.(true); }} />
       {ok === 'loading' && <i className="pf-xs-shimmer" />}
     </>
   );
@@ -401,6 +405,10 @@ function Checks({ editor, S, lead, chosen }: { editor: Editor; S: ExportStrings;
   const loudBad = lufs != null && target !== -14 && Math.abs(lufs + 14) > 2;
   const fmt = (v: number) => v.toFixed(1).replace('-', '−');
   const issues = rep?.issues.filter((i) => i.code !== 'no_loudness_target') ?? [];
+  useEffect(() => {
+    setPick({ pre: rep && !failed ? { blockers: issues.filter((i) => i.severity === 'blocker').length, warnings: issues.filter((i) => i.severity === 'warning').length, notes: issues.filter((i) => i.severity === 'note').length } : null });
+    return () => setPick({ pre: null });
+  }, [rep, failed]); // eslint-disable-line react-hooks/exhaustive-deps
   const words = (i: PreflightIssue): [string, string, string] => { const w = S.issue[i.code]; return w ? [w[0], w[1] || (ISSUE_DETAIL_IS_MESSAGE.has(i.code) ? i.message : ''), w[2]] : [i.message, '', '']; };
   return (
     <section aria-labelledby="xs-pre" data-testid="export-preflight">
@@ -477,6 +485,7 @@ function SettingsFooter({ editor, S }: { editor: Editor; S: ExportStrings }) {
   return (
     <>
       <span className="pf-xs-ambient">{S.ambient}</span>
+      {p.pre && <span className="pf-xs-pre" role="status" data-testid="export-pre-summary" data-blockers={p.pre.blockers}>{S.preSummary(p.pre.blockers, p.pre.warnings, p.pre.notes)}</span>}
       <Button variant="ghost" size="lg" onClick={closeExportSheet}>{S.cancel}</Button>
       <Button variant="primary" size="lg" icon={<Upload size={18} strokeWidth={1.75} aria-hidden="true" />} busy={s.starting} disabledReason={reason} onClick={() => void start()} data-testid="export-start" keys={['Enter']}>{S.exportN(chosen.length)}</Button>
       {s.error && <span className="pf-xs-err" role="alert">{s.error}{s.blockers.length > 0 && <> · {s.blockers.map((b) => b.message).join('; ')}</>}</span>}

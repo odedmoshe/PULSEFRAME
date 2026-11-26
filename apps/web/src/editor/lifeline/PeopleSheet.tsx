@@ -187,7 +187,10 @@ export function PeopleSheet({ open, focusPersonId, onClose }: { open: boolean; f
   return (
     <Dialog open onClose={onClose} variant="sheet" size="md" title={P.sheetTitle} closeLabel={t('close' as Key)} testId={PEOPLE_TESTIDS.sheet}>
       <div className="pf-pp">
-        <p className="pf-pp-privacy" data-testid={PEOPLE_TESTIDS.privacy}>{P.privacy}</p>
+        <div className="pf-pp-privacy" data-testid={PEOPLE_TESTIDS.privacy}>
+          <p>{P.privacyShort}</p>
+          <details><summary>{P.privacyMore}</summary><p>{P.privacy}</p></details>
+        </div>
         {problem && <AnchoredError blocking onDismiss={() => setProblem(null)} dismissLabel={P.sheetClose}>{problem}</AnchoredError>}
         {people.length === 0 && !adding && <p className="pf-life-note" role="status">{P.personNone}</p>}
         <ul className="pf-pp-list" aria-label={P.sheetTitle}>

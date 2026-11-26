@@ -36,6 +36,11 @@ export const FOCUSABLE = 'a[href],button,input,select,textarea,[tabindex],[conte
 
 /** Number-like runs: 1080×1920, 12:30, 3.5, 100%. Wrapped so they keep their order inside a right-to-left sentence (UX_REDESIGN §4.16). */
 export const NUMERIC_RUN = /\d+(?:[×x:.,/]\d+)*%?/g;
+/**
+ * A quantity with its unit, as «8.0 ש׳»: only the digits are LTR-isolated (`.num`), the unit stays in the sentence's own direction, so in a
+ * right-to-left line the number is read first and the unit after it. (A whole «8.0 ש׳» inside one LTR run puts the unit first.)
+ */
+export function NumUnit({ value, unit }: { value: ReactNode; unit: string }) { return <bdi><span className="num">{value}</span> {unit}</bdi>; }
 /** Splits a string into text and isolated `.num` runs; the whole thing sits in a <bdi> so user text picks its own direction. */
 export function isolate(text: string): ReactNode {
   const out: ReactNode[] = []; let last = 0, n = 0;

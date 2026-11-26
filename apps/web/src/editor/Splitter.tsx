@@ -5,32 +5,45 @@
  *
  * The shell (ds/shell.css) places this element in the `split` area and reads the timeline's height from --pf-shell-tl on
  * the shell element (`.app`, this element's parent); the splitter is the one that sets it:
- *   - a height the viewer chose: remembered in this browser (never in the project), and kept within the window;
- *   - otherwise the usual height: as tall as the timeline's lanes need (--pf-tl-natural, set by Timeline.tsx), between the
- *     design's least height and a little under half the window (48%); in Sound mode the timeline takes 52% of the window,
- *     or more when its taller sound lanes need it (never less than the lanes, never more than the window leaves).
+ *   - a height the viewer chose: remembered in this browser (never in the project), one per film shape (tall or wide), and
+ *     kept within the window;
+ *   - otherwise the usual height (interactions.math tlUsual): as tall as the timeline's lanes need (--pf-tl-natural, set by
+ *     Timeline.tsx), at most 30% of the window for a tall film and 38% for a wide one; in Sound mode as tall as the taller
+ *     sound lanes need (never less than the lanes, never more than the window leaves).
  * Keep the root element and its data-shell-slot: the shell finds the mount by it.
  */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Tooltip } from '../ds/index.ts';
-import { splitterHeight, TL_USUAL as USUAL, TL_USUAL_SOUND as USUAL_SOUND } from './interactions.math.ts';
+import { splitterHeight, splitterKey, tlUsual } from './interactions.math.ts';
 import { useEditorState } from './store.ts';
 import { TL_STRINGS } from './timeline.strings.ts';
 
-const KEY = 'pf.tl.height.v1';
+/** Before heights were kept per film shape (wave 8D) one height was kept for all: it stands for wide films. */
+const OLD_KEY = 'pf.tl.height.v1';
 const MIN_H = 200;       // toolbar, Pulse Strip, ruler and the main lane still fit
 const KEEP_ABOVE = 260;  // what the top bar and the viewer above keep, whatever is asked for
 
-const readStored = (): number | null => { try { const v = Number(localStorage.getItem(KEY)); return Number.isFinite(v) && v >= MIN_H ? v : null; } catch { return null; } };
+const readStored = (key: string): number | null => {
+  try {
+    const raw = localStorage.getItem(key) ?? (key.includes('landscape') ? localStorage.getItem(OLD_KEY) : null);
+    const v = Number(raw);
+    return raw !== null && Number.isFinite(v) && v >= MIN_H ? v : null;
+  } catch { return null; }
+};
 
 export function Splitter() {
   const { state } = useEditorState();
   const s = TL_STRINGS[state.lang];
   const root = useRef<HTMLDivElement>(null);
-  const [chosen, setChosen] = useState<number | null>(readStored);
+  const shape = state.doc ? { width: state.doc.settings.width, height: state.doc.settings.height } : null;
+  const key = splitterKey(shape);
+  const usual = tlUsual(shape, state.workspace === 'sound');
+  const [chosenBy, setChosenBy] = useState<{ key: string; h: number | null }>(() => ({ key, h: readStored(key) }));
+  // a project of the other shape reads its own remembered height
+  const chosen = chosenBy.key === key ? chosenBy.h : readStored(key);
+  useEffect(() => { if (chosenBy.key !== key) setChosenBy({ key, h: readStored(key) }); }, [key, chosenBy.key]);
   const [now, setNow] = useState({ height: 0, max: 0 });
   const drag = useRef<{ pointerId: number; y0: number; h0: number } | null>(null);
-  const sound = state.workspace === 'sound';
 
   const limits = () => ({ min: MIN_H, available: window.innerHeight, keepAbove: KEEP_ABOVE });
   const timelineEl = () => root.current?.parentElement?.querySelector<HTMLElement>(':scope > .timeline') ?? null;
@@ -50,10 +63,10 @@ export function Splitter() {
   useEffect(() => {
     const app = root.current?.parentElement;
     if (!app) return;
-    app.style.setProperty('--pf-shell-tl', chosen !== null ? `${splitterHeight(chosen, limits())}px` : sound ? USUAL_SOUND : USUAL);
+    app.style.setProperty('--pf-shell-tl', chosen !== null ? `${splitterHeight(chosen, limits())}px` : usual);
     measure();
     return () => { app.style.removeProperty('--pf-shell-tl'); };
-  }, [chosen, sound, measure]);
+  }, [chosen, usual, measure]);
   // a smaller window keeps the chosen height inside it; the shown value follows the timeline's real height
   useEffect(() => {
     const onResize = () => {
@@ -70,8 +83,10 @@ export function Splitter() {
 
   const choose = (h: number | null) => {
     const next = h === null ? null : splitterHeight(h, limits());
-    setChosen(next);
-    try { if (next === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, String(next)); } catch { /* storage unavailable: the height lasts for this visit */ }
+    setChosenBy({ key, h: next });
+    try {
+      if (next === null) { localStorage.removeItem(key); if (key.includes('landscape')) localStorage.removeItem(OLD_KEY); } else localStorage.setItem(key, String(next));
+    } catch { /* storage unavailable: the height lasts for this visit */ }
   };
   const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;

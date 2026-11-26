@@ -4,6 +4,7 @@ import * as T from '@pulseframe/time';
 import { clipEnd, timelineMarkers, type Clip } from '@pulseframe/core';
 import { readSnapBeats } from '../api.ts';
 import { useEditor } from './store.ts';
+import { moveClipOp, trackMoveRefusalText, trackMoveTarget, type MoveTrack } from './trackMove.ts';
 import { beatSnapTargets, markerSnapCandidates, overlapsOnTrack, snapToTargets, type SnapKind, type SnapTarget } from './interactions.math.ts';
 import './timeline.css';
 
@@ -17,6 +18,10 @@ export interface TimelineGhost {
   deltaFrames: number;
   /** The clip's length as it would be, in frames. */
   durationFrames: number;
+  /** The lane the ghost is drawn on: the clip's own track, or the track of the same kind a move is dragged onto. */
+  trackId: string;
+  /** Why the track under the pointer cannot take the clip (locked, another kind), in words; null when it can. */
+  refusal: string | null;
 }
 
 const EDGE_PX = 8;
@@ -28,6 +33,7 @@ interface Session {
   clipId: string;
   mode: Mode;
   startX: number;
+  startY: number;
   captured: boolean;
   start: T.RationalTime;
   duration: T.RationalTime;
@@ -49,6 +55,8 @@ interface Session {
   slide: { prevId: string; nextId: string; min: T.RationalTime; max: T.RationalTime } | null;
   /** Final frame-aligned result of the latest pointer position. */
   result: { start: T.RationalTime; end: T.RationalTime } | null;
+  /** Where a single-clip move lands (its own track, or another track of the same kind under the pointer) and why not, if refused. */
+  target: { trackId: string; refusal: string | null };
 }
 
 /**
@@ -71,7 +79,10 @@ export function useTimelineDrag(opts: { /** the blade tool is active: a press on
     try { if (s.captured) container.current?.releasePointerCapture(s.pointerId); } catch { /* already released */ }
     const r = s.result;
     if (cancel || !s.captured || !r) { setGhost(null); return; }
-    const unchanged = s.mode === 'move' ? T.eq(r.start, s.start) : s.mode === 'trim-start' ? T.eq(r.start, s.start) : T.eq(r.end, T.add(s.start, s.duration));
+    // a track that cannot take the clip: nothing is sent, and the reason is said (the ghost said it while dragging)
+    if (s.target.refusal) { setGhost(null); editor.notify({ kind: 'info', title: s.target.refusal }); return; }
+    const toOther = s.mode === 'move' && s.target.trackId !== s.trackId;
+    const unchanged = s.mode === 'move' ? T.eq(r.start, s.start) && !toOther : s.mode === 'trim-start' ? T.eq(r.start, s.start) : T.eq(r.end, T.add(s.start, s.duration));
     if (unchanged) { setGhost(null); return; }
     const rollOps = (() => {
       if (!s.roll || s.mode === 'move') return null;
@@ -92,7 +103,7 @@ export function useTimelineDrag(opts: { /** the blade tool is active: a press on
       return T.lt(s.start, r.start) ? [trimNext, move, trimPrev] : [trimPrev, move, trimNext]; // make room first, fill the gap last
     })();
     const ops = rollOps ?? slideOps ?? (s.mode === 'move'
-      ? (s.companions.length ? [{ op: 'move_clips', args: { clipIds: [s.clipId, ...s.companions], delta: T.sub(r.start, s.start) } }] : [{ op: 'move_clip', args: { clipId: s.clipId, start: r.start } }])
+      ? (s.companions.length ? [{ op: 'move_clips', args: { clipIds: [s.clipId, ...s.companions], delta: T.sub(r.start, s.start) } }] : [moveClipOp(s.clipId, r.start, s.trackId, s.target.trackId)])
       : [{ op: 'trim_clip', args: { clipId: s.clipId, edge: s.mode === 'trim-start' ? 'start' : 'end', to: s.mode === 'trim-start' ? r.start : r.end } }]);
     // The ghost stays until the server answers; a rejection (null) just removes it, the store reports the error.
     void editor.commit(ops as never, rollOps ? 'Roll cut' : slideOps ? 'Slide clip' : s.mode === 'move' ? 'Move clip' : 'Trim clip').finally(() => setGhost(null));
@@ -121,8 +132,9 @@ export function useTimelineDrag(opts: { /** the blade tool is active: a press on
       : rect.width >= 16 && e.clientX - rect.left <= EDGE_PX ? 'trim-start' : rect.width >= 16 && rect.right - e.clientX <= EDGE_PX ? 'trim-end' : 'move';
     container.current = e.currentTarget;
     session.current = {
-      pointerId: e.pointerId, clipId: id, mode, startX: e.clientX, captured: false, start: found.clip.start, duration: found.clip.duration,
+      pointerId: e.pointerId, clipId: id, mode, startX: e.clientX, startY: e.clientY, captured: false, start: found.clip.start, duration: found.clip.duration,
       trackId: found.tr.id, trackKind: found.tr.kind, result: null, companions: [], groupMin: found.clip.start, roll: null, slide: null,
+      target: { trackId: found.tr.id, refusal: null },
     };
     if (mode !== 'move' && (e.ctrlKey || e.metaKey)) {
       const frame = T.frameTime(1, editor.rate), endOf = clipEnd(found.clip);
@@ -150,7 +162,8 @@ export function useTimelineDrag(opts: { /** the blade tool is active: a press on
     if (!s || !doc || e.pointerId !== s.pointerId) return;
     const dx = e.clientX - s.startX;
     if (!s.captured) {
-      if (Math.abs(dx) < CLICK_PX) return; // still a click
+      // still a click; a move may go straight up or down (to another track), so the distance counts both ways
+      if (Math.abs(dx) < CLICK_PX && (s.mode !== 'move' || Math.abs(e.clientY - s.startY) < CLICK_PX)) return;
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
       s.captured = true;
     }
@@ -230,8 +243,20 @@ export function useTimelineDrag(opts: { /** the blade tool is active: a press on
       if (s.roll && T.lt(s.roll.limit, endT)) endT = s.roll.limit;
     }
     s.result = { start, end: endT };
-    const track = tracks.find((t) => t.id === s.trackId);
-    const invalid = !!track && s.trackKind !== 'audio' && overlapsOnTrack(track.clips, group, start, endT);
+    // A single clip moved by its body may change track: onto the lane under the pointer when it is of the same kind and
+    // unlocked (one move_clip with trackId), refused in words otherwise. A group, a slide and trims stay on their tracks.
+    if (s.mode === 'move' && !s.companions.length && !s.slide) {
+      const laneEl = document.elementsFromPoint?.(e.clientX, e.clientY).map((el) => el.closest?.('.track[data-track-id]') as HTMLElement | null).find(Boolean) ?? null;
+      const asMove = (t: (typeof tracks)[number]): MoveTrack => ({ id: t.id, kind: t.kind, locked: !!t.locked, name: t.name });
+      const over = laneEl ? tracks.find((t) => t.id === laneEl.dataset.trackId) ?? null : null;
+      const fromTr = tracks.find((t) => t.id === s.trackId);
+      if (fromTr) {
+        const tgt = trackMoveTarget(asMove(fromTr), over ? asMove(over) : null);
+        s.target = { trackId: tgt.trackId, refusal: tgt.refusal && over ? trackMoveRefusalText(editor.getState().lang, tgt.refusal, asMove(fromTr), asMove(over)) : null };
+      }
+    }
+    const track = tracks.find((t) => t.id === (s.mode === 'move' ? s.target.trackId : s.trackId));
+    const invalid = !!s.target.refusal || (!!track && s.trackKind !== 'audio' && overlapsOnTrack(track.clips, group, start, endT));
     const fr = (t: T.RationalTime) => T.frameIndexAt(t, rate);
     const endEdge = s.mode === 'trim-end' || (s.mode === 'move' && byEnd);
     // a snap that the limits above pulled the edge away from is no longer a snap
@@ -240,6 +265,7 @@ export function useTimelineDrag(opts: { /** the blade tool is active: a press on
     setGhost({
       clipId: s.clipId, mode: s.mode, leftPx: T.toSeconds(start) * pps, widthPx: Math.max(4, T.toSeconds(T.sub(endT, start)) * pps - 1), snappedTo, invalid,
       edgeFrame: fr(edge), deltaFrames: s.mode === 'trim-end' ? fr(endT) - fr(origEnd) : fr(start) - fr(s.start), durationFrames: fr(endT) - fr(start),
+      trackId: s.mode === 'move' ? s.target.trackId : s.trackId, refusal: s.target.refusal,
     });
   }, [editor, end]);
 

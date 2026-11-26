@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { drawnBox, findClip, type Clip } from '@pulseframe/core';
 import { boxToScreen, clampRotation, clampScale, clampX, edgeProxies, layerBox, rotationFromDrag, scaleFromDrag, SCALE_ANCHORS, screenDeltaToFrameFraction, type LayerHandle, type LayerTransform, type ScaleHandle } from './interactions.math.ts';
 import { useEditorState, type ResolvedNow } from './store.ts';
@@ -26,6 +26,9 @@ interface Drag {
   moved: boolean;
 }
 type Preview = Partial<LayerTransform>;
+
+/** The handle is drawn 12 px (the padding box, framed by an inset ring) inside a 24 px target: the transparent 6 px border is the extra hit area (WCAG 2.5.8). */
+const HIT_AREA: CSSProperties = { width: 24, height: 24, margin: '-12px 0 0 -12px', boxSizing: 'border-box', border: '6px solid transparent', backgroundClip: 'padding-box', boxShadow: 'inset 0 0 0 1px var(--pf-frame)' };
 
 export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
   const { editor, state, t } = useEditorState();
@@ -212,10 +215,10 @@ export function CanvasHandles(props: { canvas: HTMLCanvasElement | null }) {
       <div className="ch-box" style={{ left: box.cx, top: box.cy, width: box.w, height: box.h, transform: `translate(-50%, -50%) rotate(${box.rotationDeg}deg)` }}>
         <button {...common('move')} className="ch-move" />
         {(Object.entries(SCALE_ANCHORS) as [ScaleHandle, readonly [number, number]][]).map(([h, [u, v]]) => (
-          <button key={h} {...common(h)} className={`ch-handle ch-${h}`} style={{ left: `${u * 100}%`, top: `${v * 100}%` }} />
+          <button key={h} {...common(h)} className={`ch-handle ch-${h}`} style={{ left: `${u * 100}%`, top: `${v * 100}%`, ...HIT_AREA }} />
         ))}
         <span className="ch-stem" aria-hidden="true" />
-        <button {...common('rotate')} className="ch-handle ch-rotate" />
+        <button {...common('rotate')} className="ch-handle ch-rotate" style={HIT_AREA} />
       </div>
       {/* ADR-0019: the motion path of the clip's own x/y keys (MotionPath.tsx decides whether it shows; read-only in a format view) */}
       <MotionPath clip={clip} doc={doc} rect={rect} k={k} editable={!state.viewVariantId && !sel.track.locked}

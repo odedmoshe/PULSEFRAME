@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { focusIn } from '../ds/focus.ts';
+import { takeSilenceFocus } from './silenceFocus.ts';
 import { decodeTextFile, type DecodedText } from '../textDecode.ts';
 import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from '@pulseframe/core';
 import { CAPTION_LOOKS, CAPTION_PRESETS, FONT_CATALOG } from '@pulseframe/core';
 import type { Key } from '@pulseframe/i18n';
-import { api, type SilenceResult, type SpeechStatus } from '../api.ts';
+import { api, ApiFailure, type SilenceResult, type SpeechStatus } from '../api.ts';
+import { IconRename } from './icons.tsx';
 import { CaptionLooks } from './CaptionLooks.tsx';
 import { EngineInstall } from './EngineInstall.tsx';
 import { CAP_STRINGS } from './captions.strings.ts';
@@ -40,7 +43,7 @@ function AutoTranscribe({ assetId, language, overwrite, align }: { assetId: stri
   const { editor, state, t } = useEditorState();
   const [status, setStatus] = useState<SpeechStatus | null>(null);
   const [job, setJob] = useState<{ id: string; kind: 'asr' | 'download'; stage: string | null } | null>(null);
-  const [note, setNote] = useState<{ kind: 'done' | 'noSpeech' | 'failed'; detail?: string } | null>(null);
+  const [note, setNote] = useState<{ kind: 'done' | 'noSpeech' | 'failed'; detail?: string; code?: string } | null>(null);
   const refresh = () => api.speech().then(setStatus).catch(() => setStatus(null));
   useEffect(() => { void refresh(); }, []);
   useEffect(() => { setNote(null); }, [assetId]);
@@ -54,7 +57,7 @@ function AutoTranscribe({ assetId, language, overwrite, align }: { assetId: stri
         if (['succeeded', 'failed', 'canceled'].includes(j.status)) {
           setJob(null);
           if (job.kind === 'download') void refresh();
-          if (j.status === 'failed') setNote({ kind: 'failed', detail: j.error?.message });
+          if (j.status === 'failed') setNote({ kind: 'failed', detail: j.error?.message, code: (j.error as { code?: string } | undefined)?.code });
           else if (j.status === 'succeeded' && job.kind === 'asr') setNote({ kind: j.output?.attached ? 'done' : 'noSpeech' });
           return;
         }
@@ -67,7 +70,8 @@ function AutoTranscribe({ assetId, language, overwrite, align }: { assetId: stri
   }, [job?.id]);
   if (!status || !state.doc) return null;
   const pid = state.doc.id;
-  const start = (kind: 'asr' | 'download', p: Promise<{ jobId: string }>) => { setNote(null); p.then((r) => setJob({ id: r.jobId, kind, stage: null })).catch(editor.fail); };
+  // a refusal when starting is worded here, by its code, like a failed job; anything else goes to the error bar as before
+  const start = (kind: 'asr' | 'download', p: Promise<{ jobId: string }>) => { setNote(null); p.then((r) => setJob({ id: r.jobId, kind, stage: null })).catch((e) => (e instanceof ApiFailure ? setNote({ kind: 'failed', detail: e.message, code: e.code }) : editor.fail(e))); };
   const tr = status.transcription;
   const model = status.models.find((m) => m.kind === 'asr');
   const C = CAP_STRINGS[state.lang];
@@ -106,7 +110,14 @@ function AutoTranscribe({ assetId, language, overwrite, align }: { assetId: stri
           <details><summary>{C.howTo}</summary><ol>{C.notConfiguredHow.map((x) => <li key={x}>{x}</li>)}</ol></details>
         </div>
       ) : null}
-      {note && <p role="status" data-testid="asr-note" data-kind={note.kind}>{t(note.kind === 'done' ? (align ? 'asr.aligned' : 'asr.done') : note.kind === 'noSpeech' ? 'asr.noSpeech' : 'asr.failed')} {note.detail && <bdi>{note.detail}</bdi>}</p>}
+      {note && note.kind !== 'failed' && <p role="status" data-testid="asr-note" data-kind={note.kind}>{t(note.kind === 'done' ? (align ? 'asr.aligned' : 'asr.done') : 'asr.noSpeech')}</p>}
+      {/* the server's raw error text is English and technical: the owner reads the sentence for its code, the raw text waits under «פרטים טכניים» */}
+      {note?.kind === 'failed' && (
+        <div role="status" data-testid="asr-note" data-kind="failed" data-code={note.code}>
+          <p>{t('asr.failed')} {C.errors[note.code ?? ''] ?? C.errorOther}</p>
+          {(note.detail || note.code) && <details data-testid="asr-error-details"><summary>{C.techDetails}</summary><bdi dir="ltr">{[note.code, note.detail].filter(Boolean).join(': ')}</bdi></details>}
+        </div>
+      )}
     </div>
   );
 }
@@ -185,14 +196,15 @@ export function TranscriptPanel() {
 
   return (
     <div className="transcript pf-ds pf-cap" data-testid="transcript-panel" data-state="ready" data-asset-id={assetId ?? undefined}>
-      <header className="pf-cap-head"><h2>{CAP_STRINGS[state.lang].title} <span className="num">{transcript.segments.length}</span></h2><span className="pf-cap-hint">{CAP_STRINGS[state.lang].wordsHint}</span></header>
+      {/* one heading on this page: the inspector's «תמלול»; here the count and the one-line hint (design review D6) */}
+      <header className="pf-cap-head"><span className="pf-cap-count" data-testid="transcript-count">{CAP_STRINGS[state.lang].phrasesCount(transcript.segments.length)}</span><span className="pf-cap-hint"><span>{CAP_STRINGS[state.lang].wordsHintGo}</span> <span><kbd>Shift</kbd> {CAP_STRINGS[state.lang].wordsHintPick}</span></span></header>
       <ShowAsCaptions where="speech" />
       <TranslationReview />
       <div className="row">
-        <button className="ghost danger" disabled={lo < 0} onClick={() => void cut(false)} data-testid="transcript-delete">{t('transcript.delete')}</button>
+        <span className="pf-cap-reason" title={lo < 0 ? CAP_STRINGS[state.lang].pickWordsFirst : undefined}><button className="ghost danger" disabled={lo < 0} onClick={() => void cut(false)} data-testid="transcript-delete">{t('transcript.delete')}</button></span>
         {failure?.approx && <button className="ghost" onClick={() => void cut(true)} data-testid="transcript-cut-anyway">{t('transcript.cutAnyway')}</button>}
         {/* «שמור כפנינה» on the selected words (wave 7 pearls); once builder C has built it */}
-        {PEARLS_UI_BUILT && <SavePearlFromWords assetId={assetId} words={lo >= 0 ? flat.slice(lo, hi + 1).map((x) => x.w) : []} />}
+        {PEARLS_UI_BUILT && <span className="pf-cap-reason" title={lo < 0 ? CAP_STRINGS[state.lang].pickWordsFirst : undefined}><SavePearlFromWords assetId={assetId} words={lo >= 0 ? flat.slice(lo, hi + 1).map((x) => x.w) : []} /></span>}
       </div>
       {failure && <p className="muted danger" role="alert" data-testid="transcript-error">{failure.message}</p>}
       {notes.map((n) => <p key={n} className="muted" role="status" data-testid="transcript-skipped-note">{n}</p>)}
@@ -253,7 +265,7 @@ function Phrase({ seg, editing, onEdit, onSave, renderWord, formatName, formatTe
             </span>
           )}
           {formatText === undefined && seg.timing !== 'word' && <span className="badge" data-testid="transcript-timing" data-timing={seg.timing}>{t(seg.timing === 'approximate' ? 'transcript.approx' : 'transcript.segmentOnly')}</span>}
-          <button type="button" className="ghost small" onClick={() => onEdit(true)} data-testid="transcript-edit" aria-label={`${t('transcript.edit')}: ${shown.slice(0, 30)}`}>✎</button>
+          <button type="button" className="ghost small pf-cap-pencil" onClick={() => onEdit(true)} data-testid="transcript-edit" title={t('transcript.edit')} aria-label={`${t('transcript.edit')}: ${shown.slice(0, 30)}`}><IconRename size={14} /></button>
         </>
       )}
     </li>
@@ -488,6 +500,9 @@ export function SilencePanel() {
   const [stale, setStale] = useState(false);
   const [res, setRes] = useState<SilenceResult | null>(null);
   useEffect(() => { setRes(null); setErr(null); setStale(false); }, [assetId]);
+  // «הסרת שתיקות» on the timeline toolbar asked for the focus here (silenceFocus.ts): given in the commit that draws the finder
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (box.current && box.current.offsetParent && takeSilenceFocus()) { box.current.scrollIntoView({ block: 'nearest' }); focusIn(box.current, 'button:not(:disabled)', 'input', 'select'); } });
   if (!doc || !assetId) return null;
   const rate = editor.rate;
   const find = async () => {
@@ -504,7 +519,7 @@ export function SilencePanel() {
   };
   const valid = Number(minS) > 0 && minS !== '' && Number(keepS) >= 0 && keepS !== '';
   return (
-    <div className="fields silences" data-testid="silence-panel" data-asset-id={assetId}>
+    <div ref={box} className="fields silences" data-testid="silence-panel" data-asset-id={assetId}>
       <p className="muted">{t('silence.hint')}</p>
       <label>{t('silence.min')}
         <input type="number" min={0.05} step={0.05} value={minS} onChange={(e) => setMinS(e.target.value)} data-testid="silence-min" />

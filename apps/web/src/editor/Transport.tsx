@@ -1,9 +1,9 @@
 /**
- * The stage around the viewer (UX_REDESIGN §4.5). App.tsx mounts this component after the viewer (and the stage header,
- * StageHeader.tsx, before it, so the DOM and tab order match the picture); it renders what lies over the viewer (the cut loupe, the note of a moved
- * playhead, the hint of an edit with no clips yet), the scopes docked beside the viewer in Look mode at wide windows, and the
- * transport bar: timecode, steps, play, loop, the beat under the playhead, full screen. The transport runs left to right in
- * every language.
+ * The stage around the viewer (UX_REDESIGN §4.5). App.tsx mounts this component after the viewer; it renders what lies over
+ * the viewer (the cut loupe, the note of a moved playhead, the hint of an edit with no clips yet), the scopes docked beside
+ * the viewer in Look mode at wide windows, and the one transport bar under the picture (DESIGN_REVIEW WP1): timecode and
+ * total; steps, play, loop; the beat under the playhead, the frame size, and the viewer's tools (StageHeader.tsx StageTools:
+ * edit/source, formats, safe area, full screen). The transport runs left to right in every language.
  */
 import { useEffect, useState } from 'react';
 import { AudienceStageNote } from './audience/AudienceStageNote.tsx';
@@ -21,6 +21,7 @@ import { PerformView } from './perform/PerformView.tsx';
 import { playControl } from './playControl.ts';
 import { STAGE_STRINGS } from './stage.strings.ts';
 import { TimecodeButton } from './craft/TimecodeButton.tsx';
+import { StageTools } from './StageHeader.tsx';
 import './stage.css';
 
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -117,6 +118,8 @@ export function Transport() {
               <span className="pf-sr">{S.beatChip(beat.bar, beat.beat)}</span>
             </span>
           )}
+          {vw && vh && <span className="tp-facts num" data-testid="tp-facts" title={S.filmFacts} aria-label={`${S.filmFacts}: ${vw}×${vh} · ${T.toTimecode(editor.duration, rate)}`}>{vw}×{vh}</span>}
+          <StageTools />
         </div>
       </div>
     </>
