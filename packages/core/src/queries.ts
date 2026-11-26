@@ -7,6 +7,7 @@ import { timelineMarkers } from './cleanup.ts';
 import { assetNotices } from './notices.ts';
 import { eventDisplayName } from './events.ts';
 import { shareable } from './libraryCredits.ts';
+import { audienceMusicDb, hasFormatOverride } from './audienceContract.ts';
 
 const sec = (t: T.RationalTime) => Number(T.toSeconds(t).toFixed(6));
 
@@ -63,7 +64,10 @@ export function summarize(doc: ProjectDocument) {
     // shorts (ADR-0018): every sequence of the project, the main edit first; `tracks` above are the main edit's
     sequences: sequenceList(doc),
     recipeRuns: Object.values(doc.recipeRuns ?? {}).map((r) => ({ id: r.id, recipeId: r.recipeId, created: r.createdIds.length, steps: r.steps })),
-    variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.keys(v.overrides).length })),
+    // `overrides` counts the clips adjusted for this format; a clip whose only entry is a kept audience rule is not one (C14).
+    // `audience` (wave 8): a version for an audience, its profile and the music level it uses (dB relative to the rest of the mix).
+    variants: Object.values(doc.variants ?? {}).map((v) => ({ id: v.id, name: v.name, width: v.width, height: v.height, fit: v.fit, safeArea: v.safeArea, captionStyle: v.captionStyle ?? null, overrides: Object.values(v.overrides).filter(hasFormatOverride).length,
+      audience: v.audience ? { profile: v.audience.profile, musicDb: audienceMusicDb(v.audience) } : null })),
     // the STORED records, one per measured file, on purpose not by lineage (lineage.ts): this lists what exists to be read or
     // corrected (get_analysis, edit_analysis). A copy that follows its source's record has no entry (pinned in beatLineage.test.ts)
     analyses: Object.values(doc.analyses ?? {}).map((a) => ({ assetId: a.assetId, sceneCuts: a.scenes?.cuts.length ?? null, beats: a.beats?.beats.length ?? null, bpm: a.beats?.bpm ?? null, bars: a.beats?.downbeats?.length ?? null, meter: a.beats?.meter ?? null })),
