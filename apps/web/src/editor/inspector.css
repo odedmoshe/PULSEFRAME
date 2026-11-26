@@ -146,7 +146,7 @@
 .pf-insp input[type='radio'] { accent-color: var(--pf-frame); margin: 0; }
 
 /* sliders: a 4px rail filled to the value (the --v property, set by the inspector), a round knob with a frame ring */
-.pf-insp input[type='range'] { appearance: none; -webkit-appearance: none; block-size: 22px; margin: 0; padding: 0; background: transparent; cursor: pointer; --v: 0%; accent-color: var(--pf-frame); }
+.pf-insp input[type='range'] { appearance: none; -webkit-appearance: none; block-size: 24px; margin: 0; padding: 0; background: transparent; cursor: pointer; --v: 0%; accent-color: var(--pf-frame); }
 .pf-insp input[type='range']::-webkit-slider-runnable-track { block-size: 4px; border-radius: 4px; background: linear-gradient(to right, var(--pf-frame) var(--v), var(--pf-surface-4) var(--v)); }
 .pf-insp [dir='rtl'] input[type='range']:not([dir='ltr'])::-webkit-slider-runnable-track, .pf-insp:dir(rtl) input[type='range']:not([dir='ltr'])::-webkit-slider-runnable-track { background: linear-gradient(to left, var(--pf-frame) var(--v), var(--pf-surface-4) var(--v)); }
 .pf-insp input[type='range'].is-bipolar::-webkit-slider-runnable-track, .pf-insp input[type='range'][dir='ltr']::-webkit-slider-runnable-track {
@@ -310,7 +310,7 @@
 .pf-insp .mix-strip[data-muted='true'] > strong { color: var(--pf-text-disabled); border-color: var(--pf-text-disabled); }
 .pf-insp .mix-fader { display: grid; grid-template-rows: minmax(0, 1fr) auto; justify-items: center; gap: var(--pf-sp-3); min-block-size: 0; }
 /* a standing fader: physical sizes on purpose (in a vertical writing mode the logical ones swap) */
-.pf-insp input[type='range'].pf-vrange { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 100%; min-height: 72px; }
+.pf-insp input[type='range'].pf-vrange { writing-mode: vertical-lr; direction: rtl; width: 24px; height: 100%; min-height: 72px; }
 .pf-insp input[type='range'].pf-vrange::-webkit-slider-runnable-track { width: 4px; height: 100%; block-size: auto; background: linear-gradient(to top, var(--pf-k-voice) var(--v), var(--pf-surface-4) var(--v)); }
 .pf-insp input[type='range'].pf-vrange::-webkit-slider-thumb { width: 22px; height: 12px; margin: 0; margin-left: -9px; border-radius: 3px; box-shadow: 0 0 0 1px var(--pf-surface-1), 0 2px 5px color-mix(in srgb, black 50%, transparent); }
 .pf-insp input[type='range'].pf-vrange::-moz-range-track { width: 4px; height: 100%; }
