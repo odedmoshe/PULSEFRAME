@@ -378,7 +378,7 @@ describe('growing planner (W1): exclusions, warnings and the rebuild context', (
     expect(validateProject(applied({ ...plain, variants: {} } as ProjectDocument, p).doc)).toEqual([]);
   });
 
-  it('rebuild: kept picks keep their places, removed picks leave no gap and are recorded, a pick without eyes is excluded needs_marks; tracks are reused', () => {
+  it('rebuild: kept picks keep their places, removed picks are recorded, a pick without eyes is excluded needs_marks; tracks are reused', () => {
     const doc = project(['a', 'b', 'c', 'd'].map((id) => still(id)));
     const first = planGrowing(doc, { picks: ['a', 'b', 'c', 'd'].map((assetId) => ({ assetId, frame: null, eyes: level() })), sort: 'given', caption: { date: true, age: false } }, ctx({ a: '2020-01-01', b: '2020-01-02', c: '2020-01-03', d: '2020-01-04' }));
     const r = applied(doc, first);
@@ -393,11 +393,38 @@ describe('growing planner (W1): exclusions, warnings and the rebuild context', (
     expect(p.excluded.map((x) => [x.assetId, x.code])).toEqual([['b', 'kept_by_hand'], ['d', 'needs_marks'], ['c', 'removed_by_hand']]);
     expect(p.picks.map((x) => [x.assetId, x.startFrame])).toEqual([['a', 0]]);
     expect(p.record.removedPicks).toEqual([{ key: kc, assetId: 'c', frame: null }]);
-    expect((p.record.picked as { key: string }[]).map((x) => x.key)).toEqual([ka, kb]);
+    // every listed pick in show order, those not made again too (so the next rebuild keeps the same places); trailing empty slots are dropped
+    expect((p.record.picked as { key: string }[]).map((x) => x.key)).toEqual([ka, kb, kc, kd]);
+    expect(p.predicted.endFrame).toBe(60);
     expect(opsOf(p, 'add_track')).toEqual([]);
     expect(p.warnings.map((w) => w.code)).toEqual(expect.arrayContaining(['kept_by_hand', 'removed_by_hand']));
     // a first plan (no rebuild context) refuses a pick without eyes
     expect(refusal(() => planGrowing(doc, { picks: [{ assetId: 'a', frame: null }, { assetId: 'b', frame: null, eyes: level() }] }, ctx()))!.message).toBe(GROWING_REFUSALS.needsMarks.message());
+  });
+
+  it('rebuild (integration): a pick deleted by hand leaves its slot empty, so a clip kept by hand after it stays on its slot and nothing lands on it', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e'];
+    const doc = project(ids.map((id) => still(id)));
+    const first = planGrowing(doc, { picks: ids.map((assetId) => ({ assetId, frame: null, eyes: level() })), sort: 'given' }, ctx());
+    const r = applied(doc, first);
+    const runSlots = (r.results[0]!.output as { slots: { key: string; clipId: string }[] }).slots;
+    const clipId = (id: string) => runSlots.find((s) => s.key === growingPickKey(id, null))!.clipId;
+    const track = findClip(r.doc, clipId('a'))!.track.id;
+    // b deleted by hand, d kept by hand (rotated), a, c and e untouched: the server removes those three and plans again
+    const rest = applyTransaction(r.doc, [
+      { op: 'delete_clip', args: { clipId: clipId('b') } },
+      { op: 'set_clip_transform', args: { clipId: clipId('d'), transform: { rotation: 7 } } },
+      ...['a', 'c', 'e'].map((id) => ({ op: 'delete_clip', args: { clipId: clipId(id) } })),
+    ], { idSeed: 'hand_', actor: 'test' }).doc;
+    const p = planGrowing(rest, { picks: ids.map((assetId) => (assetId === 'b' || assetId === 'd' ? { assetId, frame: null } : { assetId, frame: null, eyes: level() })), sort: 'given', at: T.ZERO },
+      { capture: {}, keptKeys: [growingPickKey('d', null)], removedKeys: [growingPickKey('b', null)], reuseTracks: { pictures: track } });
+    expect(p.picks.map((x) => [x.assetId, x.startFrame, x.dissolveFrames])).toEqual([['a', 0, 0], ['c', 60, 0], ['e', 120, p.predicted.dissolveFrames]]);
+    expect(opsOf(p, 'add_track')).toEqual([]); // the pictures track is free over every new range
+    expect((p.record.picked as { key: string }[]).map((x) => x.key)).toEqual(ids.map((id) => growingPickKey(id, null)));
+    const out = applyTransaction(rest, [{ op: 'apply_template', args: { templateId: GROWING_TEMPLATE_ID, templateVersion: GROWING_VERSION, params: p.record, steps: p.steps, ops: p.ops, slots: p.slots, keepIds: [clipId('d')], recordRanges: true } }], { idSeed: 'rb_', actor: 'test', allowInternal: true }).doc;
+    expect(validateProject(out)).toEqual([]);
+    const starts = out.sequences[out.mainSequenceId]!.tracks.find((t) => t.id === track)!.clips.map((c) => T.frameIndexAt(c.start, R30)).sort((x, y) => x - y);
+    expect(starts).toEqual([0, 60, 90, 120]);
   });
 
   it('a clip moved in time keeps its transform, and the inverse gives its eyes back (the rebuild of an untouched or moved-only pick)', () => {

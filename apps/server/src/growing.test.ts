@@ -11,8 +11,7 @@
  * - THE EYES ARE REQUEST DATA ONLY (verifier C8): a planted coordinate sent in every request, after successful applies and rebuilds,
  *   appears in no table of the database (projects, transactions, outbox, entity versions, jobs, named versions…), no event, no
  *   summary, no archive (the owner's own, «בלי פרטי משפחה», «ארכיון לשיתוף»), no MCP resource, no answer and no console output.
- * PLANNER: while core GROWING_BUILT is false (W1 not merged) the planner is the LABELLED TEST DOUBLE growing.testDouble.ts (given
- * order, no captions); once W1's planner is merged, withGrowingDouble hands back core untouched and these rows run against it.
+ * PLANNER: the real core planner (W1); the test double of the build round was removed at integration.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -26,15 +25,13 @@ import { loadConfig, type Config } from './config.ts';
 import { Derivatives } from './derive.ts';
 import { Exporter } from './export.ts';
 import { Governance, type Principal } from './governance.ts';
-import { applyGrowingFor, eyesOfClip, GROWING_SERVER_BUILT, planGrowingFor, regenerateGrowingFor } from './growing.ts';
+import { applyGrowingFor, eyesOfClip, GROWING_SERVER_BUILT, growingRegeneration, planGrowingFor, regenerateGrowingFor } from './growing.ts';
 import { createApp } from './http.ts';
+import { regenerateRecipe } from './recipes.ts';
 import { createMcp } from './mcp.ts';
 import { Presence } from './presence.ts';
 import { Speech } from './speech.ts';
 import { ApiError, Store } from './store.ts';
-
-// TEST DOUBLE of the planner while W1's is not built (growing.testDouble.ts; a no-op once core GROWING_BUILT is true)
-vi.mock('@pulseframe/core', async (importOriginal) => (await import('./growing.testDouble.ts')).withGrowingDouble(await importOriginal()));
 
 const PLANTED = 0.123457;
 let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, speech: Speech, capabilities: Capabilities;
@@ -123,6 +120,25 @@ afterAll(async () => {
 });
 
 describe('growing: owner\'s own session only', () => {
+  it('a grant for another project gets the same refusal for this project\'s growing run and for an unknown run (both regenerate routes, MCP regenerate_recipe); an observing agent is refused owner_required before its body is read', async () => {
+    const other = gov.createGrant({ name: 'elsewhere', mode: 'edit', projectIds: ['prj_elsewhere'] }, OWNER).token;
+    const who = bearer(() => other);
+    for (const route of ['recipe-runs', 'template-runs']) {
+      const known = await rest(who, 'POST', `/api/v1/projects/${pid}/${route}/${runId}/regenerate`, {});
+      const unknown = await rest(who, 'POST', `/api/v1/projects/${pid}/${route}/run_nope/regenerate`, {});
+      expect([route, known.status, code(known)]).toEqual([route, 403, 'out_of_scope']);
+      expect([unknown.status, code(unknown), unknown.body.error?.message]).toEqual([known.status, code(known), known.body.error?.message]);
+    }
+    const t1 = await tool(who, 'regenerate_recipe', { projectId: pid, runId }), t2 = await tool(who, 'regenerate_recipe', { projectId: pid, runId: 'run_nope' });
+    expect(t1.text).toContain('out_of_scope');
+    expect(t2.text).toBe(t1.text);
+    // in process too (recipes.ts regenerateRecipe checks the rights before it looks the run up)
+    const pr = gov.principalForToken(other)!;
+    for (const id of [runId, 'run_nope']) await expect(regenerateRecipe(store, gov, pr, pid, id, {})).rejects.toMatchObject({ status: 403, code: 'out_of_scope' });
+    // the observer token may see the project: a growing run answers owner_required even to growing params that do not parse
+    const r = await rest(bearer(() => auth.tokens.observer), 'POST', `/api/v1/projects/${pid}/recipe-runs/${runId}/regenerate`, { params: { picks: 'x' } });
+    expect([r.status, code(r)]).toEqual([403, 'owner_required']);
+  });
   for (const [name, who] of AGENTS) {
     it(`${name}: plan, apply and both rebuild routes answer 403 owner_required; nothing is committed`, async () => {
       const before = revision();
@@ -292,6 +308,41 @@ describe('growing server (W2): the owner', () => {
     expect((await rest(owner, 'POST', `/api/v1/projects/${m.pid}/undo`, {})).status).toBe(200);
     expect(docJson(m.pid)).toBe(h2);
   });
+  it('integration: the interface\'s two rebuild requests (the bar: only expectedRevision; restore: the record list in order, the deleted pick marked again, restoreRemoved) meet the route; `at` and the rebuild fields travel; a kept pick keeps its place in the list', async () => {
+    const m = makeProject('contract', 4);
+    const at = T.frameTime(60, { num: 30, den: 1 });
+    const a = await rest(owner, 'POST', `/api/v1/projects/${m.pid}/recipes/growing/apply`, { params: { ...growingParams(m), at } });
+    expect(a.status, JSON.stringify(a.body)).toBe(200);
+    const rid = a.body.runId as string;
+    const keys = [...m.stills.map((s) => growingPickKey(s, null)), growingPickKey(m.video, 12)];
+    const d0 = store.getProject(m.pid).doc;
+    const starts0 = keys.map((k) => frameOf(clipOfKey(d0, rid, k)!.start));
+    expect(starts0).toEqual([60, 90, 120, 150, 180]); // the request's at
+    const [kA, kB, kC] = keys as [string, string, string];
+    const C = clipOfKey(d0, rid, kC)!, B = clipOfKey(d0, rid, kB)!;
+    store.commit({ projectId: m.pid, actor: 'user:local', ops: [{ op: 'delete_clip', args: { clipId: B.id } }, { op: 'set_clip_transform', args: { clipId: C.id, transform: { rotation: C.transform.rotation + 3 } } }] });
+    // the rebuild fields reach the planner even when nothing is kept or removed (W1 note 1), and the run's at (W1 note 4)
+    const g = growingRegeneration(store.getProject(m.pid).doc, store.getProject(m.pid).doc.recipeRuns[rid]!, {});
+    expect([g.ctx.keptKeys, g.ctx.removedKeys, g.params.at]).toEqual([[kC], [kB], d0.recipeRuns[rid]!.params.at]);
+    // the bar's request (GrowingBar.tsx): { expectedRevision } only
+    const r1 = await rest(owner, 'POST', `/api/v1/projects/${m.pid}/recipe-runs/${rid}/regenerate`, { expectedRevision: revision(m.pid) });
+    expect(r1.status, JSON.stringify(r1.body)).toBe(200);
+    const d1 = store.getProject(m.pid).doc;
+    expect(keys.map((k) => { const c = clipOfKey(d1, rid, k); return c ? frameOf(c.start) : null; })).toEqual([60, null, 120, 150, 180]); // B's place stays empty, C kept on it
+    expect((d1.recipeRuns[rid]!.params.picked as { key: string }[]).map((x) => x.key)).toEqual(keys); // list order, the kept C in the middle
+    expect((d1.recipeRuns[rid]!.params.removedPicks as { key: string }[]).map((x) => x.key)).toEqual([kB]);
+    // the restore request as growing.logic.ts restoreParams builds it from that record: the list in order, B marked again
+    const rec = d1.recipeRuns[rid]!.params.picked as { key: string; assetId: string; frame: number | null }[];
+    const picks = rec.map((p) => (p.key === kB ? { assetId: p.assetId, frame: p.frame, eyes: marks(1) } : { assetId: p.assetId, frame: p.frame }));
+    const r2 = await rest(owner, 'POST', `/api/v1/projects/${m.pid}/recipe-runs/${rid}/regenerate`, { params: { picks }, restoreRemoved: true, expectedRevision: revision(m.pid) });
+    expect(r2.status, JSON.stringify(r2.body)).toBe(200);
+    const d2 = store.getProject(m.pid).doc;
+    expect(keys.map((k) => frameOf(clipOfKey(d2, rid, k)!.start))).toEqual(starts0);
+    expect(r2.body.removed).toEqual([]);
+    expect((d2.recipeRuns[rid]!.params.picked as { key: string }[]).map((x) => x.key)).toEqual(keys);
+    expect(d2.recipeRuns[rid]!.params.removedPicks).toBeUndefined();
+    expect(kA).toBe(keys[0]);
+  });
   it('rebuild: a new pick without eyes is refused needs marks; params that are not an object are refused; an unknown run is 404', async () => {
     const m = makeProject('rebuild-refusals', 3);
     const a = await rest(owner, 'POST', `/api/v1/projects/${m.pid}/recipes/growing/apply`, { params: { ...growingParams(m), picks: growingParams(m).picks.slice(0, 2) } });
@@ -322,6 +373,15 @@ describe('growing: the eye marks are request data only (verifier C8)', () => {
     try {
       for (const [, who] of [...AGENTS, ['owner', owner] as [string, Who]]) for (const [method, url, body] of calls()) { const r = await rest(who, method, url, body); answers.push(r.body); if (who === owner && r.status === 200) ownerOk++; }
       // the owner's MCP session has no tools path here; the owner's REST calls above did real work
+      // the restore: a picture of the run deleted by hand, then made again from the planted marks (restoreRemoved with eyes)
+      const doc0 = store.getProject(pid).doc;
+      const gone = doc0.recipeRuns[runId]!.slots!.find((x) => x.kind === 'picture' && x.key === growingPickKey(stillIds[1]!, null))!;
+      store.commit({ projectId: pid, actor: 'user:local', ops: [{ op: 'delete_clip', args: { clipId: gone.clipId } }] });
+      const back = await rest(owner, 'POST', `/api/v1/projects/${pid}/recipe-runs/${runId}/regenerate`, { params: params(), restoreRemoved: true, expectedRevision: revision() });
+      expect(back.status, JSON.stringify(back.body)).toBe(200);
+      expect(back.body.removed).toEqual([]);
+      expect(clipOfKey(store.getProject(pid).doc, runId, growingPickKey(stillIds[1]!, null))).toBeDefined();
+      answers.push(back.body); ownerOk++;
       const v = await rest(owner, 'POST', `/api/v1/projects/${pid}/versions`, { name: 'after growing' });
       expect(v.status, JSON.stringify(v.body)).toBe(201);
       answers.push(v.body, (await rest(owner, 'GET', `/api/v1/projects/${pid}/versions`)).body);
@@ -335,7 +395,7 @@ describe('growing: the eye marks are request data only (verifier C8)', () => {
       }
       answers.push((await rest(owner, 'GET', `/api/v1/projects/${pid}/summary`)).body, (await rest(AGENTS[2]![1], 'GET', `/api/v1/projects/${pid}`)).body);
     } finally { for (const s of spies) s.mockRestore(); }
-    expect(ownerOk).toBe(4); // plan, apply and both rebuilds succeeded for the owner
+    expect(ownerOk).toBe(5); // plan, apply, both rebuilds and the restore succeeded for the owner
     const tables = (store.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((t) => t.name);
     for (const t of ['projects', 'transactions', 'outbox', 'entity_versions', 'jobs']) expect(tables).toContain(t);
     for (const t of tables) {

@@ -170,7 +170,12 @@ describe('the run in the document', () => {
     expect(v.deleted.map((x) => x.assetId)).toEqual(['a2']);
     const eyes = placePoint(placePoint(emptyMark(null), P(0.2, 0.5), shown, null).mark, P(0.6, 0.5), shown, null).mark;
     const req = restoreParams(v, { [pickId('a2', null)]: eyes })!;
-    expect(req.picks).toEqual([{ assetId: 'a3', frame: null }, { assetId: 'a2', frame: null, eyes: [P(0.2, 0.5), P(0.6, 0.5)] }]);
+    // the deleted pick is marked again at its place in the record's list (integration: sort 'given' keeps it where it was)
+    expect(req.picks).toEqual([{ assetId: 'a2', frame: null, eyes: [P(0.2, 0.5), P(0.6, 0.5)] }, { assetId: 'a3', frame: null }]);
+    // a pick the record names only as removed comes after the list
+    const d2 = base();
+    d2.recipeRuns = { r1: { ...d.recipeRuns.r1!, params: { picked: [{ key: k3, assetId: 'a3', frame: null }, { key: growingPickKey('a1', null), assetId: 'a1', frame: null }], removedPicks: [{ key: k2, assetId: 'a2', frame: null }] }, slots: [] } };
+    expect(restoreParams(currentGrowingRun(d2)!, { [pickId('a2', null)]: eyes })!.picks.map((x) => [x.assetId, !!x.eyes])).toEqual([['a3', false], ['a1', false], ['a2', true]]);
     expect(whyRows([{ assetId: 'a2', frame: null, capture: null, magnification: 1.23456, uncoveredShare: 0.0123 } as never])).toEqual([{ assetId: 'a2', frame: null, date: null, magnification: 1.23, uncoveredPercent: 1.2 }]);
   });
 });

@@ -282,7 +282,8 @@ export const planGrowing: PlanGrowing = (doc: ProjectDocument, params: unknown, 
   const exclude = (c: Checked, code: GrowingExclusion['code'], details: Record<string, unknown> = ZERO_DETAILS()) => excluded.push({ key: c.key, assetId: c.asset ? c.asset.id : P.picks[c.index]!.assetId, frame: c.frame, code, details });
 
   // ===== order (§4.7) =====
-  const live = checked.filter((c) => c.state !== 'removed');
+  // a pick deleted by hand still takes its place in the order on a rebuild (an empty slot, below); a first plan has none
+  const live = checked;
   let ordered: Checked[];
   if (P.sort === 'given') ordered = live;
   else {
@@ -306,10 +307,18 @@ export const planGrowing: PlanGrowing = (doc: ProjectDocument, params: unknown, 
     solved.set(c.key, { transform: s.transform, magnification: round6(s.magnification), k: growingCoverFactor(c.eyes!, c.shown, frame, target), share: growingUncoveredShare(c.eyes!, c.shown, frame, target) });
   }
   for (const c of checked) if (c.state === 'removed') exclude(c, 'removed_by_hand');
-  // the film: placed picks and picks kept by hand keep their places in the order; the rest leave no gap
-  const film = ordered.filter((c) => solved.has(c.key) || c.state === 'kept');
+  // the film: placed picks and picks kept by hand keep their places in the order. On a first plan an excluded pick leaves no gap.
+  // On a rebuild every listed pick keeps its slot and one that is not placed (deleted by hand, needs marks, outside the range)
+  // leaves its slot EMPTY: clips kept by hand stay where they are, so closing the gap would put the next pictures on top of
+  // them (integration of wave 8). Trailing empty slots are dropped.
+  const inFilm = (c: Checked) => solved.has(c.key) || c.state === 'kept';
+  const listed = rebuild ? ordered : ordered.filter(inFilm);
+  let last = listed.length - 1;
+  while (last >= 0 && !inFilm(listed[last]!)) last--;
+  const film = listed.slice(0, last + 1);
   const placedCount = film.filter((c) => solved.has(c.key)).length;
-  if (film.length < GROWING.minPictures) throw growingRefusal('tooFew', { inFilm: film.length, excluded: excluded.length });
+  const keptCount = film.filter((c) => c.state === 'kept').length;
+  if (placedCount + keptCount < GROWING.minPictures) throw growingRefusal('tooFew', { inFilm: placedCount + keptCount, excluded: excluded.length });
 
   // ===== time (§4.8): integer frames, nothing accumulated =====
   const startF = T.frameIndexAt(at, rate);
@@ -325,6 +334,7 @@ export const planGrowing: PlanGrowing = (doc: ProjectDocument, params: unknown, 
   const reason = (key: string, code: GrowingWarningCode) => reasons.set(key, [...(reasons.get(key) ?? []), code]);
   if (P.caption && (P.caption.date || P.caption.age)) {
     for (const c of film) {
+      if (!inFilm(c)) continue;
       const ck = growingCaptionKey(c.key);
       if (keptKeys.has(ck) || removedKeys.has(ck)) continue;
       if (c.moment === null) { noCaption.undated.push(c.key); reason(c.key, 'undated_no_caption'); continue; }
@@ -400,21 +410,22 @@ export const planGrowing: PlanGrowing = (doc: ProjectDocument, params: unknown, 
   const pictures = placedRanges.length ? chooseTrack('video', ctx.reuseTracks?.pictures, GROWING_BINDS.pictures, placedRanges) : null;
   const captionTrack = captionRanges.length ? chooseTrack('text', ctx.reuseTracks?.captions, GROWING_BINDS.captions, captionRanges) : null;
   const picks: GrowingPick[] = [];
-  let firstInFilm = true;
+  // a dissolve only from a picture right before (placed or kept by hand); never the first, never after an empty slot
+  let pictureBefore = false;
   for (const [i, c] of film.entries()) {
     const s = solved.get(c.key);
     const startI = slotStart(i);
-    if (!s) { firstInFilm = false; continue; }
+    if (!s) { pictureBefore = c.state === 'kept'; continue; }
     const freeze = !isStillAsset(c.asset);
     ops.push({ op: 'add_clip', args: freeze
       ? { assetId: c.asset.id, trackId: pictures!.arg, start: ft(startI), duration: ft(holdFrames), sourceIn: sourceTimeOfFrame(c.asset, c.frame!), freeze: true }
       : { assetId: c.asset.id, trackId: pictures!.arg, start: ft(startI), duration: ft(holdFrames), withLinkedAudio: false }, bind: c.key });
     ops.push({ op: 'set_clip_transform', args: { clipId: ref(c.key), transform: { ...s.transform } } });
-    const dissolve = firstInFilm ? 0 : D;
+    const dissolve = pictureBefore ? D : 0;
     if (dissolve > 0) ops.push({ op: 'set_transition', args: { clipId: ref(c.key), type: 'dissolve', frames: dissolve } });
     slots.push({ key: c.key, kind: 'picture', clipId: ref(c.key), accept: freeze ? 'video' : 'image' });
     picks.push({ key: c.key, assetId: c.asset.id, frame: c.frame, order: i, capture: c.moment, startFrame: startI, frames: holdFrames, dissolveFrames: dissolve, transform: { ...s.transform }, magnification: s.magnification, uncoveredShare: s.share, caption: captions.get(c.key) ?? null, reasons: [...new Set(reasons.get(c.key) ?? [])] });
-    firstInFilm = false;
+    pictureBefore = true;
   }
   for (const [i, c] of film.entries()) {
     const text = captions.get(c.key);
@@ -427,7 +438,7 @@ export const planGrowing: PlanGrowing = (doc: ProjectDocument, params: unknown, 
 
   // ===== steps and basis (words only; never a point) =====
   const secs = (f: number) => `${(f / fps).toFixed(2)} s`;
-  if (placedCount) steps.push(`Place ${placedCount} picture(s) on ${pictures!.status === 'new' ? pictures!.name : `track ${pictures!.name}`} from ${secs(startF)}, each held ${holdFrames} frames (${secs(holdFrames)}), ${P.sort === 'capture' ? 'in the order they were taken (undated ones after the picture before them in your list)' : 'in the order chosen'}${film.length > placedCount ? `; ${film.length - placedCount} picture(s) edited by hand keep their places` : ''}`);
+  if (placedCount) steps.push(`Place ${placedCount} picture(s) on ${pictures!.status === 'new' ? pictures!.name : `track ${pictures!.name}`} from ${secs(startF)}, each held ${holdFrames} frames (${secs(holdFrames)}), ${P.sort === 'capture' ? 'in the order they were taken (undated ones after the picture before them in your list)' : 'in the order chosen'}${keptCount ? `; ${keptCount} picture(s) edited by hand keep their places` : ''}${film.length > placedCount + keptCount ? `; ${film.length - placedCount - keptCount} place(s) stay empty where a picture of the last film is not made again` : ''}`);
   if (placedCount) steps.push(`Turn, size and move each picture so that the two eye points you marked land on the same two points of the frame: ${(P.faceSize * 100).toFixed(1)}% of the frame width apart, the eye line ${Math.abs(P.eyeLine * 100).toFixed(1)}% of the height ${P.eyeLine <= 0 ? 'above' : 'below'} the centre`);
   if (D > 0 && placedCount > 1) steps.push(`Dissolve from one picture to the next over ${D} frames (${secs(D)})`);
   else if (P.dissolve === 'none') steps.push('Cut from one picture to the next without a dissolve');
@@ -439,7 +450,8 @@ export const planGrowing: PlanGrowing = (doc: ProjectDocument, params: unknown, 
   basis.push('the eye points are not stored: the run keeps the pictures, their order and the settings; the pictures\' places in the film give the eye positions back');
 
   // ===== the record (never a coordinate) =====
-  const picked: GrowingPicked[] = film.map((c) => ({ key: c.key, assetId: c.asset.id, frame: c.frame }));
+  // every listed pick in show order (on a rebuild, those not made again too, so the next rebuild keeps the same places)
+  const picked: GrowingPicked[] = listed.map((c) => ({ key: c.key, assetId: P.picks[c.index]!.assetId, frame: c.frame }));
   const removedPicks: GrowingPicked[] = checked.filter((c) => c.state === 'removed').map((c) => ({ key: c.key, assetId: P.picks[c.index]!.assetId, frame: c.frame }));
   const record = growingRunRecordParams(P, picked, removedPicks);
 

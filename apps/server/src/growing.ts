@@ -234,6 +234,8 @@ export function growingRegeneration(doc: ProjectDocument, run: RecipeRun, reques
       return { assetId: p.assetId, frame: p.frame };
     }
     if (p.eyes) return { assetId: p.assetId, frame: p.frame, eyes: p.eyes };
+    // a pick the run never had must come marked (the planner only names an unmarked pick of the last film needs_marks)
+    if (!known.has(key)) throw growingRefusal('needsMarks', {});
     const eyes = slot && !goneKeys.has(key) ? eyesOfClip(doc, slot.clipId, run.params) : null;
     return eyes ? { assetId: p.assetId, frame: p.frame, eyes } : { assetId: p.assetId, frame: p.frame };
   });
@@ -287,7 +289,7 @@ export async function regenerateGrowingFor(store: Store, gov: Governance, princi
   const p = store.getProject(projectId);
   const run = own(p.doc.recipeRuns, runId);
   if (!run || run.recipeId !== GROWING_RUN_RECIPE_ID) throw GROWING_API_ERRORS.runNotFound(runId);
-  const g = growingRegeneration(p.doc, run, parsed.data as Record<string, unknown>, options);
+  const g = wrap(() => growingRegeneration(p.doc, run, parsed.data as Record<string, unknown>, options));
   const plan = wrap(() => planGrowing(g.without, g.params, g.ctx));
   // the new run record: the plan's picks and the picks kept by hand (so a later rebuild still knows what a kept clip holds), in the
   // order of the request's list (a kept pick keeps its place in it), and the picks that stay out

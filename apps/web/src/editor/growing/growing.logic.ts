@@ -210,10 +210,15 @@ export function currentGrowingRun(doc: ProjectDocument): GrowingRunView | null {
   const deleted = [...picked.filter((p) => gone.has(p.key)), ...removedRecorded.filter((p) => !picked.some((q) => q.key === p.key))];
   return { run, picked, removedRecorded, deleted };
 }
-/** The rebuild after a deletion: the whole list as the record has it (no eyes), the deleted picks marked again (eyes). */
+/**
+ * The rebuild after a deletion: the whole list in the record's order (no eyes), the deleted picks marked again (eyes) AT THEIR
+ * PLACE in it (the record lists every pick in show order, those deleted too), so `sort: 'given'` brings a picture back where it was;
+ * a deleted pick the record names only as removed comes after.
+ */
 export function restoreParams(view: GrowingRunView, marks: Marks): GrowingParams | null {
-  const keep = view.picked.filter((p) => !view.deleted.some((d) => d.key === p.key));
-  const picks = [...keep.map((p) => ({ assetId: p.assetId, frame: p.frame })), ...view.deleted.map((p) => { const m = marks[pickId(p.assetId, p.frame)]; return { assetId: p.assetId, frame: p.frame, ...(m?.eyes ? { eyes: [{ ...m.eyes[0] }, { ...m.eyes[1] }] as [EyePoint, EyePoint] } : {}) }; })];
+  const isDeleted = (p: GrowingPicked) => view.deleted.some((d) => d.key === p.key);
+  const marked = (p: GrowingPicked) => { const m = marks[pickId(p.assetId, p.frame)]; return { assetId: p.assetId, frame: p.frame, ...(m?.eyes ? { eyes: [{ ...m.eyes[0] }, { ...m.eyes[1] }] as [EyePoint, EyePoint] } : {}) }; };
+  const picks = [...view.picked.map((p) => (isDeleted(p) ? marked(p) : { assetId: p.assetId, frame: p.frame })), ...view.deleted.filter((d) => !view.picked.some((p) => p.key === d.key)).map(marked)];
   return picks.length >= GROWING.minPictures ? { picks } : null;
 }
 /** One «למה?» row: the picture, its date, magnification, uncovered share. */
