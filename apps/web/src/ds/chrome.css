@@ -193,7 +193,7 @@
 .pf-bw-legacy :is(input, select):focus, .pf-bw-audio :is(input, select):focus { box-shadow: 0 0 0 1.5px var(--pf-frame); outline: 0; }
 .pf-bw-legacy :is(.el-chips, .pf-tpl-chips) button, .pf-bw-audio .sfx-chips button { block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-5); border: 0; border-radius: var(--pf-r-pill); background: var(--pf-surface-2); color: var(--pf-text-2); font: inherit; font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); box-shadow: 0 0 0 1px var(--pf-line); }
 .pf-bw-legacy :is(.el-chips, .pf-tpl-chips) button[aria-pressed='true'], .pf-bw-audio .sfx-chips button[aria-pressed='true'] { background: var(--pf-text); color: var(--pf-surface-1); box-shadow: none; }
-.pf-bw-legacy .el-tile { background: var(--pf-surface-2); border: 0; box-shadow: 0 0 0 1px var(--pf-line); border-radius: var(--pf-r-md); }
+.pf-bw-legacy .el-tile { background: var(--pf-stage); border: 0; box-shadow: 0 0 0 1px var(--pf-line); border-radius: var(--pf-r-md); }
 .pf-bw-legacy .el-tile:hover:not(:disabled) { box-shadow: 0 0 0 1.5px var(--pf-frame); }
 .pf-bw-legacy .pf-tpl-card { background: var(--pf-surface-2); border: 0; box-shadow: 0 0 0 1px var(--pf-line); border-radius: var(--pf-r-md); }
 .pf-bw-legacy .pf-tpl-card:hover:not(.unavailable) { box-shadow: 0 0 0 1.5px var(--pf-frame); }
