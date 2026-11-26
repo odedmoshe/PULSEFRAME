@@ -959,6 +959,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     if (r < 0.45 || !maps.length) return { op: 'add_trip_map', args: { start: fr(), duration: f(30 + int(400)), stops: stops(), ...(rnd() < 0.5 ? { look: pick([...MAP_LOOKS]) } : {}) } };
     if (r < 0.75) return { op: 'update_trip_map', args: { clipId, ...(rnd() < 0.6 ? { stops: stops() } : {}), ...(rnd() < 0.5 ? { look: pick([...MAP_LOOKS]) } : {}) } };
     return { op: 'time_trip_map', args: { clipId, to: rnd() < 0.6 ? 'even' : 'bars' } };
+  };
+  /**
    * «תמונה חיה» (wave 8 living track). `genLiving(doc)` returns a random set_clip_depth or (once LIVING_BUILT) set_living_picture call:
    * mostly on a photo clip, sometimes on a video, a title or an unknown id (refused notPhoto / not_found); depths within the caps,
    * now and then an odd stroke (refused depth_invalid) or null (refused while a living picture is on the clip); moves, amounts that fit
