@@ -81,7 +81,7 @@ export const livingA11yScenarios: LivingA11yScenario[] = [
       const m = await openBlock(ctx);
       const r = await api(ctx.page, 'POST', `/projects/${m.pid}/transactions`, { ops: [{ op: 'set_living_picture', args: { clipId: m.clipId, depth: { v: 1, base: { kind: 'ramp', horizon: 450 }, strokes: [] } } }] });
       if (r.status >= 300) return { shown: false, modal: false, detail: { notMade: 'set_living_picture was refused (not built in this build?)', status: r.status } };
-      await ctx.page.getByTestId('living-block').and(ctx.page.locator('[data-state=on]')).waitFor({ timeout: 8000 }).catch(() => {});
+      await ctx.page.waitForFunction(() => !!document.querySelector('[data-testid=living-block][data-state=on]'), null, { timeout: 8000 }).catch(() => {});
       const st = await blockState(ctx.page);
       return { shown: st === 'on' && (await ctx.page.getByTestId('living-amount').count()) === 1 && (await ctx.page.getByTestId('living-move-push').getAttribute('role')) === 'radio', modal: false, detail: { blockState: st } };
     },

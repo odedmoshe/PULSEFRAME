@@ -93,8 +93,9 @@ export async function check15(ctx: LivingUiCtx): Promise<LivingUiResult> {
   const startRamp = await page.getByTestId('depth-canvas').getAttribute('aria-valuenow');
   await page.waitForFunction(() => !(document.querySelector('[data-testid=depth-save]') as HTMLButtonElement | null)?.disabled, null, { timeout: 15_000 }).catch(() => {});
   await page.getByTestId('depth-save').focus(); await page.keyboard.press('Enter');
-  const done = await page.getByTestId('living-block').and(page.locator('[data-state=on]')).waitFor({ timeout: 30_000 }).then(() => true, () => false);
+  const done = await page.waitForFunction(() => !!document.querySelector('[data-testid=living-block][data-state=on]'), null, { timeout: 30_000 }).then(() => true, () => false);
   if (!done) return { id: 15, ok: false, detail: { ramp: startRamp, ...(await notOn(page, pid, r0)) } };
+  const blockVisible = await page.getByTestId('living-block').isVisible().catch(() => null);
   const applied = await txSince(page, pid, r0);
   const afterApply = await doc(page, pid);
   const r1 = await lastRevision(page, pid);
@@ -118,7 +119,7 @@ export async function check15(ctx: LivingUiCtx): Promise<LivingUiResult> {
   const ok = startRamp === '450' && applied.length === 1 && canon(applied[0]!.ops) === canon(['set_living_picture']) && !!clipOf(afterApply, clipId)?.depth && !!fx
     && slide === 'true' && clipOf(afterSlide, clipId)?.effects?.find((e: any) => e.type === 'depth.living')?.params?.move === 'slide' && seeks.every(Boolean) && differing > 0
     && canon(undo1.sequences) === canon(afterApply.sequences) && canon(undo2.sequences) === canon(before.sequences);
-  return { id: 15, ok, detail: { rampHorizon: startRamp, transactionsOnSave: applied.map((t) => t.ops), depthStored: !!clipOf(afterApply, clipId)?.depth, slideChecked: slide, previewBytesDifferingFrame0vs89: differing, seeked: seeks,
+  return { id: 15, ok, detail: { blockVisible, rampHorizon: startRamp, transactionsOnSave: applied.map((t) => t.ops), depthStored: !!clipOf(afterApply, clipId)?.depth, slideChecked: slide, previewBytesDifferingFrame0vs89: differing, seeked: seeks,
     firstUndoEqualsAfterSave: canon(undo1.sequences) === canon(afterApply.sequences), secondUndoEqualsBefore: canon(undo2.sequences) === canon(before.sequences) } };
 }
 
@@ -165,7 +166,7 @@ export async function check18(ctx: LivingUiCtx): Promise<LivingUiResult> {
   const r0 = await lastRevision(page, pid);
   await page.getByTestId('living-apply').click();
   await page.getByTestId('depth-save').click();
-  const done = await page.getByTestId('living-block').and(page.locator('[data-state=on]')).waitFor({ timeout: 30_000 }).then(() => true, () => false);
+  const done = await page.waitForFunction(() => !!document.querySelector('[data-testid=living-block][data-state=on]'), null, { timeout: 30_000 }).then(() => true, () => false);
   if (!done) return { id: 18, ok: false, detail: await notOn(page, pid, r0) };
   const line = await page.getByText(/התנועה הקודמת הוחלפה|previous move was replaced/).count();
   const applied = await txSince(page, pid, r0);

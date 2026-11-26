@@ -273,7 +273,22 @@ export async function runLivingEngine(ctx: LivingEngineCtx): Promise<void> {
       }
       let worstPsnr = Infinity;
       for (let f = 0; f < n; f++) worstPsnr = Math.min(worstPsnr, psnr(all.subarray(f * frameBytes, (f + 1) * frameBytes) as Buffer, await still(disc.pid, f)));
-      ctx.check(7, `export (MP4): the disc's decoded centre at frames ${QUARTERS.join(', ')} follows the ease-in-out keys within 1.5 px; every exported frame within 36 dB PSNR of its still`, n === FRAMES && worstCentre <= 1.5 && worstPsnr >= 36, { frames: n, centre, worstCentrePx: Number(worstCentre.toFixed(2)), worstPsnrDb: Number(worstPsnr.toFixed(2)), exportSecondsOneSample: Math.round((Date.now() - t0) / 100) / 10 });
+      // for the reader only (not part of the pass condition): the same photo WITHOUT the effect, its first 30 frames exported the
+      // same way, against its own stills — what the encoder alone costs on this coordinate photo
+      const base = await newPhotoProject('living-export-baseline');
+      const bj0 = (await call(`/projects/${base.pid}/exports`, { range: { startFrame: 0, endFrame: 30 } })).body.jobId as string | undefined;
+      let baseline: unknown = null;
+      if (bj0) {
+        let bj: any; for (;;) { bj = (await call(`/jobs/${bj0}`)).body; if (['succeeded', 'failed', 'canceled'].includes(bj.status)) break; await new Promise((r) => setTimeout(r, 300)); }
+        if (bj.status === 'succeeded') {
+          const bout = path.join(ctx.art, 'baseline.mp4'); fs.writeFileSync(bout, (await call(`/jobs/${bj.id}/output`)).body);
+          const ball = ff(['-i', bout, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']); const bn = ball.length / frameBytes; let bw = Infinity;
+          for (let f = 0; f < bn; f++) bw = Math.min(bw, psnr(ball.subarray(f * frameBytes, (f + 1) * frameBytes) as Buffer, await still(base.pid, f)));
+          const c0 = decode(ball.subarray(0, frameBytes) as Buffer, W / 2, H / 2, [W / 2 - 0.5, H / 2 - 0.5]);
+          baseline = { frames: bn, worstPsnrDb: Number(bw.toFixed(2)), centreDecodedX: c0?.[0] ?? null, centreAtRestX: W / 2 - 0.5 };
+        } else baseline = { status: bj.status };
+      }
+      ctx.check(7, `export (MP4): the disc's decoded centre at frames ${QUARTERS.join(', ')} follows the ease-in-out keys within 1.5 px; every exported frame within 36 dB PSNR of its still`, n === FRAMES && worstCentre <= 1.5 && worstPsnr >= 36, { frames: n, centre, worstCentrePx: Number(worstCentre.toFixed(2)), worstPsnrDb: Number(worstPsnr.toFixed(2)), exportSecondsOneSample: Math.round((Date.now() - t0) / 100) / 10, withoutTheEffectForReference: baseline });
     }
   }
 
