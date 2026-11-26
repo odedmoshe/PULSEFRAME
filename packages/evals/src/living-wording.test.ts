@@ -51,4 +51,37 @@ describe('living wording', () => {
     const onAdj = translateRefusal('he', msg([{ op: 'add_effect', args: { clipId: adj, type: LIVING_EFFECT } }]));
     expect(onAdj).toContain('לתמונה חיה צריך תמונה משלה');
   });
+  it('provoked for real through set_living_picture (W1): notPhoto, rotated, tooShort, needsDepth, depthInvalid, tooFast — each worded in Hebrew with its next step, by its own pattern', () => {
+    const R = { num: 30, den: 1 }, f = (n: number) => T.frameTime(n, R);
+    const prov = { origin: 'fixture' as const, importedAt: '2026-11-26T00:00:00Z', importedBy: 'test' };
+    let doc: ProjectDocument = createProject({ id: 'p2', name: 'p2', frameRate: R });
+    let k = 0;
+    const run = (ops: OpCall[], on = doc) => applyTransaction(on, ops, { idSeed: `wl${k++}_`, actor: 'test', allowInternal: true });
+    const photo = { kind: 'image' as const, name: 'a.png', contentHash: `sha256:${'d'.repeat(64)}`, byteSize: 1, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 640, height: 360, codec: 'png', hasAlpha: false }, provenance: prov };
+    let r = run([{ op: 'import_asset', args: { asset: photo } }]);
+    doc = r.doc;
+    const pic = r.results[0]!.output!.assetId as string;
+    r = run([{ op: 'add_clip', args: { assetId: pic, start: f(0), duration: f(60) } }, { op: 'add_text', args: { text: 'x', start: f(0), duration: f(60) } }, { op: 'add_clip', args: { assetId: pic, start: f(60), duration: f(15) } }]);
+    doc = r.doc;
+    const [clip, title, short] = r.results.map((x) => x.output!.clipId as string) as [string, string, string];
+    const depth = { v: 1 as const, base: { kind: 'flat' as const }, strokes: [] };
+    const rotated = run([{ op: 'set_clip_transform', args: { clipId: clip, transform: { rotation: 4 } } }]).doc;
+    const cases: [keyof typeof LIVING_REFUSALS, OpCall, ProjectDocument][] = [
+      ['notPhoto', { op: 'set_living_picture', args: { clipId: title, depth } }, doc],
+      ['rotated', { op: 'set_living_picture', args: { clipId: clip, depth } }, rotated],
+      ['tooShort', { op: 'set_living_picture', args: { clipId: short, depth } }, doc],
+      ['needsDepth', { op: 'set_living_picture', args: { clipId: clip } }, doc],
+      ['depthInvalid', { op: 'set_living_picture', args: { clipId: clip, depth: { ...depth, strokes: [{ layer: 'near', size: 10, pts: [1, 2, 3] }] } } }, doc],
+      ['tooFast', { op: 'set_living_picture', args: { clipId: clip, depth, amount: 1 } }, doc],
+    ];
+    for (const [key, op, on] of cases) {
+      let e: OpError | undefined;
+      try { run([op], on); } catch (x) { if (x instanceof OpError) e = x; else throw x; }
+      expect(e?.details.why, key).toBe(LIVING_REFUSALS[key].why);
+      const he = translateRefusal('he', e!.message);
+      expect(he && /[א-ת]/.test(he) && IMPERATIVE.test(he), `${key}: ${e!.message}`).toBe(true);
+      expect(HE_LIVING.find(([re]) => re.test(e!.message)), key).toBeTruthy();
+      expect(e!.hint, key).toBe(LIVING_REFUSALS[key].hint);
+    }
+  });
 });

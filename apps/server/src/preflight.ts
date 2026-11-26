@@ -4,7 +4,7 @@
  * Blockers stop an export; warnings and notes do not. Read-only. Text extents are ESTIMATES (the server does not shape text).
  */
 import * as T from '@pulseframe/time';
-import { BACKDROP, BACKDROP_MIN_BLUR, documentChecks, QC_BUILT, QC_LIMITS, drawnBox, drawnName, type DrawnClip, MULTICAM_PREFLIGHT_CODE, multicamGroupOf, segmentSyncOffset, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
+import { LIVING_MAX_RATE, LIVING_PREFLIGHT, livingComfort, livingEffectOf, livingUnavailable, BACKDROP, BACKDROP_MIN_BLUR, documentChecks, QC_BUILT, QC_LIMITS, drawnBox, drawnName, type DrawnClip, MULTICAM_PREFLIGHT_CODE, multicamGroupOf, segmentSyncOffset, outputSafeArea, previousAdjacent, sequenceDuration, sequenceOf, velocityLimit, velocityNeeds, type Clip, type FollowStateName, type MediaClip, type OpCall, type ProjectDocument, type ResolvedRegion, type Track, type Transition } from '@pulseframe/core';
 import { audioPlan, captionCues, decodeOverBudget, evaluate, type DecodeStretch, type Layer } from '@pulseframe/engine';
 import type { Exporter } from './export.ts';
 import { LIBRARY_EXPORT_NOTES, outputDoc } from './export.ts';
@@ -220,13 +220,51 @@ export function preflight(exporter: Exporter, master: ProjectDocument, revision:
   // 12. «בדיקה לפני ייצוא» (wave 8 qc): the document rules of core qcChecks.ts on this output (flash_clip, held_past_picture,
   // title_hidden, ends_mid_word, cut_mid_word), each with its frame range and measured numbers. Until B1 builds them: none.
   issues.push(...documentChecks(doc).issues);
+  // 13. «תמונה חיה» (wave 8 living): a living picture moving faster than the comfort rule of thumb for its clip's length (keys by
+  // hand, a trim, a split), one with no drawn depth and one on a rotated picture (both are not drawn: still and export refuse them).
+  // Warnings with the clip's frames; the numbers behind the first are in `measured`.
+  issues.push(...livingPreflightIssues(doc, rate));
 
   const count = (s: PreflightIssue['severity']) => issues.filter((i) => i.severity === s).length;
   return {
     revision, variantId: opts.variantId ?? null, sequenceId: opts.sequenceId ?? null, output: { width: W, height: H, frames: total, fit: doc.settings.fit ?? 'contain', safeArea: guide?.safeArea ?? null },
     ok: count('blocker') === 0, blockers: count('blocker'), warnings: count('warning'), notes: count('note'), issues,
-    scope: `Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent), multicam segments out of step with the master sound by more than half a frame, stabilised clips (frames whose camera motion was not measured, frames where the correction is weakened so no empty edge shows).${QC_BUILT ? QC_SCOPE : ''} Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.`,
+    scope: `Checked: render blockers, empty picture, loudness setup, sound-effect tails cut at the end of the video, video decoders needed at once, transition handles (velocity ramps included), upscaling, safe areas (estimated text extents), caption reading speed, title fields without data and capture-sourced date stamps without a date, motion tracking (clips that follow a track or blur along it, on frames where the tracking is lost or uncertain or the followed picture is absent), multicam segments out of step with the master sound by more than half a frame, stabilised clips (frames whose camera motion was not measured, frames where the correction is weakened so no empty edge shows), living pictures (the move against the rule of thumb of at most ${LIVING_MAX_RATE * 100}% of the frame height per second between consecutive frames, a rule of thumb and not a medical check; a living picture without a drawn depth or on a rotated picture, which is not drawn).${QC_BUILT ? QC_SCOPE : ''} Not checked: picture quality, audio clipping (use measure_loudness), how the sound effects sound (nobody has listened to them), accessibility contrast, platform rules.`,
   };
+}
+
+/**
+ * «תמונה חיה» (wave 8 living; core livingComfort.ts): every ENABLED living picture on the picture tracks shown, checked as it is now
+ * (its keys, amount, move and the clip's length in whole frames). living_too_fast: livingComfort not ok — the peak change of the
+ * relative shift per second, the limit and the highest amount these keys allow are in `measured`, and the fix lowers the amount to
+ * it (update_effect always accepts a lower amount). living_no_depth / living_rotated: livingUnavailable — the picture is not drawn.
+ * Warnings, never blockers (the export's own refusal of an undrawable layer is the renderer's, not preflight's). Rules of thumb.
+ */
+export function livingPreflightIssues(doc: ProjectDocument, rate: { num: number; den: number }): PreflightIssue[] {
+  const out: PreflightIssue[] = [];
+  const seq = doc.sequences[doc.mainSequenceId];
+  for (const track of seq?.tracks ?? []) {
+    if (track.kind !== 'video' || track.hidden) continue;
+    for (const c of track.clips) {
+      const fx = livingEffectOf(c);
+      if (!fx) continue;
+      const range = { startFrame: T.frameIndexAt(c.start, rate), endFrame: T.frameIndexAt(T.add(c.start, c.duration), rate) };
+      const name = c.type === 'media' && Object.hasOwn(doc.assets, c.assetId) ? `"${doc.assets[c.assetId]!.name.slice(0, 40)}"` : `clip ${c.id}`;
+      const frames = T.frameIndexAt(c.duration, rate);
+      const comfort = livingComfort(fx, frames, rate);
+      if (!comfort.ok) {
+        const amount = typeof fx.params.amount === 'number' ? fx.params.amount : 0.5;
+        out.push({ code: LIVING_PREFLIGHT.tooFast, severity: 'warning', ids: [c.id, fx.id], range,
+          message: `the living picture on ${name} moves faster than the rule of thumb for its length: the shift between near and far changes by up to ${(comfort.peakRate * 100).toFixed(2)}% of the frame height a second, the rule of thumb is ${(comfort.limit * 100).toFixed(0)}% (not a medical check). The highest amount these keys allow: ${comfort.maxAmount}. Lower the amount or lengthen the clip`,
+          measured: { peakRate: comfort.peakRate, limit: comfort.limit, amount, maxAmount: comfort.maxAmount, clipFrames: frames },
+          fix: { label: `Lower the amount to ${comfort.maxAmount}`, ops: [{ op: 'update_effect', args: { clipId: c.id, effectId: fx.id, params: { amount: comfort.maxAmount } } }] } });
+      }
+      const why = livingUnavailable(c);
+      if (why === 'no_depth') out.push({ code: LIVING_PREFLIGHT.noDepth, severity: 'warning', ids: [c.id, fx.id], range, message: `the living picture on ${name} has no drawn depth, so it is not drawn (the still and the export refuse it). Draw the depth (set_clip_depth) or remove the living picture (set_living_picture remove)` });
+      if (why === 'rotated') out.push({ code: LIVING_PREFLIGHT.rotated, severity: 'warning', ids: [c.id, fx.id], range, message: `the living picture on ${name} is on a rotated picture, so it is not drawn (the still and the export refuse it). Set the rotation back to 0, or remove the living picture` });
+    }
+  }
+  return out;
 }
 
 /** What the qc rules add to the scope once built (rules of thumb with their numbers; nothing here says the film is fine). */

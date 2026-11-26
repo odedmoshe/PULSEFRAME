@@ -135,7 +135,7 @@ export const OP_ONLY_EFFECTS: Readonly<Record<string, string>> = Object.freeze({
 export const opOnlyEffect = (type: string): boolean => Object.hasOwn(OP_ONLY_EFFECTS, type);
 
 /** W1 sets this when set_living_picture's body and depthGrid are built and tested. The op refuses notBuilt until then. */
-export const LIVING_BUILT: boolean = false;
+export const LIVING_BUILT: boolean = true;
 
 // ---------------------------------------------------------------- operations
 export const SetLivingPictureArgsSchema = z.object({

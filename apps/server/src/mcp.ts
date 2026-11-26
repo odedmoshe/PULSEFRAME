@@ -38,6 +38,7 @@ import { libraryError } from './library/contract.ts';
 import { creditsFor } from './library/credits.ts';
 import { useLibraryItemFor } from './library/routes.ts';
 import { MadeRenderRequestSchema } from '@pulseframe/core';
+import { findClip, livingSummaryLine, type ProjectDocument as LivingDoc } from '@pulseframe/core';
 import { madeError } from './made/contract.ts';
 import { FindQuerySchema } from '@pulseframe/core';
 import { findTextFor } from './craft/findText.ts';
@@ -97,7 +98,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
 
     server.registerTool('list_projects', { description: 'List projects with their current revision.', inputSchema: z.object({}), annotations: ro }, () => run('observe', () => ({ projects: store.listProjects().filter((x) => !principal.grant?.projectIds || principal.grant.projectIds.includes(x.id)) })));
     server.registerTool('get_summary', { description: 'Project settings, duration, assets and tracks at the current revision.', inputSchema: z.object({ projectId: pid }), annotations: ro }, ({ projectId }) =>
-      run('observe', () => { const p = read(projectId); return { revision: p.revision, agentsPaused: gov.isPaused(projectId), ...summarize(p.doc), ...peopleNote(principal, p.doc) }; }));
+      run('observe', () => { const p = read(projectId); return { revision: p.revision, agentsPaused: gov.isPaused(projectId), ...summarize(p.doc), ...livingSummary(p.doc), ...peopleNote(principal, p.doc) }; }));
     // shorts (ADR-0018): a project may hold other sequences besides the main edit (list_sequences); sequenceId reads one of them
     const sid = z.string().optional().describe('A sequence of the project (list_sequences), for example a short; default the main edit');
     server.registerTool('get_timeline', { description: 'All tracks and clips with exact times, source references and ids, of the main edit or of another sequence of the project (sequenceId). A drawn clip (type drawn: a drawing or a map on a titles track) shows its kind and the kind\'s short summary only; it has no words, and text operations refuse it (drawn_not_text).', inputSchema: z.object({ projectId: pid, sequenceId: sid }), annotations: ro }, ({ projectId, sequenceId }) =>
@@ -132,7 +133,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
     server.registerTool('list_proposals', { description: 'Proposals on a project with their status (open, accepted, rejected, stale) and what they would change. The in-editor language assistant\'s proposals are the owner\'s own and are not listed for an agent credential.', inputSchema: z.object({ projectId: pid, status: z.enum(['open', 'accepted', 'rejected', 'stale']).optional() }), annotations: ro }, ({ projectId, status }) =>
       run('observe', () => { read(projectId); return { proposals: proposalsFor(principal, gov.listProposals(projectId, status)).map(({ ops: _o, changes, ...p }) => ({ ...p, changedIds: changes.map((c) => c.id) })) }; }));
     server.registerTool('describe_moment', { description: 'Everything active at one exact frame: picture/text layers with their source frame, and audio clips. Use before and after an edit to check its effect.', inputSchema: z.object({ projectId: pid, frameIndex: z.number().int().min(0), sequenceId: sid }), annotations: ro }, ({ projectId, frameIndex, sequenceId }) =>
-      run('observe', () => { const p = read(projectId); return { revision: p.revision, ...describeMoment(outputDoc(p.doc, { sequenceId }), T.frameTime(frameIndex, p.doc.settings.frameRate)), ...peopleNote(principal, p.doc) }; }));
+      run('observe', () => { const p = read(projectId); const doc = outputDoc(p.doc, { sequenceId }); return { revision: p.revision, ...withLivingLines(doc, describeMoment(doc, T.frameTime(frameIndex, p.doc.settings.frameRate))), ...peopleNote(principal, p.doc) }; }));
     server.registerTool('get_transcript', { description: 'Read the transcript of a media asset: phrases and words with ids and SOURCE times. Use the word ids with delete_transcript_range to cut speech by text, and phrase ids with correct_transcript.', inputSchema: z.object({ projectId: pid, assetId: z.string(),
       // paging (wave 8 autonomy C11): all optional; without them the whole transcript as before
       fromSeconds: z.number().min(0).optional().describe('Only phrases that end after this SOURCE second'), toSeconds: z.number().positive().optional().describe('Only phrases that start before this SOURCE second'),
@@ -410,4 +411,22 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
   const forgetAs = async (principal: Principal) => { const key = principal.grant?.id ?? principal.actor; const h = handlers.get(key); handlers.delete(key); await h?.handler.close().catch(() => {}); };
   return Object.assign(serve, { close, /** createApp hands over the assistant's job controls, so cancel_job and POST /jobs/:jobId/cancel share one cancel. */ bindAssistant(a: AssistantJobControls) { assistantJobs = a; },
     serveAs, forgetAs, /** index.ts binds W1's run service; routes and tools read it per request */ bindAgent(a: AgentRunService) { agentService = a; }, agentService: () => agentService });
+}
+
+/**
+ * «תמונה חיה» (wave 8 living): one line per living picture for agents — "living picture: push, amount 0.5; depth: drawn (3 strokes, …)"
+ * (core livingSummaryLine). get_summary lists them under `livingPictures` (only when the main edit has one, so other summaries are
+ * unchanged); describe_moment adds `living` to the layer of such a clip. A description of the document: nobody has looked at it.
+ */
+export function livingSummary(doc: LivingDoc): { livingPictures?: { clipId: string; line: string }[] } {
+  const rows = (doc.sequences[doc.mainSequenceId]?.tracks ?? []).flatMap((t) => t.clips.flatMap((c) => { const line = livingSummaryLine(c); return line ? [{ clipId: c.id, line }] : []; }));
+  return rows.length ? { livingPictures: rows } : {};
+}
+export function withLivingLines<M extends { layers: readonly object[] }>(doc: LivingDoc, moment: M): M {
+  return { ...moment, layers: moment.layers.map((l) => {
+    const id = (l as { clipId?: unknown }).clipId;
+    const clip = typeof id === 'string' ? findClip(doc, id)?.clip : undefined;
+    const line = clip ? livingSummaryLine(clip) : null;
+    return line ? { ...l, living: line } : l;
+  }) };
 }

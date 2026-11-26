@@ -14,8 +14,13 @@
  * living picture (livingReplacedMotion, C3), reporting them in output.replacedMotion so the editor says «התנועה הקודמת הוחלפה בתמונה
  * חיה». One undo removes all of it.
  */
-import { defineOp, livingRefusal, mustClip } from './ops.ts';
-import { depthProblems, LIVING_BUILT, LIVING_EFFECT, SetClipDepthArgsSchema, SetLivingPictureArgsSchema } from './livingContract.ts';
+import * as T from '@pulseframe/time';
+import { defineOp, effectSlot, livingRefusal, mustClip, OpError, parseEffect } from './ops.ts';
+import { depthProblems, LIVING_CURVES, LIVING_DEFAULTS, LIVING_EFFECT, SetClipDepthArgsSchema, SetLivingPictureArgsSchema, type LivingCurve, type SetLivingPictureOutput } from './livingContract.ts';
+import { livingLongEnough, livingMaxAmount, livingMoveOf } from './livingComfort.ts';
+import { livingReplacedMotion, livingTravelKeys } from './living.ts';
+import { sampleKeyframes, TRANSFORM_RANGE } from './animation.ts';
+import type { EffectInstance } from './effects.ts';
 import type { ProjectDocument } from './schema.ts';
 
 /** The photo clip an op of this track works on (refusal notPhoto otherwise). */
@@ -32,9 +37,51 @@ defineOp({
   version: 1,
   description: 'Make a photo clip a living picture («תמונה חיה»): the photo moves slowly in depth, what was drawn as near more than what is far. Needs a depth drawn on the photo: pass `depth` ({v:1, base: ramp with a horizon or flat, strokes of near/far soft brush}) or set it first with set_clip_depth; nothing is estimated. Moves: push (a slow push in, default) or slide. The amount (default 0.5) is capped by the clip length by a comfort rule of thumb; above it the refusal names the highest amount that fits. Replaces the clip\'s Ken Burns move in the same step. remove:true takes the living picture away (the depth stays). Photos only, not rotated; needs a graphics adapter to be seen.',
   args: SetLivingPictureArgsSchema,
-  apply(d, a) {
-    // W1 replaces this with the body described in this file's header (and sets LIVING_BUILT).
-    throw livingRefusal('notBuilt', { clipId: a.clipId, built: LIVING_BUILT });
+  apply(d, a, ctx) {
+    // W1: the refusals in the header's order, then one transaction (one undo: the generic entity diff of the clip)
+    const { clip } = mustPhotoClip(d, a.clipId);
+    const list = [...(clip.effects ?? [])];
+    const at = list.findIndex((e) => e.type === LIVING_EFFECT);
+    const was = at >= 0 ? list[at]! : undefined;
+    if (a.remove) {
+      if (!was) return { affectedIds: [], summary: 'No living picture to remove', output: { effectId: null } };
+      list.splice(at, 1);
+      if (list.length) clip.effects = list; else delete clip.effects;
+      return { affectedIds: [clip.id], summary: 'Removed the living picture (the drawn depth stays)', output: { effectId: null, removed: was.id } };
+    }
+    const rate = d.settings.frameRate;
+    // the whole-clip move the living picture replaces (C3); the rotation is judged on the clip as it will be
+    const replaced = livingReplacedMotion(clip, rate);
+    const rotationKeys = replaced.properties.includes('rotation') ? 0 : clip.keyframes?.rotation?.length ?? 0;
+    const restRotation = replaced.properties.includes('rotation') ? sampleKeyframes(clip.keyframes!.rotation!, T.ZERO, TRANSFORM_RANGE.rotation) : clip.transform.rotation;
+    if (restRotation !== 0 || rotationKeys > 0) throw livingRefusal('rotated', { clipId: clip.id, rotation: restRotation, rotationKeys });
+    const frames = T.frameIndexAt(clip.duration, rate);
+    if (!livingLongEnough(frames, rate)) throw livingRefusal('tooShort', { clipId: clip.id, clipFrames: frames });
+    if (!a.depth && !clip.depth) throw livingRefusal('needsDepth', { clipId: clip.id });
+    if (a.depth) { const problems = depthProblems(a.depth); if (problems.length) throw livingRefusal('depthInvalid', { clipId: clip.id, problems }, problems.join('; ')); }
+    const move = a.move ?? (was ? livingMoveOf(was.params) : LIVING_DEFAULTS.move);
+    const firstEasing = was?.keyframes?.travel?.[0]?.easing;
+    const curve: LivingCurve = a.curve ?? ((LIVING_CURVES as readonly string[]).includes(firstEasing ?? '') ? firstEasing as LivingCurve : LIVING_DEFAULTS.curve);
+    const max = livingMaxAmount(frames, rate, move, curve);
+    // an amount given above the rule of thumb is refused with the highest that fits; one not given (the default or the one there
+    // was) is lowered to it, so the op's own default never refuses a short clip
+    if (a.amount !== undefined && a.amount > max) throw livingRefusal('tooFast', { clipId: clip.id, max, amount: a.amount, move, curve, clipFrames: frames }, max);
+    const amount = a.amount ?? Math.min(max, typeof was?.params.amount === 'number' ? was.params.amount : LIVING_DEFAULTS.amount);
+    if (!was && list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
+    // in the same transaction: the depth, the instance with its keys, the replaced move
+    if (a.depth) clip.depth = structuredClone(a.depth);
+    const fx: EffectInstance = { ...(was ?? {}), id: was?.id ?? ctx.newId('fx'), type: LIVING_EFFECT, enabled: true,
+      params: parseEffect(LIVING_EFFECT, { ...(was?.params ?? {}), move, amount, travel: 0 }),
+      keyframes: { ...(was?.keyframes ?? {}), travel: livingTravelKeys(frames, rate, curve) } };
+    if (was) list[at] = fx; else list.splice(effectSlot(list, LIVING_EFFECT, undefined), 0, fx);
+    clip.effects = list;
+    if (replaced.properties.length) {
+      const kf = { ...clip.keyframes };
+      for (const p of replaced.properties) { clip.transform = { ...clip.transform, [p]: sampleKeyframes(kf[p]!, T.ZERO, TRANSFORM_RANGE[p]) }; delete kf[p]; }
+      if (Object.keys(kf).length) clip.keyframes = kf; else delete clip.keyframes;
+    }
+    const output: SetLivingPictureOutput = { effectId: fx.id, move, amount, maxAmount: max, replacedMotion: replaced.presetIds };
+    return { affectedIds: [clip.id], summary: `Living picture (${move}, amount ${amount}${replaced.presetIds.length ? `; replaced ${replaced.presetIds.join(', ')}` : ''})`, output: { ...output } };
   },
 });
 
