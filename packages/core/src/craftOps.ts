@@ -91,7 +91,7 @@ defineOp({
 defineOp({
   name: 'paste_attributes',
   version: 1,
-  description: 'Copy groups of attributes of one clip onto other clips: colour (colour effects), effects (the other effects, blend mode, mask), transform (position, scale, rotation, opacity), animation (transform keys, a title\'s letter animation), sound (gain, fades, volume keys, sound effects), titleStyle (a title\'s style). Each group REPLACES the target\'s, never merges; a group the source has nothing in changes nothing. A pair the target cannot take is left out and listed in output.skipped with the reason; the rest is applied in one step. Refused when nothing could be applied anywhere.',
+  description: 'Copy groups of attributes of one clip onto other clips: colour (colour effects, a colour grade with its curves), effects (the other effects, blend mode, mask), transform (position, scale, rotation, opacity), animation (transform keys, a title\'s letter animation), sound (gain, fades, volume keys, sound effects), titleStyle (a title\'s style). Each group REPLACES the target\'s, never merges; a group the source has nothing in changes nothing. A pair the target cannot take is left out and listed in output.skipped with the reason; the rest is applied in one step. Refused when nothing could be applied anywhere.',
   args: PasteAttributesArgsSchema,
   apply(d, a, ctx) {
     const out = applyAttributes(d, a, ctx);

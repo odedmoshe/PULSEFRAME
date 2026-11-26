@@ -186,3 +186,7 @@ export * from './audienceContract.ts';
 export * from './audienceValidate.ts';
 export * from './audience.ts';
 export * from './audienceOps.ts';
+// colour curves «עקומות» (wave 8 grade track): the contract, validation rule, canonical form, presets and the op set_grade_curves are
+// lead-built; the table maths (gradeCurveTable / gradeCurveTables / gradeCurveTablesRgba / gradeCurveTablesDigest) is W1's
+export * from './gradeCurves.ts';
+export * from './gradeCurvesOps.ts';

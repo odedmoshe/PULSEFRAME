@@ -361,7 +361,9 @@ export async function applyEffects(a: Buf, effects: NonNullable<LayerLook['effec
       drawFiltered(next.ctx, cur.canvas, css, blur, env.width, env.height);
     } else if (isGpuEffect(effects[i]!.type)) {
       // Not available (no adapter, or the reference check failed): the layer goes on unchanged and the effect is recorded as missing.
-      if (!(await gpuEffect(effects[i]!.type, effects[i]!.params, cur.canvas, next.ctx, env))) next.ctx.drawImage(cur.canvas, 0, 0);
+      // the instance's non-parameter fields ride as `extra` (a grade's colour curves, wave 8 grade C2); absent for every other effect
+      const curves = effects[i]!.curves;
+      if (!(await gpuEffect(effects[i]!.type, effects[i]!.params, cur.canvas, next.ctx, env, curves ? { curves } : undefined))) next.ctx.drawImage(cur.canvas, 0, 0);
       i++;
     } else {
       layerEffect(effects[i]!.type, effects[i]!.params, cur.canvas, next.ctx, env);

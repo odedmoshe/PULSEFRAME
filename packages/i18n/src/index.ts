@@ -24,6 +24,7 @@ import { STORY_EN, STORY_HE } from './story.ts';
 import { GROWING_EN, GROWING_HE } from './growing.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
 import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
+import { GRADE_EN, GRADE_HE } from './grade.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { COVER_EN, COVER_HE } from './cover.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
@@ -244,6 +245,7 @@ export const he = {
   ...INSTRUMENTS_HE,
   ...BOOTH_HE,
   ...COVER_HE,
+  ...GRADE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -460,6 +462,7 @@ export const en: Record<keyof typeof he, string> = {
   ...INSTRUMENTS_EN,
   ...BOOTH_EN,
   ...COVER_EN,
+  ...GRADE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -493,3 +496,4 @@ export * from './footageSearch.ts';
 export * from './instruments.ts';
 export * from './booth.ts';
 export * from './cover.ts';
+export * from './grade.ts';

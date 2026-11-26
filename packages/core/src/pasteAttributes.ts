@@ -90,6 +90,9 @@ function pasteEffects(c: Ctx, id: string, family: (type: string) => boolean): vo
     const r = runOp(d, ctx, 'add_effect', { clipId: id, type: s.type, params: s.params, ...(at !== undefined ? { index: at } : {}) });
     const effectId = (r.output as { effectId: string }).effectId;
     at = target(d, id).clip.effects!.findIndex((e) => e.id === effectId) + 1;
+    // colour curves (wave 8 grade, verifier C4): not a parameter, so add_effect cannot carry them; copied onto THIS new instance (a
+    // clip with two colour grades keeps each one's own curves, which set_grade_curves, always the first grade, could not)
+    if (s.curves) target(d, id).clip.effects![at - 1]!.curves = structuredClone(s.curves);
     if (!s.enabled) runOp(d, ctx, 'update_effect', { clipId: id, effectId, enabled: false });
     for (const [param, keys] of Object.entries(s.keyframes ?? {})) {
       const w = keysWithin(keys, duration);
