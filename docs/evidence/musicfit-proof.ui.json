@@ -1,5 +1,5 @@
 {
- "when": "2026-11-26T07:47:22.024Z",
+ "when": "2026-11-26T15:20:07.556Z",
  "web": true,
  "pageErrors": [],
  "evidence": {
@@ -89,7 +89,7 @@
   "impact.en.1440.line": "The moment is 10 frames after the beat",
   "impact.en.1440.after": "The moment is on the beat's frame",
   "heard.he": {
-   "made": "ast_f61afae70d0",
+   "made": "ast_04a70f4c270",
    "unheard": "חיבור אוטומטי — עוד לא הושמע",
    "playPressed": true,
    "heardEnabledAfterPlay": true,
@@ -107,7 +107,7 @@
    "state": "unmarked"
   },
   "heard.en": {
-   "made": "ast_7bab9d04120",
+   "made": "ast_548e1434560",
    "unheard": "Automatic join — not heard yet",
    "playPressed": true,
    "heardEnabledAfterPlay": true,
