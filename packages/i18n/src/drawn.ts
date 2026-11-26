@@ -13,6 +13,8 @@ export const DRAWN_EN: Record<keyof typeof DRAWN_HE, string> = {
 };
 export const HE_DRAWN: [RegExp, (m: RegExpExecArray) => string][] = [
   // core DRAWN_NOT_TEXT (every text operation aimed at a drawn clip); the kind's English name is not repeated in Hebrew
+  // a trip map is named as one (tripmap integration): the map is changed with «עריכת המפה» in its panel
+  [/^clip is a trip map, not a title: it has no words or text style to change$/, () => 'הקליפ הזה הוא מפת טיול ולא כותרת: אין בה מילים או סגנון טקסט לשנות. כדי לשנות מילים בחרו כותרת; את המפה משנים בלחיצה על «עריכת המפה» בחלונית שלה'],
   [/^clip is a (.+), not a title: it has no words or text style to change$/, () => 'הקליפ הזה הוא ציור ולא כותרת: אין בו מילים או סגנון טקסט לשנות. כדי לשנות מילים בחרו כותרת; את הציור משנים בחלונית שלו'],
   // core placeDrawnClip
   [/^a drawing cannot go on (\w+) track$/, () => 'אפשר לשים ציור רק ברצועת כותרות. בחרו רצועת כותרות, או השאירו את הבחירה למערכת'],

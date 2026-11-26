@@ -109,6 +109,15 @@ describe('trip map wording', () => {
     }
     // notBuilt can no longer be provoked: the ops are built; its sentence stays worded (the first test) for an older build's answers
     expect(Object.keys(MAP_REFUSALS).filter((k) => !provoked.has(k))).toEqual(['notBuilt']);
+    // integration: a text op aimed at a map clip is worded as a trip map in Hebrew (not «ציור»), with where the map is changed
+    for (const c of [{ op: 'update_text', args: { clipId: mapId, text: 'x' } }, { op: 'apply_text_preset', args: { clipId: mapId, presetId: 'clean' } }] as OpCall[]) {
+      const e = refused(doc, c);
+      expect(e.code).toBe('drawn_not_text');
+      const he = translateRefusal('he', e.message)!;
+      expect(he, c.op).toContain('מפת טיול');
+      expect(he, c.op).not.toContain('ציור');
+      expect(he, c.op).toContain('«עריכת המפה»');
+    }
   });
 });
 
