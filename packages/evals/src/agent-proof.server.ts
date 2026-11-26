@@ -265,7 +265,10 @@ export async function runServerChecks(check: Check): Promise<void> {
     const p14 = await newProject('mode');
     const born = (await rest(`/projects/${p14}/transactions`, { ops: [{ op: 'add_person', args: { name: 'נועה', birthDate: '2020-03-15', form: 'f' } }] })).body;
     const personId = born?.results?.[0]?.output?.personId as string;
-    await rest(`/projects/${p14}/transactions`, { ops: [{ op: 'add_text', args: { text: `{name:${personId}} ({age:${personId}})`, start: T.rt(0, 1), duration: T.rt(2, 1) } }] });
+    const titled = (await rest(`/projects/${p14}/transactions`, { ops: [{ op: 'add_text', args: { text: `{name:${personId}} ({age:${personId}})`, start: T.rt(0, 1), duration: T.rt(2, 1), fields: true } }] })).body;
+    const titleId = titled?.results?.[0]?.output?.clipId as string | undefined;
+    // the title must really hold a live {age} field (fields: true), or neither half below means anything
+    const titleOk = !!titleId && Object.values((await doc(p14)).project.sequences).some((sq) => sq.tracks.some((t) => t.clips.some((c) => c.id === titleId && c.type === 'text' && (c as { fields?: boolean }).fields === true)));
     const guarded = await setMode('guarded');
     set([
       { toolCalls: [{ name: 'get_summary', input: {} }] },
@@ -294,8 +297,8 @@ export async function runServerChecks(check: Check): Promise<void> {
     const b14 = await finalRun(p14, r14);
     const openFull = !/"peopleAccess"/.test(b14.steps.find((x) => x.kind === 'tool')?.tool?.resultSummary ?? 'peopleAccess');
     check('14 mode (Part 1, merged): in guarded mode the run reads people as names only and its export of an {age} title is a failed step (people_scope_required), not a crash; in open mode the same run is an open agent (full read); switching to guarded stops the open run as stopped_mode_changed and continue resumes it (C4)',
-      [guarded, open, switched].every((x) => x === 200) && a14.run.status === 'succeeded' && namesOnly && refusedExport && openFull && stopped.run.status === 'stopped_mode_changed' && stopped.run.stopReason === 'mode_changed' && cont.status === 200 && b14.run.status === 'succeeded',
-      { puts: [guarded, open, switched], guardedRun: [a14.run.status, namesOnly, t14[1]?.tool?.errorCode], openRead: openFull, stopped: [stopped.run.status, stopped.run.stopReason], continued: [cont.status, b14.run.status] });
+      titleOk && [guarded, open, switched].every((x) => x === 200) && a14.run.status === 'succeeded' && namesOnly && refusedExport && openFull && stopped.run.status === 'stopped_mode_changed' && stopped.run.stopReason === 'mode_changed' && cont.status === 200 && b14.run.status === 'succeeded',
+      { ageTitle: titleOk, puts: [guarded, open, switched], guardedRun: [a14.run.status, namesOnly, t14[1]?.tool?.errorCode], openRead: openFull, stopped: [stopped.run.status, stopped.run.stopReason], continued: [cont.status, b14.run.status] });
     await setMode('guarded');
     reader.cancel().catch(() => {});
   } finally {
