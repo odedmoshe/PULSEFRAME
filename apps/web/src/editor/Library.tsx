@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowUpFromLine, Captions as CaptionsIcon, ImagePlus, Plus, Search, Sparkles, Type } from 'lucide-react';
-import { COLOR_LOOKS, EFFECTS, TRANSITIONS, type Clip } from '@pulseframe/core';
+import { COLOR_LOOKS, PICKABLE_EFFECTS, TRANSITIONS, type Clip } from '@pulseframe/core';
 import { Button, Chip, Tabs } from '../ds/index.ts';
 import { AiTools } from './AiTools.tsx';
 import { CHROME_STRINGS } from './chrome.strings.ts';
@@ -197,7 +197,7 @@ function AudioDrawer({ onView }: { onView: (id: string) => void }) {
 }
 
 const CATALOGUE: Record<'effects' | 'transitions' | 'looks', { kind: PickKind; items: () => { id: string; name: { he: string; en: string } }[] }> = {
-  effects: { kind: 'effect', items: () => EFFECTS.map((e) => ({ id: e.id, name: e.name })) },
+  effects: { kind: 'effect', items: () => PICKABLE_EFFECTS.map((e) => ({ id: e.id, name: e.name })) }, // a living picture: the Motion tab (opOnlyEffect)
   transitions: { kind: 'transition', items: () => TRANSITIONS.map((x) => ({ id: x.id, name: x.name })) },
   looks: { kind: 'look', items: () => COLOR_LOOKS.map((l) => ({ id: l.id, name: l.name })) },
 };

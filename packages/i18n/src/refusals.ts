@@ -25,7 +25,11 @@ import { HE_AUDIENCES } from './audiences.ts';
 import { HE_INSTRUMENTS } from './instruments.ts';
 import { HE_BOOTH } from './booth.ts';
 import { HE_COVER } from './cover.ts';
+<<<<<<< HEAD
 import { HE_OWNTEMPLATE } from './owntemplate.ts';
+=======
+import { HE_LIVING } from './living.ts';
+>>>>>>> wt/w8-living
 import { HE_FOOTAGE } from './footageSearch.ts';
 import { HE_PICMODELS } from './picmodels.ts';
 
@@ -213,6 +217,8 @@ const ADJUSTMENT_REASONS_HE: Record<string, string> = {
   "a time effect needs a clip's own source; it cannot act on the picture below": 'אפקט זמן צריך את המקור של הקליפ עצמו, ואינו יכול לפעול על התמונה שמתחת',
   'a chroma key over the whole picture below would cut holes through to the background': 'מסך ירוק על כל התמונה שמתחת היה פותח חורים עד הרקע',
   'a drop shadow has no visible result on a full-frame picture': 'לצל אין תוצאה נראית על תמונה שממלאת את כל הפריים',
+  // «תמונה חיה» (wave 8 living; core LIVING_ON_ADJUSTMENT)
+  'a living picture needs a photo of its own; an adjustment clip has none': 'לתמונה חיה צריך תמונה משלה, ולשכבת התאמה אין',
 };
 const adjustmentReasonHe = (why: string) => ADJUSTMENT_REASONS_HE[why] ?? 'הוא אינו מתאים לשכבת התאמה';
 const TEMPLATE_FAULT_HE = 'זו תקלה בתבנית, לא בעריכה שלך';
@@ -300,7 +306,11 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
+<<<<<<< HEAD
   for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_TRIPMAP, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING, ...HE_TEACH, ...HE_OWNTEMPLATE, ...HE_PICMODELS]) { const m = re.exec(message); if (m) return say(m); }
+=======
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING, ...HE_LIVING]) { const m = re.exec(message); if (m) return say(m); }
+>>>>>>> wt/w8-living
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -381,9 +391,14 @@ export const INSTRUMENTS_REFUSAL_PATTERNS: readonly RegExp[] = HE_INSTRUMENTS.ma
 export const BOOTH_REFUSAL_PATTERNS: readonly RegExp[] = HE_BOOTH.map(([re]) => re);
 /** The patterns of «הפריים הכי חד» and «שמירת התמונה» (cover.ts HE_COVER, wave 8), for packages/evals/src/cover-wording.test.ts. */
 export const COVER_REFUSAL_PATTERNS: readonly RegExp[] = HE_COVER.map(([re]) => re);
+<<<<<<< HEAD
 /** The patterns of «מפת טיול» (tripMap.ts HE_TRIPMAP, wave 8), for packages/evals/src/tripmap-wording.test.ts. */
 export const TRIPMAP_REFUSAL_PATTERNS: readonly RegExp[] = HE_TRIPMAP.map(([re]) => re);
 /** The patterns of «שמירת הסרט כתבנית» (owntemplate.ts HE_OWNTEMPLATE, wave 8), for packages/evals/src/owntemplate-wording.test.ts. */
 export const OWNTEMPLATE_REFUSAL_PATTERNS: readonly RegExp[] = HE_OWNTEMPLATE.map(([re]) => re);
 /** The patterns of «למדו אותי פעם אחת» (teach.ts HE_TEACH, wave 8), for packages/evals/src/teach-wording.test.ts. */
 export const TEACH_REFUSAL_PATTERNS: readonly RegExp[] = HE_TEACH.map(([re]) => re);
+=======
+/** The patterns of «תמונה חיה» (living.ts HE_LIVING, wave 8), for packages/evals/src/living-wording.test.ts. */
+export const LIVING_REFUSAL_PATTERNS: readonly RegExp[] = HE_LIVING.map(([re]) => re);
+>>>>>>> wt/w8-living

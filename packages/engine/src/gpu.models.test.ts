@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EFFECTS, effectParams, GPU_TRANSITION_IDS, TRANSITIONS, transitionDef } from '@pulseframe/core';
-import { brushFront, burnThreshold, crtMap, digicamTick, digicamTone, GPU_EFFECTS, GPU_TRANSITIONS, hash32, PAGE_RADIUS, pageFold, pageTurnSource, transitionUniforms, unit32 } from './gpu.ts';
+import { brushFront, burnThreshold, crtMap, digicamTick, digicamTone, GPU_EFFECTS, GPU_TRANSITIONS, hash32, PAGE_RADIUS, pageFold, pageTurnSource, transitionUniforms, unit32, LIVING_PASS_BUILT, LivingPassNotBuilt, livingModel, livingVisibleRect } from './gpu.ts';
 
 const defaults = (type: string) => effectParams(type, {}) as Record<string, unknown>;
 const env = (seconds: number) => ({ width: 360, height: 640, seconds, beat: null });
@@ -75,11 +75,13 @@ describe('crtMap (the curved glass)', () => {
 });
 
 describe('registration', () => {
-  it('every effect of cost gpu has a pass, and every pass gets at most eight numbers', () => {
-    for (const e of EFFECTS.filter((x) => x.cost === 'gpu')) {
+  it('every effect of cost gpu has a pass, and every pass gets at most eight numbers (twelve for a wide pass)', () => {
+    // depth.living («תמונה חיה», wave 8): its pass is W2's; until LIVING_PASS_BUILT it has none and is reported unavailable
+    for (const e of EFFECTS.filter((x) => x.cost === 'gpu' && !(x.id === 'depth.living' && !LIVING_PASS_BUILT))) {
       expect(GPU_EFFECTS[e.id], e.id).toBeDefined();
-      expect(GPU_EFFECTS[e.id]!.params(defaults(e.id), env(1)).length, e.id).toBeLessThanOrEqual(8);
+      expect(GPU_EFFECTS[e.id]!.params(defaults(e.id), env(1)).length, e.id).toBeLessThanOrEqual(GPU_EFFECTS[e.id]!.wide ? 12 : 8);
     }
+    expect(!!GPU_EFFECTS['depth.living']).toBe(LIVING_PASS_BUILT);
   });
   it('digicam: the eight numbers in the documented order, the tick computed here; the noise changes only from one tick to the next', () => {
     const p = { amount: 0.8, sharpen: 0.7, noise: 0.3, bloom: 0.35, cool: 0.4, seed: 9 };
@@ -177,4 +179,18 @@ describe('trend-pack transitions (ADR-0012)', () => {
     expect(pageTurnSource(0.05, 0.5)).toEqual({ face: 'front', at: 0.05 });
     expect(pageTurnSource(mid.fold - 0.05, 0.5).face).toBe('back');
   });
+});
+
+describe('depth.living («תמונה חיה», wave 8 living): the pass contract (W2)', () => {
+  it('until W2 builds it, the pass, its geometry and its model are typed stubs that say so', () => {
+    expect(LIVING_PASS_BUILT).toBe(false);
+    expect(() => livingModel([0.5, 0.5], [], { width: 1, height: 1, data: new Uint8Array(1) })).toThrow(LivingPassNotBuilt);
+    expect(() => livingVisibleRect({ cx: 0, cy: 0, w: 1, h: 1, rotation: 0, scale: 1 }, { width: 1, height: 1 }, { width: 1, height: 1 })).toThrow(LivingPassNotBuilt);
+  });
+  it.todo('W2 the pass is wide (12 numbers) and samples the depth at binding 3; its shader passes checkWgsl (gpu.validation.test.ts loop)');
+  it.todo('W2 livingVisibleRect: the picture rectangle cut to the frame, inset half a texel; a photo at Ken Burns scale 1.18 clamps inside the frame (C2)');
+  it.todo('W2 the step count comes from the depth grid (core livingSteps): the same numbers at 640×360, 1280×720 and 1920×1080 (C7)');
+  it.todo('W2 livingModel: a flat depth with one near dab moves the dab by the expected shift and leaves the far plane (push: still; slide: −f·d)');
+  it.todo('W2 evaluate copies clip.depth into the ImageLayer, so the frame key covers every stroke: a changed stroke changes the key, an equal record keeps it (frameKey tests)');
+  it.todo('W2 with no depth or rotated (core livingUnavailable) the effect is recorded unavailable with the reason, never drawn flat (C6)');
 });

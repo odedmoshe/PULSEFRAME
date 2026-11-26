@@ -101,7 +101,11 @@ export type PasteAttributesArgs = z.infer<typeof PasteAttributesArgsSchema>;
 export const PASTE_SKIP_CODES = ['source_empty', 'target_animated'] as const;
 export type PasteSkipCode = (typeof PASTE_SKIP_CODES)[number] | OpErrorCode;
 export interface PasteSkip { clipId: string; group: AttributeGroup; code: PasteSkipCode; message: string }
-export interface PasteAttributesOutput { applied: { clipId: string; group: AttributeGroup }[]; skipped: PasteSkip[]; keysLeftOut: number }
+export interface PasteAttributesOutput {
+  applied: { clipId: string; group: AttributeGroup }[]; skipped: PasteSkip[]; keysLeftOut: number;
+  /** Effects of the source that only their own op adds (a living picture, livingContract.ts opOnlyEffect), not pasted; absent when none. */
+  opOnlyLeftOut?: number;
+}
 /** planPasteAttributes: the op run on a copy; the dialog's rows equal the commit's applied + skipped. */
 export interface PastePlan extends PasteAttributesOutput { revision?: number }
 

@@ -14,7 +14,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import * as T from '@pulseframe/time';
-import { adjustmentRefusal, applyTransaction, COLOR_LOOKS, createProject, drawnName, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument, switchFrame, TRANSITION_CATEGORIES, velocityNeeds } from '@pulseframe/core';
+import { adjustmentRefusal, applyTransaction, COLOR_LOOKS, createProject, drawnName, EFFECTS, PICKABLE_EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument, switchFrame, TRANSITION_CATEGORIES, velocityNeeds } from '@pulseframe/core';
 import { drawGraph, evaluate, FlashGuard, type FrameImage } from '@pulseframe/engine';
 import { fillIn, type Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
@@ -90,7 +90,8 @@ interface Item { key: string; kind: Kind; id: string; he: string; en: string; gp
 /** Tiles whose picture moves by itself, so they animate while hovered or focused; and every transition. */
 const animates = (it: Item) => it.kind === 'motion' || it.kind === 'transition' || (it.kind === 'effect' && (it.category === 'time' || it.category === 'overlay' || it.id === 'light.strobe'));
 const ITEMS: Item[] = [
-  ...EFFECTS.map((e) => ({ key: `effect:${e.id}`, kind: 'effect' as const, id: e.id, he: e.name.he, en: e.name.en, gpu: e.cost === 'gpu', category: e.category })),
+  // a living picture is made from the Motion tab, after the owner draws its depth (core PICKABLE_EFFECTS, opOnlyEffect)
+  ...PICKABLE_EFFECTS.map((e) => ({ key: `effect:${e.id}`, kind: 'effect' as const, id: e.id, he: e.name.he, en: e.name.en, gpu: e.cost === 'gpu', category: e.category })),
   ...COLOR_LOOKS.map((l) => ({ key: `look:${l.id}`, kind: 'look' as const, id: l.id, he: l.name.he, en: l.name.en, gpu: true })),
   ...TRANSITIONS.map((x) => ({ key: `transition:${x.id}`, kind: 'transition' as const, id: x.id, he: x.name.he, en: x.name.en, gpu: x.gpu, category: x.category, kernel: x.kernel })),
   ...TEXT_PRESETS.map((p) => ({ key: `text:${p.id}`, kind: 'text' as const, id: p.id, he: p.name.he, en: p.name.en, gpu: false })),

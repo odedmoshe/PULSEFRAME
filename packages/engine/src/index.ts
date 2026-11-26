@@ -5,7 +5,7 @@ export { grainOffset, COMPOSITE, REGION_COPY_SLOT, REGION_MASK_SLOT, regionBlurP
 export { resolveFollows, resolveRegions, WHOLE_BLUR_MIN_STRENGTH, type Follower, type LayerAt } from './follow.ts';
 export * from './audio.ts';
 export * from './stretch.ts';
-export { motionAt, musicHit, smoothNoise, hash32, unit32, initGpu, gpuStatus, isGpuEffect, isGpuTransition, GPU_EFFECTS, GPU_TRANSITIONS, transitionUniforms, digicamTick, digicamTone, crtMap, thinnedHits, type GpuStatus, type LutStrip, type TransitionState } from './gpu.ts';
+export { motionAt, musicHit, smoothNoise, hash32, unit32, initGpu, gpuStatus, isGpuEffect, isGpuTransition, GPU_EFFECTS, GPU_TRANSITIONS, transitionUniforms, digicamTick, digicamTone, crtMap, thinnedHits, type GpuStatus, type LutStrip, type TransitionState, LIVING_PASS_BUILT, LivingPassNotBuilt, livingModel, livingVisibleRect, type DepthStrip, type EffectBox } from './gpu.ts';
 export { CANVAS_TRANSITIONS, CANVAS_KERNELS, CANVAS_TRANSITION_SLOT, type CanvasKernel, type CanvasTransitionArgs } from './canvasTransitions.ts';
 export { textAtRest, unitPose, unitProgress, type UnitPose } from './textAnimation.ts';
 export { flashSchedule, FlashGuard, SCREEN_FLASH_AHEAD_MAX, SCREEN_FLASH_GAP, SCREEN_FLASH_SEEN, SCREEN_FLASH_STEP, layerLights, screenLight, flashSince, flashGapFrames, lightKey, type FlashDecision, type FlashPainted, type FlashSchedule, type LightPlan } from './strobeSchedule.ts';

@@ -6,7 +6,7 @@ import {
 import * as T from '@pulseframe/time';
 import {
   toSourceSpan, clipEnd, drawnName, fieldsToDisplay, keyTimes, findAudioEffect, findEffect, getOp, sortAudioFx, sourceEnd, speedValue, timelineAt, timelineMarkers, transcriptFor, velocityLimit, MARKER_COLORS,
-  type Clip, type Marker, type ProjectDocument, type Track,
+  opOnlyEffect, type Clip, type Marker, type ProjectDocument, type Track,
 } from '@pulseframe/core';
 import { duckEnvelope, flashSchedule, speechRanges } from '@pulseframe/engine';
 import type { Key, Lang } from '@pulseframe/i18n';
@@ -703,6 +703,7 @@ export function Timeline() {
       const on = catalogTarget(e, item);
       setDrop(null);
       if (!on || !doc) return;
+      if (item.kind === 'effect' && opOnlyEffect(item.id)) return; // a living picture: the Motion tab (verifier C4)
       const clip = doc.sequences[doc.mainSequenceId]!.tracks.flatMap((tr) => tr.clips).find((c) => c.id === on.clipId);
       if (item.kind === 'transition') {
         const frames = clip?.type === 'media' && clip.transition ? { frames: clip.transition.frames } : {};

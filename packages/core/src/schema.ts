@@ -11,6 +11,7 @@ import { DrawnPayloadSchema } from './drawn.ts';
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
 import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
+import { ClipDepthSchema } from './livingContract.ts';
 import { AUDIENCE_MUSIC_DB_MAX, AUDIENCE_MUSIC_DB_MIN, AUDIENCE_PROFILES, AUDIENCE_RULES_VERSION, KEEP_RULES, SOUND_ROLES } from './audienceLimits.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
@@ -483,6 +484,13 @@ export const MediaClipSchema = z
      * fingerprint: a marked clip counts as edited by hand on regeneration. validate.ts clip_impact.
      */
     impact: RationalTimeSchema.optional(),
+    /**
+     * «תמונה חיה» (wave 8 living, livingContract.ts): what the owner drew as near and far on this photo, for the effect depth.living.
+     * Photo clips (an image file) on video tracks only (validate.ts clip_depth). Ordinary document data, like a mask. Kept by split,
+     * duplicate, paste, versions, variants and archives; dropped by the portrait backdrop copy; replace_clip_media to another file
+     * is refused while it is there (livingSites.test.ts lists every copier).
+     */
+    depth: ClipDepthSchema.optional(),
   })
   .strict();
 /**

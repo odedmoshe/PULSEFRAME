@@ -24,6 +24,8 @@ import { steadyIssues } from './steadyValidate.ts';
 import { validateSourceRanges } from './sourceRanges.ts';
 import { musicFitIssues } from './musicFitValidate.ts';
 import { audienceIssues } from './audienceValidate.ts';
+import { livingIssues } from './livingValidate.ts';
+import { LIVING_EFFECT, LIVING_ON_ADJUSTMENT } from './livingContract.ts';
 import { instrumentsIssues } from './instrumentsValidate.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -47,6 +49,7 @@ export function adjustmentRefusal(type: string): string | null {
   if (isTimeEffect(type)) return 'a time effect needs a clip\'s own source; it cannot act on the picture below';
   if (type === 'key.chroma') return 'a chroma key over the whole picture below would cut holes through to the background';
   if (type === 'stylize.shadow') return 'a drop shadow has no visible result on a full-frame picture';
+  if (type === LIVING_EFFECT) return LIVING_ON_ADJUSTMENT;
   return null;
 }
 
@@ -425,6 +428,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   issues.push(...instrumentsIssues(doc));
   // versions for an audience (wave 8 audiences; audienceValidate.ts, codes audience_*)
   issues.push(...audienceIssues(doc));
+  // «תמונה חיה» (wave 8 living; livingValidate.ts, codes clip_depth, living_effect)
+  issues.push(...livingIssues(doc));
   return issues;
 }
 const hasTags = (doc: ProjectDocument) => Object.values(doc.sequences).some((s) => s.tracks.some((t) => t.clips.some((c) => c.type === 'media' && !!c.multicam)));

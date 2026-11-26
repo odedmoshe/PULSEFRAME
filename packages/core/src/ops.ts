@@ -40,6 +40,8 @@ import { ownBeats, sceneCutsFor, timingRelations, transcriptFor } from './lineag
 import { skippedClips, timingCoverage, untimedCopyRefusal } from './cleanup.ts';
 import { MULTICAM_REFUSALS, type MulticamRefusalKey, type MulticamRefusalRow } from './multicamRefusals.ts';
 import { projectCameraSamples, STEADY_REFUSALS } from './steadyContract.ts';
+import { LIVING_EFFECT, LIVING_REFUSALS, opOnlyEffect, type LivingRefusalKey, type LivingRefusalRow } from './livingContract.ts';
+import { livingComfort } from './livingComfort.ts';
 import { detachRangesOfAsset } from './sourceRanges.ts';
 import { DEFAULT_REDACT_REGION, isUsable, MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, MAX_REDACT_REGIONS, MAX_TRACK_SAMPLES, roundHalfUp, SIZE_UNIT, ST, TrackOpArgs, trackSampleAt, type MotionTrack, type RedactRegion } from './tracking.ts';
 
@@ -60,6 +62,11 @@ export class OpError extends Error {
   toJSON() {
     return { code: this.code, message: this.message, details: this.details, hint: this.hint };
   }
+}
+/** A refusal of «תמונה חיה» (livingContract.ts LIVING_REFUSALS): the row's code, its sentence and next step, details.why names the case. */
+export function livingRefusal<K extends LivingRefusalKey>(key: K, details: Record<string, unknown>, ...values: Parameters<(typeof LIVING_REFUSALS)[K]['message']>): OpError {
+  const r = LIVING_REFUSALS[key] as LivingRefusalRow<unknown[]>;
+  return new OpError(r.code, r.message(...values), { ...details, why: r.why }, r.hint);
 }
 
 /**
@@ -2761,6 +2768,8 @@ defineOp({
   apply(d, a, ctx) {
     const { clip } = pictureClip(d, a.clipId);
     refuseAdjustmentEffect(clip, a.type);
+    // «תמונה חיה» needs a depth and keyed travel: only its own op adds it (verifier C4)
+    if (opOnlyEffect(a.type)) throw livingRefusal('useOp', { clipId: clip.id, type: a.type });
     const list = [...(clip.effects ?? [])];
     if (list.length >= 16) throw new OpError('out_of_bounds', 'a clip can carry at most 16 effects', { clipId: clip.id });
     const fx = { id: ctx.newId('fx'), type: a.type, enabled: true, params: parseEffect(a.type, a.params) };
@@ -2794,8 +2803,10 @@ defineOp({
     const list = [...clip.effects!];
     const fx = { ...list[i]! };
     refuseAdjustmentEffect(clip, fx.type); // changed or moved, it is still an effect the adjustment may carry
+    const before = { ...fx };
     if (a.params) { fx.params = parseEffect(fx.type, { ...fx.params, ...a.params }); assertLutRef(d, fx.type, fx.params); }
     if (a.enabled !== undefined) fx.enabled = a.enabled;
+    if (fx.type === LIVING_EFFECT) refuseLivingUpdate(d, clip, before, fx);
     list.splice(i, 1);
     list.splice(effectSlot(list, fx.type, a.index ?? i), 0, fx);
     refuseFollowTimeEffect(clip, list);
@@ -2803,6 +2814,21 @@ defineOp({
     return { affectedIds: [clip.id], summary: `Updated effect ${fx.type}${a.enabled === false ? ' (bypassed)' : ''}`, output: { params: fx.params } };
   },
 });
+/**
+ * update_effect on a living picture (verifier C5, C6): a change of amount or move may not make the move faster than the comfort rule
+ * of thumb allows (a change that does not make it faster is accepted, so an amount can always be lowered), and it is not switched
+ * on where the clip has no depth. Hand keys that break the rule are left to preflight's living_too_fast warning.
+ */
+function refuseLivingUpdate(d: ProjectDocument, clip: Clip, before: EffectInstance, after: EffectInstance): void {
+  if (after.enabled && !before.enabled && (clip.type !== 'media' || !clip.depth)) throw livingRefusal('needsDepth', { clipId: clip.id });
+  const frames = T.frameIndexAt(clip.duration, d.settings.frameRate);
+  const now = livingComfort(after, frames, d.settings.frameRate);
+  if (now.ok) return;
+  const was = livingComfort(before, frames, d.settings.frameRate);
+  if (now.peakRate > was.peakRate * (1 + 1e-9)) {
+    throw livingRefusal('tooFast', { clipId: clip.id, max: now.maxAmount }, now.maxAmount);
+  }
+}
 const FxKeyTarget = { clipId: z.string(), effectId: z.string(), param: z.string().max(48), time: RT.describe('Offset from the clip start (frame-aligned)') };
 defineOp({
   name: 'set_effect_keyframe',
@@ -3485,6 +3511,8 @@ defineOp({
     // Stabilisation (wave 7) uses the camera motion measured on the current file: switch it off first rather than drop it silently.
     for (const { clip: c } of targets)
       if (c.stabilise && c.assetId !== asset.id) throw new OpError(STEADY_REFUSALS.otherFile.code, STEADY_REFUSALS.otherFile.message(), { clipId: c.id }, STEADY_REFUSALS.otherFile.hint);
+    // «תמונה חיה» (wave 8): the depth was drawn on the current photo; another file would move a drawing that no longer matches it
+    for (const { clip: c } of targets) if (c.depth && c.assetId !== asset.id) throw livingRefusal('depthOtherFile', { clipId: c.id });
     // The source a clip needs from sourceIn: its stretch of source (a freeze frame needs one picture inside the file).
     const needed = (c: MediaClip) => toSourceSpan(c, c.duration);
     const fits = (c: MediaClip, sourceIn: T.RationalTime) => isStill || (!T.isNegative(sourceIn) && (c.freeze ? T.lt(sourceIn, asset.duration) : T.lte(T.add(sourceIn, needed(c)), asset.duration)));

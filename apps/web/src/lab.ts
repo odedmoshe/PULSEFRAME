@@ -5,7 +5,7 @@
 import './lab.css';
 import './strictPage.ts';
 import * as T from '@pulseframe/time';
-import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, TRANSITIONS, type Mask, type TransitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, BLEND_MODES, createProject, DEFAULT_MASK, describeCatalog, EFFECTS, LIVING_BUILT, opOnlyEffect, TRANSITIONS, type ClipDepth, type Mask, type TransitionDef, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { drawGraph, evaluate, gpuStatus, initGpu, placedArea, type DrawOptions, type FrameImage } from '@pulseframe/engine';
 import { ensureFonts } from './fonts.ts';
 import { pictureSize } from './pictureSize.ts';
@@ -92,7 +92,7 @@ function makeScene(aspect: Aspect): Scene {
 }
 
 // ---- tile building ----
-interface Tile { kind: 'effect' | 'blend' | 'mask' | 'transition'; id: string; variant: string; aspect: Aspect; params: unknown; build: (s: Scene) => { doc: ProjectDocument; frame: number }; strip?: boolean }
+interface Tile { kind: 'effect' | 'blend' | 'mask' | 'transition'; id: string; variant: string; aspect: Aspect; params: unknown; build: (s: Scene) => { doc: ProjectDocument; frame: number }; strip?: boolean; /** Not built in this build: drawn without the effect and labelled so (an honest unavailable tile). */ pending?: string }
 const clipOps = (s: Scene, assetId: string, trackId: string, start = 0, dur = 150) => ({ op: 'add_clip', args: { assetId, trackId, start: f(start), duration: f(dur), withLinkedAudio: false } }) as OpCall;
 
 function withClip(s: Scene, extra: (clipId: string) => OpCall[], base = false) {
@@ -131,8 +131,24 @@ const moving = (c: string): OpCall[] => [
   { op: 'set_keyframe', args: { clipId: c, property: 'x', time: f(0), value: -0.2 } },
   { op: 'set_keyframe', args: { clipId: c, property: 'x', time: f(30), value: 0.2 } },
 ];
+/**
+ * «תמונה חיה» (wave 8 living, verifier C4): an effect only its own op adds is tiled through that op, on a drawn depth (a flat base and
+ * one near dab), at a late frame of its 150-frame clip so the move shows. Until the feature is built the tile shows the photo without
+ * it and says so.
+ */
+const LAB_DEPTH: ClipDepth = { v: 1, base: { kind: 'flat' }, strokes: [{ layer: 'near', size: 250, pts: [500, 450] }] };
+const LIVING_FRAME = 120;
+const opOnlyTileOps = (c: string, params: Record<string, unknown>): OpCall[] => [
+  { op: 'set_clip_depth', args: { clipId: c, depth: LAB_DEPTH } },
+  ...(LIVING_BUILT ? [{ op: 'set_living_picture', args: { clipId: c, ...(typeof params.move === 'string' ? { move: params.move } : {}), ...(typeof params.amount === 'number' ? { amount: params.amount } : {}) } }] : []),
+];
 for (const e of EFFECTS) {
   const defaults = catalog.effects.find((x) => x.id === e.id)!.defaults;
+  if (opOnlyEffect(e.id)) {
+    for (const aspect of ['16:9', '9:16'] as const) for (const [variant, params] of [['default', {}], ['extreme', { amount: 1 }]] as const)
+      tiles.push({ kind: 'effect', id: e.id, variant, aspect, params: { ...defaults, ...params }, build: (s) => ({ doc: withClip(s, (c) => opOnlyTileOps(c, params)), frame: LIVING_FRAME }), ...(LIVING_BUILT ? {} : { pending: 'not built in this build yet' }) });
+    continue;
+  }
   const time = e.category === 'time';
   for (const aspect of ['16:9', '9:16'] as const) {
     const variants: [string, Record<string, unknown>, number][] = [['default', {}, time ? TIME_FRAME : 0], ['extreme', numericExtreme(e.id), time ? TIME_FRAME : 0]];
@@ -212,7 +228,8 @@ async function main() {
       const { missing, unavailableEffects } = await drawGraph(canvas.getContext('2d')!, g, provider);
       if (missing.length) throw new Error(`source picture missing for ${missing.join(', ')}`);
       // Not an error of the page: this browser cannot run the effect, so the tile shows the picture without it and says so.
-      if (unavailableEffects.length) { fig.dataset.unavailable = '1'; cap.before(el('div', { className: 'tile-note', role: 'note', textContent: `needs a graphics adapter (WebGPU): ${gpuStatus().reason}` })); }
+      if (tile.pending) { fig.dataset.unavailable = '1'; cap.before(el('div', { className: 'tile-note', role: 'note', textContent: tile.pending })); }
+      else if (unavailableEffects.length) { fig.dataset.unavailable = '1'; cap.before(el('div', { className: 'tile-note', role: 'note', textContent: `needs a graphics adapter (WebGPU): ${gpuStatus().reason}` })); }
     } catch (e) {
       errors++;
       cap.before(el('div', { className: 'tile-error', role: 'alert', textContent: e instanceof Error ? e.message : String(e) }));
