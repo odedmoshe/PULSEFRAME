@@ -8,7 +8,8 @@
  * safe-area guide live at the end of the transport (StageHeader.tsx StageTools); undo and redo, with their words, at the start of
  * the timeline's toolbar (TimelineToolbar.tsx; same test ids, same keys). Styles: ds/chrome.css (everything under .pf-ds).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { focusIn } from '../ds/focus.ts';
 import { Bot, Check, ChevronDown, CircleAlert, CloudOff, Pencil, Search, TriangleAlert, User } from 'lucide-react';
 import { LOGO_SVG } from '@pulseframe/brand';
 import type { Key } from '@pulseframe/i18n';
@@ -147,10 +148,10 @@ function ModeMenu({ options, value }: { options: SegOption<Workspace>[]; value: 
     const away = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); btn.current?.focus(); } };
     document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', esc, true);
-    // the chosen mode's radio takes the focus, so the arrows move between the modes at once
-    requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('.pf-top-modes [aria-checked=true]')?.focus());
     return () => { document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', esc, true); };
   }, [open]);
+  // the chosen mode's radio takes the focus in the commit that shows the modes, so the arrows move between them at once
+  useLayoutEffect(() => { if (open) focusIn(root.current, '.pf-top-modes [aria-checked=true]'); }, [open]);
   const i = MODES.indexOf(value);
   const name = S.modes[value as keyof typeof S.modes];
   return (

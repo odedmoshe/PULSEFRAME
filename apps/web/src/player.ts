@@ -258,9 +258,20 @@ export class Player {
    * state. The next frame drawn follows it, and so does pictureQuality().
    */
   sharpness: PlaySharpness = 'smooth';
+  /**
+   * The playhead is being dragged (wave 8D, editor/scrub/useScrub.ts): the frames of the drag are drawn as playing frames are
+   * (the reduced picture and draft quality of pictureSize.ts), so the picture keeps up with the pointer; the release draws the
+   * frame it ends on again, full, so the paused picture is the one a still and the export show (ADR-0005).
+   */
+  private scrubbing = false;
+  setScrubbing(on: boolean): void {
+    if (this.scrubbing === on) return;
+    this.scrubbing = on;
+    if (!on && this.doc && !this.playing) this.request(this.frame); // the frame the drag ended on, at full quality
+  }
   /** The size and quality the next frame of `settings` is drawn at (pictureSize.ts: the one rule). */
   private sizeOf(settings: { width: number; height: number }) {
-    return pictureSize(settings, { playing: this.playing, sharpness: this.sharpness, ...(this.opts.draftOnly ? { draftMaxHeight: this.opts.draftOnly.maxHeight } : {}) });
+    return pictureSize(settings, { playing: this.playing || this.scrubbing, sharpness: this.sharpness, ...(this.opts.draftOnly ? { draftMaxHeight: this.opts.draftOnly.maxHeight } : {}) });
   }
   /**
    * The quality the next frame is drawn at, as pump() chooses it: draft (the proxy) for the angle viewer and while playing at a

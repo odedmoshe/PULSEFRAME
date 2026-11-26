@@ -40,6 +40,11 @@ export interface Command {
   /** Default bindings, e.g. 'Space', 'Shift+ArrowRight', 'Mod+KeyZ' (Mod = Ctrl or Cmd). */
   keys: string[];
   enabled?(e: Editor): boolean;
+  /**
+   * Where its KEYS act (wave 8D: I, O and X only while the focus is on the timeline, the stage or nowhere, so a panel or the
+   * source viewer keeps its own I and O). Buttons and the palette ignore it: `enabled` alone decides whether they can run it.
+   */
+  keysHere?(): boolean;
   run(e: Editor): void | Promise<unknown>;
 }
 

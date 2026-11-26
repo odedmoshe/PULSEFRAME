@@ -180,6 +180,25 @@ describe('pictureQuality (the quality prefetch warms)', () => {
   });
 });
 
+describe('scrubbing (wave 8D: a playhead drag draws the playing picture; the release draws the full one)', () => {
+  it('while the playhead is dragged a 1080p frame is the draft at the proxies\' scale; on release the same frame is drawn again, full, as a still shows it', async () => {
+    const { doc } = project();
+    const big = { ...doc, settings: { ...doc.settings, width: 1920, height: 1080 } };
+    const p = playing(big).p;
+    (p as unknown as { playing: boolean }).playing = false;
+    p.setScrubbing(true);
+    expect(p.pictureQuality()).toBe('draft');
+    drawn.calls.length = 0; p.follow(20);
+    await vi.waitFor(() => expect(drawn.calls.length).toBeGreaterThan(0));
+    expect(drawn.calls.at(-1)!).toMatchObject({ pool: pool.draftFrames, quality: 'draft', w: 960, h: 540 });
+    drawn.calls.length = 0; p.setScrubbing(false);
+    expect(p.pictureQuality()).toBe('full');
+    await vi.waitFor(() => expect(drawn.calls.length).toBeGreaterThan(0));
+    expect(drawn.calls.at(-1)!).toMatchObject({ pool: pool.frames, quality: 'full', w: 1920, h: 1080 });
+    expect(p.painted).toBe(20);
+  });
+});
+
 describe('paintedDoc (what prefetch plans from)', () => {
   it('is the document of the frame on screen: after setPictureDoc it stays the old one until a frame of the new one is painted', async () => {
     const { doc, picture } = project();

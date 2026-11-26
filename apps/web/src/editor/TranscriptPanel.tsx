@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { focusIn } from '../ds/focus.ts';
+import { takeSilenceFocus } from './silenceFocus.ts';
 import { decodeTextFile, type DecodedText } from '../textDecode.ts';
 import * as T from '@pulseframe/time';
 import type { Clip, ProjectDocument } from '@pulseframe/core';
@@ -436,6 +438,9 @@ export function FillerPanel() {
   const [stale, setStale] = useState(false);
   const [res, setRes] = useState<Awaited<ReturnType<typeof api.findFillers>> | null>(null);
   useEffect(() => { setRes(null); setErr(null); setStale(false); }, [assetId]);
+  // «הסרת שתיקות» on the timeline toolbar asked for the focus here (silenceFocus.ts): given in the commit that draws the finder
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (box.current && box.current.offsetParent && takeSilenceFocus()) { box.current.scrollIntoView({ block: 'nearest' }); focusIn(box.current, 'button:not(:disabled)', 'input', 'select'); } });
   if (!doc || !assetId) return null;
   const find = async () => {
     setBusy(true); setErr(null); setStale(false); setRes(null);
@@ -514,7 +519,7 @@ export function SilencePanel() {
   };
   const valid = Number(minS) > 0 && minS !== '' && Number(keepS) >= 0 && keepS !== '';
   return (
-    <div className="fields silences" data-testid="silence-panel" data-asset-id={assetId}>
+    <div ref={box} className="fields silences" data-testid="silence-panel" data-asset-id={assetId}>
       <p className="muted">{t('silence.hint')}</p>
       <label>{t('silence.min')}
         <input type="number" min={0.05} step={0.05} value={minS} onChange={(e) => setMinS(e.target.value)} data-testid="silence-min" />

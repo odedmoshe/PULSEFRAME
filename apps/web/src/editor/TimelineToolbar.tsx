@@ -19,10 +19,19 @@ import { COMMANDS, chordLabel } from './commands.ts';
 import { useEditorState, type Editor } from './store.ts';
 import { IconDelete, IconMainMagnet, IconRedo, IconRippleDelete, IconUndo } from './icons.tsx';
 import type { TlStrings } from './timeline.strings.ts';
+import { focusIn } from '../ds/focus.ts';
+import { askSilenceFocus, dropSilenceFocus } from './silenceFocus.ts';
+import { useRange } from './range/range.state.ts';
 
 const cmd = (id: string) => COMMANDS.find((c) => c.id === id);
 const keysOf = (id: string): string[] | undefined => { const k = cmd(id)?.keys[0]; return k ? chordLabel(k).split('+') : undefined; };
 const canRun = (editor: Editor, id: string) => { const c = cmd(id); return !!c && !!editor.doc && (!c.enabled || c.enabled(editor)); };
+/** Why a range button cannot run now: not built, no film yet (I, O), or the marks are missing (X). */
+export function rangeReason(s: Pick<TlStrings, 'notBuilt' | 'needProject' | 'rangeNeed'>, editor: Editor, id: string): string | undefined {
+  if (!cmd(id)) return s.notBuilt;
+  if (canRun(editor, id)) return undefined;
+  return id === 'range.cut' && editor.doc ? s.rangeNeed : s.needProject;
+}
 const run = (editor: Editor, id: string) => { const c = cmd(id); if (c && (!c.enabled || c.enabled(editor))) void c.run(editor); };
 
 /**
@@ -31,15 +40,18 @@ const run = (editor: Editor, id: string) => { const c = cmd(id); if (c && (!c.en
  * found and asks first).
  */
 function openSilences(editor: Editor) {
+  const shown = () => { const p = document.querySelector<HTMLElement>('[data-testid=silence-panel]'); return p && p.offsetParent ? p : null; };
+  const now = shown();
+  if (now) { now.scrollIntoView({ block: 'nearest' }); focusIn(now, 'button:not(:disabled)', 'input', 'select'); return; }
+  // the finder is drawn by a later render: it takes the focus itself in that commit (silenceFocus.ts); here only the page is chosen
+  askSilenceFocus();
   editor.setWorkspace('captions');
   let tries = 0;
   const step = () => {
+    if (shown()) return;
     const tab = document.querySelector<HTMLElement>('[data-testid=inspector-tab-speech]');
     if (tab && tab.getAttribute('aria-selected') !== 'true') tab.click();
-    const panel = document.querySelector<HTMLElement>('[data-testid=silence-panel]');
-    const target = panel?.querySelector<HTMLElement>('button:not(:disabled), input, select') ?? panel;
-    if (target && target.offsetParent) { target.scrollIntoView({ block: 'nearest' }); target.focus(); return; }
-    if (++tries < 20) requestAnimationFrame(step);
+    if (++tries < 20) requestAnimationFrame(step); else dropSilenceFocus(); // no finder (no sound in the film): no late focus either
   };
   requestAnimationFrame(step);
 }
@@ -73,11 +85,13 @@ export function ToolbarActions({ s }: { s: TlStrings }) {
   const { editor, state } = useEditorState();
   void state.tick;
   const doc = state.doc;
+  // the marks are view state outside the editor's store: «חיתוך טווח» lights up the moment I and O are both set
+  useRange(doc?.id);
   const mod = chordLabel('Mod+KeyZ').split('+')[0]!;
   const range = (id: string, testId: string, label: string, word: string, icon: ReactNode, key: string, className = 'tl-range') => {
     const c = cmd(id);
     return <Act testId={testId} className={className} help={label} word={word} icon={icon} keys={c ? keysOf(id) : [key]}
-      reason={!c ? s.notBuilt : !canRun(editor, id) ? s.rangeNeed : undefined} onClick={() => run(editor, id)} />;
+      reason={rangeReason(s, editor, id)} onClick={() => run(editor, id)} />;
   };
   return (
     <>
@@ -112,6 +126,7 @@ export function ToolbarActions({ s }: { s: TlStrings }) {
 export function ToolbarMoreMenu({ s, m }: { s: TlStrings; m: ToolbarMore }) {
   const { editor, state } = useEditorState();
   void state.tick;
+  useRange(state.doc?.id);
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null), btn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -147,7 +162,7 @@ export function ToolbarMoreMenu({ s, m }: { s: TlStrings; m: ToolbarMore }) {
           <Button size="sm" variant="ghost" className="tl-act" disabledReason={canRun(editor, 'edit.duplicate') ? undefined : s.needClip} icon={<CopyPlus size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => run(editor, 'edit.duplicate')}>{s.duplicateWord}</Button>
           {(['in', 'out', 'cut'] as const).map((k) => {
             const id = `range.${k}`, c = cmd(id);
-            return <Button key={k} size="sm" variant="ghost" className="tl-act" disabledReason={!c ? s.notBuilt : !canRun(editor, id) ? s.rangeNeed : undefined} onClick={() => run(editor, id)}>{k === 'in' ? s.rangeIn : k === 'out' ? s.rangeOut : s.rangeCut}</Button>;
+            return <Button key={k} size="sm" variant="ghost" className="tl-act" disabledReason={c ? rangeReason(s, editor, id) : s.notBuilt} onClick={() => run(editor, id)}>{k === 'in' ? s.rangeIn : k === 'out' ? s.rangeOut : s.rangeCut}</Button>;
           })}
         </div>
         <div className="tl-more-row">

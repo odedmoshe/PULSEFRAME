@@ -13,6 +13,11 @@ const allowed = (chord: string, ctx: { typing?: boolean; paletteOpen?: boolean; 
 const EDITING = ['Delete', 'Backspace', 'KeyS', 'KeyT', 'KeyM', 'Space', 'Mod+KeyZ', 'Mod+Shift+KeyZ', 'Escape', 'Mod+KeyX', 'Mod+KeyV', 'Mod+KeyD', 'ArrowLeft', 'Mod+KeyE'];
 
 describe('shortcutAllowed', () => {
+  it('a command whose keys act only in one place (keysHere) is passed by elsewhere: I in another panel does not mark the timeline', () => {
+    const cmd = { id: 'range.in', group: 'edit', keysHere: () => false };
+    expect(shortcutAllowed('KeyI', cmd, { typing: false, paletteOpen: false, modalOpen: false })).toBe(false);
+    expect(shortcutAllowed('KeyI', { ...cmd, keysHere: () => true }, { typing: false, paletteOpen: false, modalOpen: false })).toBe(true);
+  });
   it('runs every shortcut when nothing is in the way', () => {
     for (const c of [...EDITING, 'Mod+KeyK']) expect(allowed(c, {}), c).toBe(true);
   });

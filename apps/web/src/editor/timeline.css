@@ -432,3 +432,4 @@
   .timeline.pf-ds .playhead, .timeline.pf-ds .playhead-cap { background: Highlight; }
   .timeline.pf-ds button.cut-chip, .timeline.pf-ds button.cut-add { border: 1px solid ButtonText; }
 }
+.timeline.pf-ds .trim-chip.is-refused { background: var(--pf-danger-soft); color: var(--pf-text); white-space: normal; max-width: 360px; }

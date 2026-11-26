@@ -40,6 +40,8 @@ export function useScrub(): Scrub {
     const root = host.closest<HTMLElement>('.timeline');
     try { host.setPointerCapture(id); } catch { /* the pointer is already gone */ }
     root?.setAttribute('data-scrubbing', 'true');
+    // the drag draws the playing picture (draft, reduced); the release draws the full frame again (Player.setScrubbing)
+    player.setScrubbing(true);
     let moved = false;
     const aim = (clientX: number, alt: boolean, t: number) => {
       const { frame } = snapFrame(clientX - offset - origin, pps, rate, last, cuts, !alt);
@@ -60,8 +62,9 @@ export function useScrub(): Scrub {
       window.removeEventListener('keydown', key, true);
       try { host.releasePointerCapture(id); } catch { /* released already */ }
       root?.removeAttribute('data-scrubbing');
-      if (cancelled) { gate.cancel(); editor.seek(from); return; }
+      if (cancelled) { gate.cancel(); player.setScrubbing(false); editor.seek(from); return; }
       gate.flush();
+      player.setScrubbing(false);
     };
     const up = (ev: PointerEvent) => end(ev, false);
     const cancel = (ev: PointerEvent) => end(ev, true);

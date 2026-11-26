@@ -29,7 +29,9 @@ export function takenFromBrowser(chord: string, keysFor: (id: string) => string[
   return chord.startsWith('Mod+') && TAKEN_FROM_BROWSER.some((id) => keysFor(id).includes(chord));
 }
 
-export function shortcutAllowed(chord: string, cmd: { id: string; group: string }, ctx: ShortcutContext): boolean {
+export function shortcutAllowed(chord: string, cmd: { id: string; group: string; keysHere?: () => boolean }, ctx: ShortcutContext): boolean {
+  // a command whose keys belong to one place (Command.keysHere: the range keys, the timeline's) lets the key pass elsewhere
+  if (cmd.keysHere && !cmd.keysHere()) return false;
   if (ctx.typing && !(chord.startsWith('Mod+') && (cmd.group === 'view' || RUN_WHILE_TYPING.includes(cmd.id)))) return false;
   // The palette's own toggle must still close it; nothing else runs behind the palette.
   if (ctx.paletteOpen) return cmd.id === 'view.palette';

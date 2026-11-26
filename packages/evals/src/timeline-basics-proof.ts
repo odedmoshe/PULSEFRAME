@@ -7,6 +7,10 @@
  *     its own I (the timeline's marks unchanged), c1 X cuts the range in ONE commit and one undo restores the document,
  *     c2 a locked track: refused in words, nothing changes, d1 a video clip with sound shows its waveform under the filmstrip
  *     from the import's peaks (one waveform request for the file, shared with its sound clip).
+ * Wave 8D integration: b3 the toolbar's range buttons run the range commands and light up with the marks; e1/e2 a clip dragged
+ * onto another track of its kind (one move_clip with trackId), refused in words on a locked track or a track of another kind;
+ * a5 a 1080p film scrubbed with the draft picture while dragging and the full frame on release (before/after latency).
+ * The zoom is read from the timeline (data-pps): a short film is fitted to the ruler when it opens.
  * Fixture: SYNTHETIC, made here by ffmpeg lavfi (testsrc2 640×360 30 fps, 8 s, a keyframe every second as the house fixtures have, with a 440 Hz tone that beeps); deleted with the
  * folder at the next run. The server listens on port 0.
  *   pnpm build && pnpm proof:timeline-basics
@@ -66,7 +70,9 @@ async function main() {
     await page.getByTestId('ruler').waitFor();
     await page.locator(`.clip[data-clip-id="${videoClip}"] [data-testid=clip-visual][data-drawn]`).first().waitFor({ timeout: 30000 });
     await page.waitForFunction(() => Number(document.querySelector('[data-testid=preview]')?.getAttribute('data-frame') ?? -1) >= 0, undefined, { timeout: 30000 });
-    const pps = await page.evaluate(() => 90); // the editor's starting zoom (store.ts pxPerSecond)
+    // the zoom the editor opened at: a film under 3 minutes is fitted to the ruler on open (wave 8D WP1), so it is read, not assumed
+    const pps = Number(await page.locator('.tl-inner').getAttribute('data-pps'));
+    const fr = (px: number) => Math.round((px * 30) / pps); // frames in a horizontal distance at this zoom
     const ruler = (await page.getByTestId('ruler').boundingBox())!;
     const xAt = (frame: number) => ruler.x + (frame / 30) * pps;
     const frameNow = async () => Number(await page.getByTestId('playhead').getAttribute('data-frame'));
@@ -96,9 +102,9 @@ async function main() {
       await page.mouse.click(lx, vy);
       await sleep(250);
       const selected = await page.locator(`.clip[data-clip-id="${videoClip}"]`).getAttribute('aria-pressed');
-      check('a1 the playhead drags by its cap: grab area ≥ 24 px; the playhead follows the pointer frame by frame (180 px at 90 px/s = 60 frames), the picture shows the frame it ends on, no transaction is posted and the revision is unchanged; over the lanes a click at the playhead reaches the clip under it and selects it',
-        gb.width >= 24 && Math.abs(end - 60) <= 1 && new Set(mid).size >= 8 && pic === end && posts === p0 && (await rev()) === r0 && under === videoClip && selected === 'true',
-        { grabWidth: gb.width, mid, end, painted: pic, posts: posts - p0, revision: [r0, await rev()], hitAtPlayhead: under, selected });
+      check(`a1 the playhead drags by its cap: grab area ≥ 24 px; the playhead follows the pointer frame by frame (180 px at ${Math.round(pps)} px/s = ${fr(180)} frames), the picture shows the frame it ends on, no transaction is posted and the revision is unchanged; over the lanes a click at the playhead reaches the clip under it and selects it`,
+        gb.width >= 24 && Math.abs(end - fr(180)) <= 1 && new Set(mid).size >= 8 && pic === end && posts === p0 && (await rev()) === r0 && under === videoClip && selected === 'true',
+        { pps, grabWidth: gb.width, mid, end, painted: pic, posts: posts - p0, revision: [r0, await rev()], hitAtPlayhead: under, selected });
     }
     {
       const p0 = posts;
@@ -129,7 +135,7 @@ async function main() {
       const snapped = await drag(xAt(vEnd) + 5, false);
       await sleep(150);
       const free = await drag(xAt(vEnd) + 5, true);
-      check(`a3 near the title's end (frame ${vEnd}) the playhead sticks to it within 6 px; with Alt held it does not (5 px = frame ${vEnd + 2})`, snapped === vEnd && free === vEnd + 2, { cut: vEnd, snapped, free });
+      check(`a3 near the title's end (frame ${vEnd}) the playhead sticks to it within 6 px; with Alt held it does not (5 px = frame ${vEnd + fr(5)})`, snapped === vEnd && free === vEnd + fr(5) && fr(5) >= 1, { cut: vEnd, snapped, free });
     }
     {
       // a4: a 5 s drag back and forth over the clip; every pointer move recorded with the frame it asked for, every paint timed
@@ -196,9 +202,32 @@ async function main() {
       await page.keyboard.press('Escape');
       await sleep(150);
       const cleared = await page.locator('[data-testid^=range-]').count();
-      check('b1 I at frame 30 and O on frame 89 put «התחלה» at 30 and «סוף» at 90 on the ruler, the tint covers [30, 90) on every lane, the end flag drags (+45 px = 105), Escape clears them; no revision',
-        flags.in === '30' && flags.out === '90' && flags.inText === S.in && flags.outText === S.out && tint.in === '30' && tint.out === '90' && covers && dragged === '105' && cleared === 0 && (await rev()) === r0,
+      check(`b1 I at frame 30 and O on frame 89 put «התחלה» at 30 and «סוף» at 90 on the ruler, the tint covers [30, 90) on every lane, the end flag drags (+45 px = ${90 + fr(45)}), Escape clears them; no revision`,
+        flags.in === '30' && flags.out === '90' && flags.inText === S.in && flags.outText === S.out && tint.in === '30' && tint.out === '90' && covers && dragged === String(90 + fr(45)) && cleared === 0 && (await rev()) === r0,
         { flags, tint, tintCoversLanes: covers, dragged, afterEscape: cleared });
+    }
+    {
+      // b3: the toolbar's range buttons (WP1) run the range commands (P5) and follow the marks as they change
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      const dis = async (id: string) => (await page.getByTestId(id).getAttribute('aria-disabled')) === 'true';
+      const before = { in: await dis('tl-range-in'), out: await dis('tl-range-out'), cut: await dis('tl-range-cut') };
+      await seekTo(40); await page.getByTestId('tl-range-in').click();
+      await seekTo(70); await page.getByTestId('tl-range-out').click();
+      await sleep(150);
+      const flags = { in: await page.getByTestId('range-in').getAttribute('data-frame'), out: await page.getByTestId('range-out').getAttribute('data-frame') };
+      const cutLit = !(await dis('tl-range-cut'));
+      // marks set by the KEYS light the cut button too (the marks are outside the editor's store)
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.keyboard.press('Escape'); await sleep(100);
+      const cutDark = await dis('tl-range-cut');
+      await seekTo(40); await page.keyboard.press('KeyI'); await seekTo(70); await page.keyboard.press('KeyO');
+      await sleep(150);
+      const cutLitByKeys = !(await dis('tl-range-cut'));
+      const tip = await page.getByTestId('tl-range-cut').evaluate((el) => el.closest('[data-tooltip], .pf-tip-host')?.textContent ?? null).catch(() => null);
+      check('b3 the toolbar\'s «תחילת טווח» and «סוף טווח» buttons set the marks (40, 71); «חיתוך טווח» is dark without both marks and lights up once they are set, by the buttons or by I and O',
+        !before.in && !before.out && before.cut && flags.in === '40' && flags.out === '71' && cutLit && cutDark && cutLitByKeys, { before, flags, cutLit, cutDarkAfterEscape: cutDark, cutLitByKeys, tip });
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.keyboard.press('Escape');
     }
     {
       await seekTo(20); await page.keyboard.press('KeyI');
@@ -273,6 +302,117 @@ async function main() {
       check('d1 the video clip (lane ≥ 56 px) shows its waveform in a band at the bottom of the clip, drawn from the import\'s peaks: the waveform of the file was asked for once, shared with its sound clip',
         lane >= 56 && Math.abs(band.y + band.height - (clip.y + clip.height)) <= 1 && band.height < clip.height / 2 + 1 && lit > 0.02 && waveReqs === 1,
         { laneHeight: lane, band: { top: Math.round(band.y - clip.y), height: band.height }, clipHeight: clip.height, inkedShare: Math.round(lit * 1000) / 1000, waveformRequests: waveReqs });
+    }
+    console.log('\n# e: a clip dragged onto another track of its kind');
+    {
+      const d1 = await doc();
+      const seq = (d: any) => d.sequences[d.mainSequenceId];
+      const audioTrack = seq(d1).tracks.find((t: any) => t.clips.some((c: any) => c.id === audioClipId));
+      const v1 = seq(d1).tracks.find((t: any) => t.clips.some((c: any) => c.id === videoClip));
+      await call(`/projects/${pid}/transactions`, { ops: [{ op: 'update_track', args: { trackId: audioTrack.id, locked: false } }, { op: 'add_track', args: { kind: 'video' } }] });
+      let d2 = await doc();
+      for (let i = 0; i < 30 && seq(d2).tracks.length === seq(d1).tracks.length; i++) { await sleep(100); d2 = await doc(); }
+      const v2 = seq(d2).tracks.find((t: any) => t.kind === 'video' && t.id !== v1.id && !seq(d1).tracks.some((o: any) => o.id === t.id));
+      await page.locator(`.track[data-track-id="${v2.id}"]`).waitFor();
+      await sleep(400);
+      const lane = async (id: string) => (await page.locator(`.track[data-track-id="${id}"] .track-lane`).boundingBox())!;
+      const cb = (await page.locator(`.clip[data-clip-id="${videoClip}"]`).boundingBox())!;
+      const r0 = (await doc()).revision, p0 = posts;
+      const sx = cb.x + cb.width / 2, sy = cb.y + cb.height / 2;
+      await page.mouse.move(sx, sy); await page.mouse.down();
+      const l2 = await lane(v2.id);
+      await page.mouse.move(sx, (sy + l2.y + l2.height / 2) / 2, { steps: 3 });
+      await page.mouse.move(sx, l2.y + l2.height / 2, { steps: 3 });
+      await sleep(150);
+      const ghostOn = await page.getByTestId('clip-ghost').getAttribute('data-track-id').catch(() => null);
+      await page.mouse.up();
+      let d3 = await doc();
+      for (let i = 0; i < 50 && d3.revision === r0; i++) { await sleep(100); d3 = await doc(); }
+      const onV2 = seq(d3).tracks.find((t: any) => t.id === v2.id).clips.map((c: any) => c.id);
+      const sameStart = T.eq(clipOf(d3, videoClip).start, clipOf(d1, videoClip).start);
+      const audioStays = seq(d3).tracks.find((t: any) => t.id === audioTrack.id).clips.some((c: any) => c.id === audioClipId);
+      check('e1 a video clip dragged straight up onto V2 (a video track): the ghost is on V2 while dragging; ONE transaction (revision +1, one POST) puts it on V2 at the same start; its sound stays on its sound track',
+        ghostOn === v2.id && d3.revision === r0 + 1 && posts - p0 === 1 && onV2.includes(videoClip) && sameStart && audioStays, { ghostOn, v2: v2.id, revisions: [r0, d3.revision], posts: posts - p0, onV2, sameStart, audioStays });
+      // refusals: V1 locked, and a title dragged onto a video lane
+      await call(`/projects/${pid}/transactions`, { ops: [{ op: 'update_track', args: { trackId: v1.id, locked: true } }] });
+      await sleep(500);
+      const tryDrag = async (clipId: string, toTrack: string) => {
+        const b = (await page.locator(`.clip[data-clip-id="${clipId}"]`).boundingBox())!;
+        const x = b.x + Math.min(b.width / 2, 60), y = b.y + b.height / 2;
+        await page.mouse.move(x, y); await page.mouse.down();
+        const l = await lane(toTrack);
+        await page.mouse.move(x, (y + l.y + l.height / 2) / 2, { steps: 3 });
+        await page.mouse.move(x, l.y + l.height / 2, { steps: 3 });
+        await sleep(150);
+        const words = await page.getByTestId('clip-ghost-refusal').innerText().catch(() => '');
+        const ghostTrack = await page.getByTestId('clip-ghost').getAttribute('data-track-id').catch(() => null);
+        await page.mouse.up();
+        await sleep(500);
+        return { words, ghostTrack };
+      };
+      const r1 = (await doc()).revision, p1 = posts;
+      const locked = await tryDrag(videoClip, v1.id);
+      const titleId = clips(await doc()).find((c: any) => c.type === 'text').id;
+      const kind = await tryDrag(titleId, v2.id);
+      const toast = await page.getByTestId('toasts').first().innerText().catch(() => '');
+      check('e2 onto a locked track and onto a track of another kind the ghost says why in words (the locked track named and what to do; «קליפ טקסט נכנס רק לרצועת טקסט…»), the release posts nothing and the revision is unchanged',
+        /נעולה/.test(locked.words) && /בטלו את הנעילה/.test(locked.words) && locked.ghostTrack === v1.id && /טקסט/.test(kind.words) && /גררו/.test(kind.words) && posts === p1 && (await rev()) === r1,
+        { locked, kind, toast: toast.slice(0, 160), posts: posts - p1 });
+      await page.screenshot({ path: path.join(art, 'track-move.png') });
+    }
+
+    console.log('\n# a5: scrubbing a 1080p film: the drag draws the draft picture, the release the full one');
+    {
+      const big = path.join(art, 'big.mp4');
+      ff(['-f', 'lavfi', '-t', '6', '-i', 'testsrc2=s=1920x1080:r=30', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-g', '30', '-bf', '2', big]);
+      const bid = (await call('/projects', { name: 'scrub 1080p', width: 1920, height: 1080 })).body.project.id;
+      const bu = await (await fetch(`${s.url}/api/v1/projects/${bid}/assets`, { method: 'POST', headers: { ...h, 'x-filename': 'big.mp4' }, body: fs.readFileSync(big) })).json() as any;
+      await call(`/projects/${bid}/transactions`, { ops: [{ op: 'add_clip', args: { assetId: bu.assetId, start: T.ZERO } }] });
+      const pg = await (await browser.newContext({ viewport: { width: 1908, height: 876 } })).newPage();
+      await pg.addInitScript('globalThis.__name = (f) => f');
+      // __pfAudioTap exposes the player as __pfPlayer (measurement only, player.ts); nothing plays here, so no sound is tapped
+      await pg.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } (globalThis as any).__pfAudioTap = true; });
+      pg.on('pageerror', (e) => errors.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${bid}`);
+      await pg.getByTestId('ruler').waitFor();
+      await pg.waitForFunction(() => Number(document.querySelector('[data-testid=preview]')?.getAttribute('data-frame') ?? -1) >= 0, undefined, { timeout: 30000 });
+      await sleep(1500);
+      const bpps = Number(await pg.locator('.tl-inner').getAttribute('data-pps'));
+      const br = (await pg.getByTestId('ruler').boundingBox())!;
+      const bx = (f: number) => br.x + (f / 30) * bpps;
+      const drag = async (label: string) => {
+        await pg.evaluate(() => {
+          (globalThis as any).__pfScrubProbe = [];
+          const paints: { t: number; frame: number; q: string }[] = ((globalThis as any).__pfPaints = []);
+          const cv = document.querySelector('[data-testid=preview]') as HTMLCanvasElement;
+          (globalThis as any).__pfObs?.disconnect();
+          (globalThis as any).__pfObs = new MutationObserver(() => { const frame = Number(cv.dataset.frame), q = cv.dataset.quality ?? ''; requestAnimationFrame(() => paints.push({ t: performance.now(), frame, q })); });
+          (globalThis as any).__pfObs.observe(cv, { attributes: true, attributeFilter: ['data-frame', 'data-quality'] });
+        });
+        await pg.mouse.move(bx(10), br.y + br.height / 2); await pg.mouse.down();
+        const t0 = Date.now();
+        for (;;) { const e = Date.now() - t0; if (e > 5000) break; const ph = e / 2500, k = ph <= 1 ? ph : 2 - ph; await pg.mouse.move(bx(10) + k * Math.min(600, bpps * 4.5), br.y + br.height / 2); await sleep(12); }
+        await pg.mouse.up();
+        await sleep(1500);
+        const { moves, paints } = await pg.evaluate(() => ({ moves: (globalThis as any).__pfScrubProbe as { t: number; frame: number }[], paints: (globalThis as any).__pfPaints as { t: number; frame: number; q: string }[] }));
+        const lat: number[] = []; let next = 0;
+        for (const p of paints) { let k = -1; for (let j = moves.length - 1; j >= 0; j--) if (moves[j]!.t <= p.t && moves[j]!.frame === p.frame) { k = j; break; } if (k < 0) continue; for (; next <= k; next++) lat.push(p.t - moves[next]!.t); }
+        const q = (x: number) => { const so = [...lat].sort((a, b) => a - b); return so.length ? Math.round(so[Math.min(so.length - 1, Math.floor(x * so.length))]! * 10) / 10 : NaN; };
+        const endFrame = Number(await pg.getByTestId('playhead').getAttribute('data-frame'));
+        const cv = await pg.getByTestId('preview').evaluate((c: HTMLCanvasElement) => ({ frame: Number(c.dataset.frame), quality: c.dataset.quality, w: c.width, h: c.height }));
+        const during = [...new Set(paints.slice(0, -1).map((p) => p.q))];
+        return { label, moves: moves.length, answered: lat.length, medianMs: q(0.5), p90Ms: q(0.9), worstMs: lat.length ? Math.round(Math.max(...lat) * 10) / 10 : NaN, qualitiesWhileDragging: during, released: cv, endFrame };
+      };
+      // the same fixture, the same drag: first as before this change (the player told nothing: full quality while paused), then as now
+      await pg.evaluate(() => { const p = (globalThis as any).__pfPlayer; (globalThis as any).__pfScrubKeep = p.setScrubbing; p.setScrubbing = () => {}; });
+      const before = await drag('full while dragging (before)');
+      await pg.evaluate(() => { const p = (globalThis as any).__pfPlayer; p.setScrubbing = (globalThis as any).__pfScrubKeep; });
+      const after = await drag('draft while dragging (after)');
+      fs.writeFileSync(path.join(art, 'scrub-1080.json'), JSON.stringify({ pps: bpps, before, after, note: 'one sample each on this machine (shared CPUs)' }, null, 2));
+      check('a5 a 1080p film scrubbed for 5 s: while dragging the frames are drawn as draft (the playing picture), and the frame the release stands on is drawn again FULL at 1920×1080, the playhead\'s frame (the paused picture = the still); before/after latency recorded (one sample each)',
+        after.qualitiesWhileDragging.includes('draft') && after.released.quality === 'full' && after.released.w === 1920 && after.released.h === 1080 && after.released.frame === after.endFrame && before.qualitiesWhileDragging.every((x) => x === 'full'),
+        { before, after });
+      await pg.close();
     }
     check('no page errors', errors.length === 0, errors.slice(0, 3));
   } finally {

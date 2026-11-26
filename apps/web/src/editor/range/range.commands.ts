@@ -4,7 +4,7 @@
  * the marks through edit.deselect (one chord, one command), before it clears the selection.
  * I and O act only while the focus is on the timeline, the stage or nowhere in particular: never inside another panel, and never
  * in the source viewer, which has its own I and O for a source range (SourceViewer.tsx; a modal, so the dispatcher passes it by
- * as well). The marks are view state; the cut is ONE commit of cut_range (one undo).
+ * as well). That rule is `keysHere` (the key dispatcher reads it); the toolbar buttons and the palette run them from anywhere. The marks are view state; the cut is ONE commit of cut_range (one undo).
  */
 import type { Command } from '../commands.ts';
 import type { Editor } from '../store.ts';
@@ -63,8 +63,8 @@ export async function cutRange(e: Editor): Promise<unknown> {
 }
 
 export const RANGE_COMMANDS: Command[] = [
-  { id: RANGE_COMMAND_IDS.in, label: 'timeline', text: txt('cmdIn'), group: 'edit', keys: ['KeyI'], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0 && rangeKeysHere(), run: (e) => put(e, markIn(marksOf(e), e.frame)) },
-  { id: RANGE_COMMAND_IDS.out, label: 'timeline', text: txt('cmdOut'), group: 'edit', keys: ['KeyO'], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0 && rangeKeysHere(), run: (e) => put(e, markOut(marksOf(e), e.frame)) },
-  { id: RANGE_COMMAND_IDS.cut, label: 'timeline', text: txt('cmdCut'), group: 'edit', keys: ['KeyX'], enabled: (e) => !!e.doc && fullRange(marksOf(e)) && rangeKeysHere(), run: cutRange },
+  { id: RANGE_COMMAND_IDS.in, label: 'timeline', text: txt('cmdIn'), group: 'edit', keys: ['KeyI'], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0, keysHere: () => rangeKeysHere(), run: (e) => put(e, markIn(marksOf(e), e.frame)) },
+  { id: RANGE_COMMAND_IDS.out, label: 'timeline', text: txt('cmdOut'), group: 'edit', keys: ['KeyO'], enabled: (e) => !!e.doc && (e.player?.frameCount ?? 0) > 0, keysHere: () => rangeKeysHere(), run: (e) => put(e, markOut(marksOf(e), e.frame)) },
+  { id: RANGE_COMMAND_IDS.cut, label: 'timeline', text: txt('cmdCut'), group: 'edit', keys: ['KeyX'], enabled: (e) => !!e.doc && fullRange(marksOf(e)), keysHere: () => rangeKeysHere(), run: cutRange },
   { id: RANGE_COMMAND_IDS.clear, label: 'timeline', text: txt('cmdClear'), group: 'edit', keys: [], enabled: (e) => hasRange(marksOf(e)), run: (e) => put(e, { in: null, out: null }) },
 ];

@@ -73,4 +73,20 @@ describe('range commands', () => {
     expect(rangeStore.get('prj_cmd')).toEqual({ in: null, out: null });
     expect(byId('edit.deselect').enabled!(a.e)).toBe(false);
   });
+  it('the buttons and the palette can run I, O and X wherever the focus is; only the KEYS wait for the timeline (keysHere)', () => {
+    rangeStore.set('prj_cmd', { in: 5, out: 20 });
+    const a = fakeEditor(0);
+    const g = globalThis as { document?: unknown };
+    const had = g.document;
+    // the palette is open (a modal) and the focus is in it: what CommandPalette.tsx and the toolbar see when they ask
+    const field = { closest: () => null };
+    g.document = { querySelector: (q: string) => (q.includes('aria-modal') ? {} : null), activeElement: field, body: {}, documentElement: {} };
+    try {
+      for (const id of ['range.in', 'range.out', 'range.cut']) {
+        expect(byId(id).enabled!(a.e)).toBe(true);
+        expect(byId(id).keysHere!()).toBe(false);
+      }
+    } finally { g.document = had; }
+    for (const id of ['range.in', 'range.out', 'range.cut']) expect(byId(id).keysHere!()).toBe(true);
+  });
 });

@@ -384,10 +384,12 @@ const TrackRow = memo(function TrackRow(p: LaneProps) {
             <Plus size={15} strokeWidth={1.75} aria-hidden="true" /><strong>{s.dropFirst}</strong><span>{s.dropFirstOr}</span>
           </div>
         )}
-        {ghost && tr.clips.some((c) => c.id === ghost.clipId) && (
-          <div className={`clip-ghost${ghost.invalid ? ' invalid' : ''}${ghost.snappedTo ? ' snapped' : ''}`} data-testid="clip-ghost" data-mode={ghost.mode} style={{ left: ghost.leftPx, width: ghost.widthPx, top: CLIP_PAD, height: clipH }}>
-            <span className={`trim-chip at-${ghost.mode === 'trim-start' || ghost.mode === 'move' ? 'start' : 'end'}`} data-testid="trim-chip" dir={lang === 'he' ? 'rtl' : 'ltr'}>
-              <bdi className="num">{signedTimecode(ghost.deltaFrames, rate)}</bdi><span aria-hidden="true">·</span><span>{s.frames(Math.abs(ghost.deltaFrames))}</span>
+        {ghost && ghost.trackId === tr.id && (
+          <div className={`clip-ghost${ghost.invalid ? ' invalid' : ''}${ghost.snappedTo ? ' snapped' : ''}`} data-testid="clip-ghost" data-mode={ghost.mode} data-track-id={ghost.trackId} style={{ left: ghost.leftPx, width: ghost.widthPx, top: CLIP_PAD, height: clipH }}>
+            <span className={`trim-chip at-${ghost.mode === 'trim-start' || ghost.mode === 'move' ? 'start' : 'end'}${ghost.refusal ? ' is-refused' : ''}`} data-testid="trim-chip" dir={lang === 'he' ? 'rtl' : 'ltr'} role={ghost.refusal ? 'status' : undefined}>
+              {ghost.refusal
+                ? <span data-testid="clip-ghost-refusal">{ghost.refusal}</span>
+                : <><bdi className="num">{signedTimecode(ghost.deltaFrames, rate)}</bdi><span aria-hidden="true">·</span><span>{s.frames(Math.abs(ghost.deltaFrames))}</span></>}
             </span>
           </div>
         )}
@@ -830,7 +832,7 @@ export function Timeline() {
       <div className="tl-film" dir={uiDir}><FilmBar lang={lang} /><StoryBar lang={lang} /><GrowingBar lang={lang} /></div>
       {menu && <ClipMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} />}
       <div className="tl-scroll" ref={setScroller} {...containerProps} onPointerDownCapture={() => { kbdNav.current = false; }} onFocusCapture={(e) => { if ((e.target as HTMLElement).classList?.contains('clip') && (e.target as HTMLElement).matches(':focus-visible')) kbdNav.current = true; }}>
-        <div className="tl-inner" style={{ width: innerWidth, '--tl-head': `${head}px`, '--tl-step': `${step * pps}px` } as React.CSSProperties} {...marqueeProps} onKeyDown={onLanesKey}
+        <div className="tl-inner" data-pps={pps} style={{ width: innerWidth, '--tl-head': `${head}px`, '--tl-step': `${step * pps}px` } as React.CSSProperties} {...marqueeProps} onKeyDown={onLanesKey}
           onDragOver={onDragOver} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(null); }} onDrop={onDrop}>
           <div className="tl-top" data-beats={hasBeats ? 'true' : 'none'}>
             <div className="tl-corner">
