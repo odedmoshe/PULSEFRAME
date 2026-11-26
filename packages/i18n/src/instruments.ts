@@ -17,7 +17,7 @@ const INSTRUMENTS_HE_BASE = {
   'error.code.instruments_range': 'אין הקלטה קרובה מספיק לחלק מהצלילים', 'error.code.instruments_too_large': 'דורש יותר מדי זיכרון',
   'error.code.instruments_not_fittable': 'אי אפשר להתאים לאורך מוזיקה עם כלים מוקלטים',
   'instruments.sound': 'צליל', 'instruments.synth': 'מסונתז', 'instruments.recorded': 'כלים מוקלטים',
-  'instruments.unheard': 'כלים מוקלטים — עוד לא הושמעו לאף אחד', 'instruments.heardOn': 'כלים מוקלטים — בעל הפרויקט שמע ({date})',
+  'instruments.unheard': 'כלים מוקלטים — עוד לא הושמעו לאף אחד', 'instruments.heardOn': 'כלים מוקלטים — נשמעו במחשב הזה ({date})',
   'instruments.parts': '{recorded} מנוגנים מקובצי הספרייה; שאר החלקים מסונתזים', 'instruments.allOrNothing': 'כל החלקים של הערכה מוקלטים, או שהמוזיקה לא נוצרת והסיבה מוצגת',
   'instruments.state.not_built': 'כלים מוקלטים עוד לא נבנו בגרסה הזו', 'instruments.state.library_not_set': 'ספריית התוכן לא הוגדרה',
   'instruments.state.not_calibrated': 'ערכת הכלים עוד לא הורדה ולא נבדקה במחשב הזה', 'instruments.state.item_missing': 'הכלים לא נמצאו בספרייה',

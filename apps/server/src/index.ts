@@ -109,7 +109,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // when the owner chose it and asks) and the compute lane; tests may pass their own (a labelled MOCK) in deps.assistant.local
   const assistantDeps: AssistantDeps = { ...(deps.assistant ?? { adapters: new Map(), endpoint: () => null }), lane, local: deps.assistant?.local !== undefined ? deps.assistant.local : createLlamaAdapter() };
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache, search });
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, assistant: assistantDeps, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const bound = (server.address() as AddressInfo).port;

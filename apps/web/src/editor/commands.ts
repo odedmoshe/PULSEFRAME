@@ -12,6 +12,7 @@ import { cutBefore } from './inspector.model.ts';
 import { cutToBeat, rollCut } from './cutActions.ts';
 import { arrangeByEvents, canArrange, freezeSelectedTitle, liveTitleId, openPeopleSheet, readCaptureDates } from './lifeline/lifeCommands.ts';
 import { sourceFromSelection } from './familyFilm.logic.ts';
+import { BOOTH_COMMANDS } from './booth/booth.commands.ts';
 import { channelName, clampDelta, remapKeySel } from './keyStrip.math.ts';
 import { MULTICAM_ANGLE_COMMANDS, MULTICAM_CUT_COMMANDS, MULTICAM_KEYS } from './multicam.keys.ts';
 import { angleForDigit } from './multicamSession.ts';
@@ -436,6 +437,8 @@ export const COMMANDS: Command[] = [
   { id: 'view.openStory', label: 'cmd.openStory', group: 'view', keys: [], enabled: (e) => !!e.doc && sourceFromSelection(e.doc, e.getState().selection).assetIds.length > 0, run: (e) => { if (e.doc) e.openStory(sourceFromSelection(e.doc, e.getState().selection)); } },
   // music that fits the film (wave 7 musicfit): mark the moment, moment to the beat / bar (musicfit/musicFit.commands.ts; disabled until builder C)
   ...MUSICFIT_COMMANDS,
+  // «תא הבדיקה» (wave 8 booth): «פתיחת תא הבדיקה», owner's own session only (booth/booth.commands.ts; empty until builder W3)
+  ...BOOTH_COMMANDS,
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */

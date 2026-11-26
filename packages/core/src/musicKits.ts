@@ -121,8 +121,8 @@ export function kitBankInput(kit: MusicKit, sampler: number = MUSIC_SAMPLER_VERS
 
 /** Shown with every recorded kit and every recorded track until the owner marks the kit as heard. */
 export const MUSIC_RECORDED_UNHEARD_LABEL = { he: 'כלים מוקלטים — עוד לא הושמעו לאף אחד', en: 'Recorded instruments — nobody has listened yet' } as const;
-/** After the owner's own mark ({date} is the day they marked it). Says that they listened, nothing about how it sounds. */
-export const MUSIC_RECORDED_HEARD_LABEL = { he: 'כלים מוקלטים — בעל הפרויקט שמע ({date})', en: 'Recorded instruments — the owner listened ({date})' } as const;
+/** After the owner's own mark ({date} is the day they marked it). Says that someone listened on this computer, nothing about how it sounds; plural and impersonal, no gendered form (wave 8 booth pre-pass). */
+export const MUSIC_RECORDED_HEARD_LABEL = { he: 'כלים מוקלטים — נשמעו במחשב הזה ({date})', en: 'Recorded instruments — the owner listened ({date})' } as const;
 /** Added to the library name of a recorded track ("Calm and warm · 16 bars · recorded instruments.wav"). */
 export const RECORDED_NAME_SUFFIX = ' · recorded instruments' as const;
 /** Words no instruments string may use (he, en): nobody here has listened, and a recording is not «better» by being recorded. */

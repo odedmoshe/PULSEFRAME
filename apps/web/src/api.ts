@@ -12,6 +12,7 @@ import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 import type { MusicKitStatus } from '@pulseframe/core';
+import type { BoothAnswerBody, BoothAnswerResult, BoothCheckRow, BoothServerCheckId, BoothView } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -283,6 +284,14 @@ export const api = {
   musicKits: () => call<{ kits: MusicKitStatus[] }>('/music/kits'),
   /** The owner's own session only (everyone else gets 403 owner_required). */
   markKitHeard: (kitId: string, heard: boolean) => call<{ kitId: string; version: number; heard: { at: string } | null }>(`/music/kits/${encodeURIComponent(kitId)}/heard`, json({ heard })),
+  // «תא הבדיקה» (wave 8 booth; apps/server/src/booth/contract.ts BOOTH_ROUTES): owner's own session only; 501 booth_not_built until W1
+  booth: () => call<BoothView>('/booth'),
+  boothAudioUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/audio`,
+  boothTestPictureUrl: (which: 'a' | 'b') => `/api/v1/booth/test-picture/${which}`,
+  boothExportStillUrl: (itemId: string) => `/api/v1/booth/items/${encodeURIComponent(itemId)}/export-still`,
+  putBoothAnswer: (itemId: string, body: BoothAnswerBody) => call<BoothAnswerResult>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  deleteBoothAnswer: (itemId: string) => call<void>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
+  runBoothCheck: (rowId: BoothServerCheckId, signal?: AbortSignal) => call<BoothCheckRow>(`/booth/checks/${encodeURIComponent(rowId)}`, { method: 'POST', ...(signal ? { signal } : {}) }),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }
