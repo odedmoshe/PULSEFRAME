@@ -30,6 +30,7 @@ import { describeMedia } from './ingest.ts';
 import { ModelStore, type ModelStatus } from './models.ts';
 import { assertStorageRoom } from './storage.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import { PYTHON_WORKER_FLAGS } from './pythonArgs.ts';
 
 type ModelFile = CapabilityDescriptor['models'][number];
 export interface SpeechModel { id: string; kind: 'asr' | 'tts'; title: { he: string; en: string }; languages: string[]; note: string; engineModel: string; dir: string; files: ModelFile[] }
@@ -208,7 +209,7 @@ export class Speech {
   private worker(python: string, args: string[], onLine: (o: any) => void, jobId?: string): Promise<{ code: number | null; stderr: string }> {
     return new Promise((resolve, reject) => {
       // -I: the interpreter ignores the environment and the current directory when importing, so only the worker and its installed packages run.
-      const p = spawn(python, ['-I', WORKER, ...args], { stdio: ['ignore', 'pipe', 'pipe'], timeout: MAX_RUN_MS, killSignal: 'SIGKILL' });
+      const p = spawn(python, [...PYTHON_WORKER_FLAGS, WORKER, ...args], { stdio: ['ignore', 'pipe', 'pipe'], timeout: MAX_RUN_MS, killSignal: 'SIGKILL' });
       if (jobId) this.running.set(jobId, p);
       let buf = '', err = '';
       p.stdout.setEncoding('utf8');
@@ -237,7 +238,7 @@ export class Speech {
     return new Promise((resolve, reject) => {
       let k = this.kept.get(python);
       if (!k) {
-        const p = spawn(python, ['-I', WORKER, 'serve'], { stdio: ['pipe', 'pipe', 'pipe'] });
+        const p = spawn(python, [...PYTHON_WORKER_FLAGS, WORKER, 'serve'], { stdio: ['pipe', 'pipe', 'pipe'] });
         const entry = { p, idle: null as NodeJS.Timeout | null, onLine: null as ((o: any) => void) | null, done: null as ((r: { code: number | null; stderr: string }) => void) | null, err: '' };
         k = entry;
         this.kept.set(python, entry);
