@@ -59,8 +59,8 @@ describe('made harness — drawing (made browser)', () => {
   }, 240_000);
 
   it('the clock and random numbers are the frame\'s (recorded with API and first frame), so such a page still draws each frame alike', async () => {
-    const r = await host.draw(spec(canvas(`PF.render = (f) => { c.clearRect(0,0,64,48); const x = (Date.now() / 10) % 60; c.fillStyle = 'rgb(' + Math.floor(Math['ran'+'dom']()*255) + ',0,0)'; c.fillRect(x, 0, 4, 48); };`)));
-    expect(r.clock.map((u) => u.api).sort()).toEqual(['Date.now', 'Math.random']);
+    const r = await host.draw(spec(canvas(`PF.render = (f) => { c.clearRect(0,0,64,48); const x = (Date.now() / 10) % 60; c.fillStyle = 'rgb(' + Math.floor(Math['ran'+'dom']()*255) + ',0,0)'; c.fillRect(x, 0, 4, 48); void new Intl.DateTimeFormat().format(); void document['time'+'line'].currentTime; };`)));
+    expect(r.clock.map((u) => u.api).sort()).toEqual(['Date.now', 'Intl.DateTimeFormat', 'Math.random', 'document.timeline']);
     expect(r.clock.every((u) => u.frame === 0)).toBe(true);
     expect(r.compared.every((c) => c.equalBytes)).toBe(true);
   }, 240_000);
@@ -102,6 +102,16 @@ describe('made harness — drawing (made browser)', () => {
     const canceled = await host.draw(spec(canvas(`PF.render = () => {};`), { frames: 200, compareFrames: [0], signal: ac.signal, onFrame: (i) => { if (i === 5) ac.abort(); } })).catch((e) => e);
     expect(canceled).toMatchObject({ why: 'canceled' });
     expect(await host.openContexts()).toBe(0);
+  }, 300_000);
+
+  it('navigating to an address (aborted by the route), a form submit and window.open: navigation fails the draw with navigated, a form is stopped by the CSP, a pop-up is closed (proof:made G3.4 found "crashed")', async () => {
+    const err = await host.draw(spec(canvas(`PF.render = (f) => { if (f === 1) location.href = 'http://127.0.0.1:9/nav'; c.fillRect(0,0,9,9); };`))).catch((e) => e);
+    expect(err).toMatchObject({ why: 'navigated' });
+    // a form submit is stopped by the page CSP (form-action 'none'): nothing navigates, the draw goes on
+    const form = await host.draw(spec(canvas(`PF.render = (f) => { if (f === 1) { const x = document.createElement('form'); x.action = 'http://127.0.0.1:9/form'; x.method = 'post'; document.body.appendChild(x); x.submit(); } c.fillRect(0,0,9,9); };`)));
+    expect(form.compared).toHaveLength(3);
+    const r = await host.draw(spec(canvas(`PF.render = (f) => { if (f === 1) window.open('http://127.0.0.1:9/open'); c.fillRect(0,0,9,9); };`)));
+    expect(r.compared).toHaveLength(3);
   }, 300_000);
 
   it('a page that eats memory fails with crashed; the next draw succeeds', async () => {

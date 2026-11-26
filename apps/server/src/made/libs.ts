@@ -126,8 +126,8 @@ export async function mayFetch(url: string, lookup: Lookup = systemLookup): Prom
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
   const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
   if (net.isIP(host)) return isPublicIp(host);
-  if (host === 'localhost' || /\.(localhost|local|invalid|internal|home\.arpa)$/.test(host) || !host.includes('.')) return false;
-  try { const ips = await lookup(host); return ips.length > 0 && ips.every(isPublicIp); } catch { return true; /* unresolved here: the fetch itself fails and names it */ }
+  if (host === 'localhost' || host.endsWith('.localhost')) return false;
+  try { const ips = await lookup(host); return ips.length > 0 && ips.every(isPublicIp); } catch { return true; /* not resolved here: the fetch itself fails and the job names the address (made_fetch_failed) */ }
 }
 /**
  * The addresses the server fetches, and those it leaves to the page (never fetched: the page's own request is aborted like any

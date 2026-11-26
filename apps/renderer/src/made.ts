@@ -120,7 +120,7 @@ export function madeInitScript(g: { width: number; height: number; fps: { num: n
   W.cancelAnimationFrame = (id) => { queue.delete(id); };
   for (const k of ['setTimeout', 'setInterval', 'requestIdleCallback']) { const real = W[k]; if (typeof real === 'function') W[k] = function (...a) { note(k); return real.apply(this, a); }; }
   try { const tl = Object.getOwnPropertyDescriptor(AnimationTimeline.prototype, 'currentTime'); Object.defineProperty(DocumentTimeline.prototype, 'currentTime', { get() { note('document.timeline'); return tl.get.call(this); }, configurable: true }); } catch {}
-  try { const RF = Intl.DateTimeFormat; const fmt = RF.prototype.format; Object.defineProperty(RF.prototype, 'format', { get() { const self = this; return (d) => { if (d === undefined) { note('Intl.DateTimeFormat'); d = EPOCH + ms(); } return fmt.call(self, d); }; }, configurable: true }); } catch {}
+  try { const RF = Intl.DateTimeFormat; const fd = Object.getOwnPropertyDescriptor(RF.prototype, 'format'); Object.defineProperty(RF.prototype, 'format', { get() { const f = fd.get.call(this); return (d) => { if (d === undefined) { note('Intl.DateTimeFormat'); d = EPOCH + ms(); } return f(d); }; }, configurable: true }); } catch {}
   try { Object.defineProperty(Document.prototype, 'lastModified', { get() { note('document.lastModified'); return '01/01/2026 00:00:00'; }, configurable: true }); } catch {}
   try { if (W.Temporal && W.Temporal.Now) for (const k of Object.keys(W.Temporal.Now)) { const f = W.Temporal.Now[k]; W.Temporal.Now[k] = (...a) => { note('Temporal.Now.' + k); return f(...a); }; } } catch {}
   // ---- what the page uses: WebGL, font families ----
@@ -326,7 +326,12 @@ export class MadeHost {
         return await guard(withTimeout(work, left, () => new MadeDrawError('frameTimeout', frame, `the page did not finish drawing frame ${frame} within ${spec.frameMs / 1000} seconds`)));
       } catch (e) {
         if (e instanceof MadeDrawError) throw e;
+        // a navigation destroys the page's context before Playwright reports the frame as navigated (proof:made G3.4 saw "crashed"):
+        // give the event a moment, then name it from the error
+        if (!failure) await new Promise((r) => setTimeout(r, 300));
         if (failure) throw failure;
+        if (/context was destroyed|navigat/i.test(String((e as Error)?.message ?? e))) throw new MadeDrawError('navigated', frame, 'the page navigated away while drawing');
+        if ((e as Error)?.name === 'TimeoutError' || /Timeout \d+ms exceeded/i.test(String((e as Error)?.message ?? e))) throw new MadeDrawError('frameTimeout', frame, `the page did not finish drawing frame ${frame} within ${spec.frameMs / 1000} seconds`);
         throw new MadeDrawError('crashed', frame, 'the page crashed while drawing (probably memory)', String((e as Error)?.message ?? e).slice(0, 300));
       }
     };
