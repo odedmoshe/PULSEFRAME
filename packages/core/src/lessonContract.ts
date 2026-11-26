@@ -256,6 +256,7 @@ export const EFFECT_STRING_PARAMS: Readonly<Record<string, Readonly<Record<strin
   'overlay.speed-lines': { color: 'colour' },
   'stylize.date-stamp': { text: 'words', corner: 'enum', color: 'colour', source: 'enum', dateOrder: 'enum' },
   'stylize.crt': { phosphor: 'enum' },
+  'depth.living': { move: 'enum' }, // «תמונה חיה» (wave 8 living; classified by the lead at the merge; the effect itself is never a lesson step)
 };
 export const AUDIO_EFFECT_STRING_PARAMS: Readonly<Record<string, Readonly<Record<string, StringParamClass>>>> = {
   'cleanup.dehum': { mainsHz: 'enum' },
@@ -272,6 +273,7 @@ export const EFFECT_FRAME_PARAMS: Readonly<Record<string, readonly string[]>> = 
 export const EFFECT_NOT_FRAME_PARAMS: Readonly<Record<string, readonly string[]>> = {
   'stylize.scanlines': ['lines'], 'time.shutter': ['angle', 'samples'], 'overlay.snow': ['speed'], 'overlay.confetti': ['speed'],
   'overlay.hearts': ['speed'], 'overlay.bokeh': ['speed'], 'stylize.crt': ['lines'],
+  'depth.living': ['amount'], // a share of the frame height, not a frame count
 };
 /** The class of one string parameter, or undefined for a parameter that is not a string. */
 export const stringParamClass = (catalogue: 'effect' | 'audio', type: string, param: string): StringParamClass | undefined => {
