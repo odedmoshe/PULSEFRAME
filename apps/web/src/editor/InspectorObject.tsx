@@ -5,6 +5,7 @@
  * controls that proofs drive keep their test ids on the same native elements.
  */
 import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { sizeToCommit } from './audience/audience.logic.ts';
 import {
   Activity, Blend as BlendIcon, Captions, ChevronRight, Contrast, Droplet, Ellipsis, Film, Gauge, Layers, Maximize2, Minimize2, Move, Music,
   Scissors, SlidersHorizontal, Sparkles, Spline, SquareDashed, Timer, Trash2, Type, Volume2, type LucideProps,
@@ -822,6 +823,7 @@ function TextTab({ clip, viewClip }: PanelProps) {
     ? [{ op: 'set_variant_override', args: { variantId, clipId: clip.id, textStyle: { sizeFrac: v } } }]
     : [{ op: 'update_text', args: { clipId: clip.id, style: { sizeFrac: v } } }], 'Text size');
   const size = viewClip.type === 'text' ? viewClip.style.sizeFrac : 0.05;
+  const audienceViewed = !!(variantId && editor.doc?.variants?.[variantId]?.audience);
   return (
     <>
       <Section id="text" title={S.secWords}>
@@ -844,21 +846,24 @@ function TextTab({ clip, viewClip }: PanelProps) {
         {/* the font picker (ADR-0022): each face drawn in itself, category chips, «ניקוד נבדק», pairings; one update_text */}
         <FontPicker label={t('font.family')} lang={state.lang} value={{ family: clip.style.fontFamily, weight: clip.style.fontWeight }}
           onChange={(f) => void editor.commit([{ op: 'update_text', args: { clipId: clip.id, style: { fontFamily: f.family, fontWeight: f.weight } } }], 'Font')} />
-        <SizeRow key={variantId ?? 'master'} size={size} commit={sizeCommit} />
+        <SizeRow key={variantId ?? 'master'} size={size} commit={sizeCommit} audienceViewed={audienceViewed} />
       </Section>
     </>
   );
 }
 
 /** The text size: the slider and its readout follow a drag; one commit when it ends. Keyed by the viewed format only, so focus stays. */
-function SizeRow({ size, commit }: { size: number; commit: (v: number) => Promise<unknown> }) {
+const SIZE_RANGE = { min: 0.02, max: 0.2, step: 0.005 } as const;
+function SizeRow({ size, commit, audienceViewed }: { size: number; commit: (v: number) => Promise<unknown>; audienceViewed: boolean }) {
   const { state, t } = useEditorState();
   const S = INSPECTOR_STRINGS[state.lang];
   const [live, setDraft] = useDraft(size);
-  const done = (v: number) => { setDraft(v); settle(v !== size && commit(v), setDraft); };
+  // in a version for an audience the shown size is the PROJECTED one: the value the slider hands back after a mere visit (snapped to its
+  // step and range) is not a change and is never written as the version's own absolute size (verifier C3; audience.logic.ts sizeToCommit)
+  const done = (v: number) => { setDraft(v); const next = sizeToCommit(v, size, SIZE_RANGE, audienceViewed); settle(next !== null && commit(next), setDraft); };
   return (
     <Row label={S.fontSize} value={<bdi className="val num pf-read">{Math.round(live * 100)}%</bdi>}>
-      <input type="range" min={0.02} max={0.2} step={0.005} value={live} aria-label={t('text.size')} aria-valuetext={`${Math.round(live * 100)}%`} data-testid="text-size"
+      <input type="range" min={SIZE_RANGE.min} max={SIZE_RANGE.max} step={SIZE_RANGE.step} value={live} aria-label={t('text.size')} aria-valuetext={`${Math.round(live * 100)}%`} data-testid="text-size"
         onChange={(e) => setDraft(Number(e.currentTarget.value))} onPointerUp={(e) => done(Number(e.currentTarget.value))} onKeyUp={(e) => { if (RANGE_KEYS.has(e.key)) done(Number(e.currentTarget.value)); }} />
     </Row>
   );
