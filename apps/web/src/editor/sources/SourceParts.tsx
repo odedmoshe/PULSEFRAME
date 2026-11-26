@@ -7,7 +7,7 @@ import { api } from '../../api.ts';
 import { sayFailure } from '../library/LibraryBrowser.tsx';
 import { SOURCES_TESTIDS as TID } from './sources.testids.ts';
 import { sourcesApi } from './sourcesApi.ts';
-import { parseStage, percentOf, sizeText, sx, termLines, TERMINAL, warningHead, type SourcesKey } from './sources.logic.ts';
+import { parseStage, percentOf, sizeText, sx, termLines, warningHead, type SourcesKey } from './sources.logic.ts';
 import './sources.css';
 
 /** A term row: the sentence at its source, verbatim, with its link and the day it was read; the Hebrew beside it is marked as a translation. */
@@ -41,24 +41,17 @@ export function WarningLine({ w, lang, id, withTitle }: { w: SourceWarning; lang
 const UNKNOWN_FAIL = 'sources.fail.canceled';
 const failKey = (code: unknown): SourcesKey | null => (typeof code === 'string' ? (`sources.fail.${code}` as SourcesKey) : null);
 
-/** A download in progress (polls its job; shows the stage and the bytes it knows) until the import card takes over. */
-export function DownloadRow({ jobId, title, lang, onDone }: { jobId: string; title: string; lang: Lang; onDone: (jobId: string) => void }): ReactElement {
-  const [job, setJob] = useState<{ status: string; stage: string | null; error: { code?: string; message?: string } | null } | null>(null);
+/** A download in progress (shows the stage and the bytes it knows) until the import card takes over. Its state comes from the job events
+ * of the editor's own stream (`live`, store.ts sourceJobs); the job is read once when the row appears, never polled. */
+export function DownloadRow({ jobId, title, lang, onDone, live }: { jobId: string; title: string; lang: Lang; onDone: (jobId: string) => void; live?: { status: string; stage: string | null; error?: unknown } }): ReactElement {
+  const [read, setRead] = useState<{ status: string; stage: string | null; error: { code?: string; message?: string } | null } | null>(null);
   useEffect(() => {
     let stop = false;
-    const tick = async () => {
-      try {
-        const j = await api.job(jobId);
-        if (stop) return;
-        setJob({ status: j.status, stage: j.stage, error: j.error ?? null });
-        if (j.status === 'succeeded') { onDone(jobId); return; }
-        if (TERMINAL.has(j.status)) return;
-      } catch { /* the next tick asks again */ }
-      if (!stop) timer = window.setTimeout(() => void tick(), 1000);
-    };
-    let timer = window.setTimeout(() => void tick(), 0);
-    return () => { stop = true; window.clearTimeout(timer); };
-  }, [jobId, onDone]);
+    api.job(jobId).then((j) => { if (!stop) setRead({ status: j.status, stage: j.stage, error: j.error ?? null }); }).catch(() => undefined);
+    return () => { stop = true; };
+  }, [jobId]);
+  const job = live ? { status: live.status, stage: live.stage, error: (live.error ?? null) as { code?: string; message?: string } | null } : read;
+  useEffect(() => { if (job?.status === 'succeeded') onDone(jobId); }, [job?.status, jobId, onDone]);
   const v = parseStage(job?.stage);
   const pct = percentOf(v);
   const failed = job && (job.status === 'failed' || job.status === 'canceled' || job.status === 'cancelled');

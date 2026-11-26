@@ -114,7 +114,7 @@ export function SourcesTab(): ReactElement {
   return (
     <div className="pf-src" data-testid={TID.panel}>
       <LinkBox lang={lang} projectId={projectId} place={() => place(null)} onStarted={(jobId, title) => setDownloads((d) => [...d, { jobId, title }])} />
-      {downloads.length > 0 && <ul className="pf-src-downloads">{downloads.map((d) => <DownloadRow key={d.jobId} jobId={d.jobId} title={d.title} lang={lang} onDone={done} />)}</ul>}
+      {downloads.length > 0 && <ul className="pf-src-downloads">{downloads.map((d) => <DownloadRow key={d.jobId} jobId={d.jobId} title={d.title} lang={lang} onDone={done} {...(state.sourceJobs[d.jobId] ? { live: state.sourceJobs[d.jobId] } : {})} />)}</ul>}
 
       <div className="pf-src-chips" role="group" aria-label={sx(lang, 'sources.chips')}>
         {SEARCHABLE_SOURCES.map((p, i) => {

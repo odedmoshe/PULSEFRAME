@@ -68,6 +68,11 @@ describe('result card and link box', () => {
     const html = renderToStaticMarkup(createElement(DownloadRow, { jobId: 'job_1', title: 'clip.mp4', lang: 'en', onDone: () => {} }));
     expect(html).toContain(`data-testid="${TID.download('job_1')}"`); expect(html).toContain(`data-testid="${TID.downloadCancel('job_1')}"`);
   });
+  it('a download row shows the job event of the editor\'s stream (no polling): stage and percent', () => {
+    const live = { id: 'job_1', type: 'source_fetch', status: 'running', stage: JSON.stringify({ stage: 'downloading', bytes: 50, total: 200, etag: null, lastModified: null, importJobId: null }), output: null, error: null };
+    const html = renderToStaticMarkup(createElement(DownloadRow, { jobId: 'job_1', title: 'clip.mp4', lang: 'en', onDone: () => {}, live }));
+    expect(html).toContain('data-status="running"'); expect(html).toContain('25%');
+  });
 });
 
 describe('asset lines and export lines', () => {
