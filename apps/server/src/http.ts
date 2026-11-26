@@ -145,8 +145,14 @@ export function reviewTranslation(gov: Governance, p: Principal, projectId: stri
 }
 const ImportBody = z.object({ id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/), title: z.string().min(1).max(120), graph: z.unknown() }).strict();
 
-/** Content security policy of the app's pages: same-origin code only, no inline or blob: scripts, no plugins, no framing. Style attributes set from code are allowed by the browser without 'unsafe-inline'. */
-export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+/**
+ * Content security policy of the app's pages: same-origin code only, no inline or blob: scripts, no plugins, no framing. Style attributes set from code are allowed by the browser without 'unsafe-inline'.
+ * `worker-src 'self' blob:` (wave 8 motioncode, gate G1): mediabunny 1.66 decodes the alpha of a VP8/VP9 WebM in a pool of workers it makes from a blob: URL
+ * (media-sink.js ColorAlphaMerger), with no hook to self-host it; under `worker-src 'self'` a transparent video failed to draw in the preview and in
+ * render_frame (made-g1.ts, measured). What it opens: script already running under `script-src 'self'` can run a string as worker code (no DOM, the same
+ * connect-src 'self'). script-src keeps no blob:; proof:phase5 asserts worker-src is exactly 'self' blob:.
+ */
+export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 /** Policy of every non-page response (JSON, media, exports): nothing may load or run if it is ever opened as a document. */
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
