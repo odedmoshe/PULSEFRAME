@@ -240,6 +240,7 @@ interface RegionPlan {
   /** release starts here (frames from the note's start) */ gR: number; /** the note's frames */ n: number;
   att: number; hold: number; sus: number; dd: number; rd: number; fade: number; gainL: number; gainR: number;
   /** laps of the loop already played at gR (loop_sustain) */ kG: number;
+  /** the output frame at which the source runs out when nothing loops (zoneEnd), or -1 when a loop plays */ srcEnd: number;
 }
 const ceilDiv = (a: number, b: number): number => {
   if (a <= 0) return 0;
@@ -300,7 +301,7 @@ function planRegion(part: Part, inst: ResolvedInstrument, region: Region, midi: 
     while (kG > 0 && v - kG * loop.len < loop.s) kG--;
     while (v - kG * loop.len >= loop.e) kG++;
   }
-  return { zone, stepQ, table, p0, end, loop, mode, gR, n, att, hold, sus, dd, rd, fade, gainL, gainR, kG };
+  return { zone, stepQ, table, p0, end, loop, mode, gR, n, att, hold, sus, dd, rd, fade, gainL, gainR, kG, srcEnd: mode === 'none' || mode === 'one_shot' ? zoneEnd : -1 };
 }
 /** Frames of its zone the plan reads within the first `frames` output frames (never past its end). */
 function planNeed(p: RegionPlan, frames: number): number {
@@ -355,6 +356,31 @@ export function decodedBytesOf(needs: readonly ZoneNeed[], bank: Pick<ResolvedBa
   let bytes = 0;
   for (const n of needs) bytes += n.frames * (insts.get(n.instrument)?.zones[n.zone]?.channels ?? 2) * 4;
   return bytes;
+}
+
+/** One region of a note as planRegion plays it (noteReport). Frames are output frames at 48 kHz from the note's start. */
+export interface RegionReport {
+  zone: number; ratio: number; mode: 'none' | 'one_shot' | 'continuous' | 'sustain';
+  /** where the source runs out when nothing loops, or -1 when a loop plays */ srcEnd: number;
+  /** the frame the release starts at, and the release's length */ releaseAt: number; release: number;
+}
+/**
+ * kit:check and tests only (packages/evals/src/kit-check.ts, laptop check L4): how a note of a part would be played, read from the same
+ * noteRegions and planRegion that planZones and renderSampled use. `key` is the key whose regions play it (another key: an edge
+ * substitute); `regions` is empty, or `outOfRange` true, when the request would be refused (instruments_range). Reads no sample. Pure.
+ */
+export function noteReport(part: NonNullable<ResolvedBank['parts'][KitPartRole]>, midi: number, vel: number, gate: number): { key: number; outOfRange: boolean; regions: RegionReport[] } {
+  const inst = part.instrument;
+  const v = midiVelocity(part, vel);
+  const { key, regions } = noteRegions(inst, midi, v, part.edge);
+  const out: RegionReport[] = [];
+  let ok = regions.length > 0;
+  for (const region of regions) {
+    const p = planRegion(part, inst, region, midi, v, gate);
+    if (!p) { ok = false; continue; }
+    out.push({ zone: region.zone, ratio: p.stepQ / Q24, mode: p.mode, srcEnd: p.srcEnd, releaseAt: p.gR, release: p.n - p.gR });
+  }
+  return { key, outOfRange: !ok, regions: out };
 }
 
 /** Add one region's note into outL/outR[0..w). */
