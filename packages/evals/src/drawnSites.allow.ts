@@ -181,4 +181,6 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/evals/src/soak.ts", snippet: "=> c.kind === 'video' || c.kind === 'text');", class: 'proof', note: "proof reads the titles/tool text it made" },
   { file: "packages/evals/src/speed-proof.ts", snippet: "n.tracks.find((t: any) => t.kind === 'text').clips[0];", class: 'proof', note: "proof reads the titles/tool text it made" },
   { file: "packages/evals/src/voicefx-ui-proof.ts", snippet: "ent as any[]).find((c) => c.type === 'text')?.text;", class: 'proof', note: "proof reads the titles/tool text it made" },
+  { file: "packages/core/src/audience.ts", snippet: "if (clip.type !== 'text') continue;", class: 'words', note: "audience versions: the grandparents text size applies to titles only; a drawn clip keeps its own size" },
+  { file: "packages/evals/src/audiences-proof.core.ts", snippet: "if (clip.type === 'text') {", class: 'proof', note: "audiences proof reads the titles it made" },
 ];
