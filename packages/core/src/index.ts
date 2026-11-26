@@ -123,6 +123,12 @@ export * from './loudnessMatch.ts';
 export * from './sendOps.ts';
 export * from './sizeFit.ts';
 export * from './exportChecks.ts';
+// «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover, version 1): the contract is lead-built; stillsRank is W1's, printFit and
+// stillDocument W2's (stubs until then)
+export * from './stillsContract.ts';
+export * from './stillsRank.ts';
+export * from './printFit.ts';
+export * from './stillDocument.ts';
 // editing craft (wave 7 craft track; .artifacts/wave7/craft-decisions.md): the contract is lead-built; craftOps, timeEntry,
 // rippleTrim, pasteAttributes and findReplace bodies are W1's, versionDiff W2's
 export * from './craftContract.ts';

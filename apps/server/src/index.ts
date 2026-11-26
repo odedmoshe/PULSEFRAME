@@ -20,6 +20,7 @@ import { Store } from './store.ts';
 import { recoverTrackingJobs, stopTrackingJobs } from './tracking.ts';
 import { recoverStabiliseJobs, stopStabiliseJobs } from './stabilise.ts';
 import { recoverMomentsJobs, stopMomentsJobs } from './moments.ts';
+import { recoverStillsJobs, stopStillsJobs } from './stills.ts';
 import { createDropDoor } from './drop.ts';
 import { loadDropPage } from './drop-page/index.ts';
 import { dropLimitsFrom, type DropDoor, type ImportQueue } from './importContracts.ts';
@@ -128,6 +129,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   recoverTrackingJobs(store, { derivatives });
   recoverStabiliseJobs(store, { derivatives }); // stabilisation (wave 7): run again from the start
   recoverMomentsJobs(store, { derivatives, lane });
+  recoverStillsJobs(store, { derivatives, lane }); // «הפריים הכי חד» (wave 8 cover): measured again from the start
   speech.recover();
   derivatives.recover();
   search.recover(); // picture search scans cut off by the restart resume at the first file without a complete row (wave 7)
@@ -148,6 +150,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       await stopTrackingJobs(store); // the rows stay running: they are tracked again after a restart
       await stopStabiliseJobs(store); // likewise: measured again after a restart
       await search.stop(); // picture search (wave 7): workers let go; a running scan's row stays running for recover()
+      await stopStillsJobs(store); // likewise (wave 8 cover)
       await stopMomentsJobs(store); // likewise: measured again after a restart (cached files make it cheap)
       await door.stop(); // the code closes ('shutdown') and the second listener with it; uploads in flight are aborted
       await imports.stop(); // the running ffmpeg is killed; the rows stay running for recover()

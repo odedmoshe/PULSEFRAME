@@ -115,6 +115,8 @@ const STAGE_WORDS: Record<string, { he: string; en: string }> = {
   'tracking backward': { he: 'עוקב אחורה', en: 'tracking backward' }, 'saving track': { he: 'שומר את המסלול', en: 'saving the track' },
   // measured moments (core momentsStage, ADR-0026); 'measuring moments 12/31' keeps its count
   'measuring moments': { he: 'מודד רגעים', en: 'measuring moments' },
+  // «הפריים הכי חד» (core stillsStage, wave 8 cover); 'measuring sharpness 3/12' keeps its count
+  'measuring sharpness': { he: 'מדידת חדות', en: 'measuring sharpness' },
   // the shorts finder's measuring job (core shortsContract.ts SHORTS_STAGES, ADR-0018)
   'measuring audio features': { he: 'מודד את הקול', en: 'measuring the sound' }, 'ranking moments': { he: 'מדרג רגעים', en: 'ranking moments' },
   // the multicam sync job (core multicamApi.ts MULTICAM_SYNC_STAGES, ADR-0020); 'measuring sound 2/5' keeps its count
