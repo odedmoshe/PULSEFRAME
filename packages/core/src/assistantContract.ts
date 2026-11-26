@@ -73,6 +73,9 @@ export const ASSISTANT_EXCLUDED_OPS = [
   'add_audience_version', 'update_audience_version', 'set_audience_keep',
   // trip map (wave 8 tripmap): left out so the reviewed ASSISTANT_PROMPT_DIGEST stays as it is; on MCP and REST as ordinary reversible edits
   'add_trip_map', 'update_trip_map', 'time_trip_map',
+  // «למדו אותי פעם אחת» (wave 8 teach): a model never authors a macro of other edits; in version 1 every agent's apply_lesson is
+  // refused by governance as well (apps/server/src/lessons/guard.ts). Left out, the reviewed ASSISTANT_PROMPT_DIGEST stays as it is
+  'apply_lesson',
 ] as const;
 /** The ops a proposal may hold: every registered public op minus ASSISTANT_EXCLUDED_OPS and PERSON_OPS, in registry order. */
 export function assistantOps(): string[] {

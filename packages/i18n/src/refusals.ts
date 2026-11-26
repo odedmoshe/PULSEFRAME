@@ -19,6 +19,7 @@ import { HE_TRIPMAP } from './tripMap.ts';
 import { HE_PEARLS } from './pearls.ts';
 import { HE_STORY } from './story.ts';
 import { HE_GROWING } from './growing.ts';
+import { HE_TEACH } from './teach.ts';
 import { HE_MUSICFIT } from './musicFit.ts';
 import { HE_AUDIENCES } from './audiences.ts';
 import { HE_INSTRUMENTS } from './instruments.ts';
@@ -299,7 +300,7 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_TRIPMAP, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING, ...HE_OWNTEMPLATE, ...HE_PICMODELS]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_TRIPMAP, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING, ...HE_TEACH, ...HE_OWNTEMPLATE, ...HE_PICMODELS]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -384,3 +385,5 @@ export const COVER_REFUSAL_PATTERNS: readonly RegExp[] = HE_COVER.map(([re]) => 
 export const TRIPMAP_REFUSAL_PATTERNS: readonly RegExp[] = HE_TRIPMAP.map(([re]) => re);
 /** The patterns of «שמירת הסרט כתבנית» (owntemplate.ts HE_OWNTEMPLATE, wave 8), for packages/evals/src/owntemplate-wording.test.ts. */
 export const OWNTEMPLATE_REFUSAL_PATTERNS: readonly RegExp[] = HE_OWNTEMPLATE.map(([re]) => re);
+/** The patterns of «למדו אותי פעם אחת» (teach.ts HE_TEACH, wave 8), for packages/evals/src/teach-wording.test.ts. */
+export const TEACH_REFUSAL_PATTERNS: readonly RegExp[] = HE_TEACH.map(([re]) => re);

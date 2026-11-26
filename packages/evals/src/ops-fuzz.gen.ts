@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, MAP_OPS_BUILT, MAP_MODES, MAP_LOOKS, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
+import { animatableParams, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, LESSON_OPS_BUILT, LESSON_PART_ORDER, MAP_OPS_BUILT, MAP_MODES, MAP_LOOKS, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -613,6 +613,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(AUDIENCE_PROJECTION_BUILT && !opts.v1Replay ? [() => genAudience(doc)] : []),
       // trip maps (wave 8 tripmap): the three public operations, once W1 has built the bodies (never in the v1 corpus)
       ...(MAP_OPS_BUILT && !opts.v1Replay ? [() => genTripMap(doc)] : []),
+      // «למדו אותי פעם אחת» (wave 8 teach): apply_lesson, once W1 has built lesson.ts (never in the v1 corpus)
+      ...(LESSON_OPS_BUILT && !opts.v1Replay ? [() => genLesson(doc)] : []),
       // a held frame (add_clip freeze, wave 8 growing; never in the v1 corpus, which keyframe-replay and ripple-delete-golden pin): mostly a video picture right after a picture clip (where a dissolve out of it can
       // follow), now and then a still, linked sound, no duration or a picture past the end (each refused)
       ...(opts.v1Replay ? [] : [() => {
@@ -876,6 +878,40 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
    * audience versions mostly, sometimes on a plain format or an unknown id (refused); levels inside and outside −20..0 and null; roles
    * on sound tracks, picture tracks and unknown tracks; every keep rule on clips of every kind (title_size in a calm version refused).
    */
+  /**
+   * «למדו אותי פעם אחת» (wave 8 teach). `genLesson(doc)` returns a random apply_lesson call (public; `gen` draws it once LESSON_OPS_BUILT):
+   * a source clip and 1–4 targets of any kind (sometimes the source itself, an unknown id or a target named twice: refused or counted
+   * once); 1–3 parts from a menu of learnable steps (trims by ±frames on either edge, gain, fades, a look, a merged grade, a transform,
+   * an effect life with its own $ref, a transition with $frames, a sound preset), sometimes in the wrong part, with a literal clip id,
+   * an unknown $-key, a never-carried argument or a non-learnable op (all refused whole by validation). W1 extends the menu.
+   */
+  const genLesson = (doc: ProjectDocument): OpCall => {
+    const clips = Object.values(doc.sequences).flatMap((s) => s.tracks.flatMap((t) => t.clips));
+    const ids = clips.map((c) => c.id);
+    const any = () => (ids.length && rnd() < 0.93 ? pick(ids) : 'clp_none');
+    const src = any();
+    const targets = Array.from({ length: 1 + int(4) }, () => (rnd() < 0.05 ? src : any()));
+    const slot = { $slot: rnd() < 0.8 ? 'clip' : 'sound' };
+    const by = () => T.frameTime(1 + int(12), rate);
+    const steps: Record<string, () => { kind: string; steps: { op: string; args: Record<string, unknown>; bind?: string }[] }> = {
+      trim: () => { const edge = pick(['start', 'end'] as const); return { kind: 'trim', steps: [{ op: 'trim_clip', args: { clipId: slot, edge, to: { $edge: edge, by: rnd() < 0.5 ? by() : T.sub(T.ZERO, by()) } } }] }; },
+      gain: () => ({ kind: 'gain', steps: [{ op: 'set_clip_gain', args: { clipId: slot, gain: pick([0, 0.5, 0.7, 1, 2]) } }] }),
+      fades: () => ({ kind: 'fades', steps: [{ op: 'set_clip_fades', args: { clipId: slot, fadeIn: { $dur: by() }, ...(rnd() < 0.5 ? { fadeOut: { $dur: by() } } : {}) } }] }),
+      look: () => ({ kind: 'look', steps: [{ op: 'apply_look', args: { clipId: slot, lookId: pick(['warm-sun', 'skin-warm', 'look_none']) } }, ...(rnd() < 0.5 ? [{ op: 'set_colour_grade', args: { clipId: slot, mode: 'merge', params: { contrast: pick([0.9, 1.1, 1.3]) } } }] : [])] }),
+      transform: () => ({ kind: 'transform', steps: [{ op: 'set_clip_transform', args: { clipId: slot, transform: { scale: pick([0.5, 1, 1.2]), ...(rnd() < 0.5 ? { x: pick([-0.2, 0, 0.3]) } : {}) } } }] }),
+      effect: () => ({ kind: 'effect', steps: [{ op: 'add_effect', args: { clipId: slot, type: pick(['blur.gaussian', 'color.adjust', 'time.echo']), ...(rnd() < 0.3 ? { params: {} } : {}) }, bind: 'fx' }, ...(rnd() < 0.5 ? [{ op: 'update_effect', args: { clipId: slot, effectId: { $ref: 'fx', out: 'effectId' }, enabled: false } }] : [])] }),
+      transition: () => ({ kind: 'transition', steps: [{ op: 'set_transition', args: { clipId: slot, type: pick(['dissolve', 'wipe-left']), frames: { $frames: 1 + int(20), rate } } }] }),
+      soundFx: () => ({ kind: 'soundFx', steps: [{ op: 'apply_audio_preset', args: { clipId: slot, presetId: pick([...AUDIO_PRESETS.map((p) => p.id), null]) } }] }),
+    };
+    const keys = Object.keys(steps);
+    const parts = Array.from({ length: 1 + int(3) }, (_, i) => ({ key: `p${i}`, ...steps[pick(keys)]!() }));
+    const r = rnd();
+    if (r < 0.04) parts[0]!.kind = pick([...LESSON_PART_ORDER]); // the wrong part: refused
+    else if (r < 0.07) parts[0]!.steps[0]!.args.clipId = any(); // a literal clip: refused
+    else if (r < 0.09) parts[0]!.steps[0]!.args.$frames = 1; // an unknown $-key: refused
+    else if (r < 0.11) parts[0]!.steps.push({ op: 'add_person', args: { name: 'x' } }); // not a step op: refused
+    return { op: 'apply_lesson', args: { sourceClipId: src, targets, parts } };
+  };
   const genAudience = (doc: ProjectDocument): OpCall => {
     const all = Object.values(doc.variants ?? {});
     const aud = all.filter((v) => v.audience);
@@ -931,5 +967,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genTripMap };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genLesson, genTripMap };
 }

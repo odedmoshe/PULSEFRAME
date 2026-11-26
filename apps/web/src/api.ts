@@ -13,6 +13,7 @@ import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
 import type { AudienceChanges } from '@pulseframe/core';
+import type { DerivedLessonView } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 import type { MusicKitStatus } from '@pulseframe/core';
 import type { OwnTemplateDeleteAnswer, OwnTemplatePreviewAnswer, OwnTemplatePreviewBody, OwnTemplateSaveAnswer, OwnTemplateSaveBody } from '@pulseframe/core';
@@ -309,6 +310,8 @@ export const api = {
   /** The owner's own session only (agents get 403 human_approval_required). */
   // ----- «גרסה לכל קהל» (wave 8 audiences; apps/server/src/audiences/routes.ts): 501 audience_not_built until built -----
   audienceChanges: (projectId: string, variantId: string) => call<AudienceChanges>(`/projects/${projectId}/variants/${encodeURIComponent(variantId)}/audience`),
+  // ----- «למדו אותי פעם אחת» (wave 8 teach): the lesson of one clip, the owner's own session only (501 teach_not_built until built) -----
+  deriveLesson: (projectId: string, clipId: string) => call<DerivedLessonView>(`/projects/${projectId}/clips/${encodeURIComponent(clipId)}/lesson`),
   markJoinHeard: (projectId: string, assetId: string, heard: boolean) => call<unknown>(`/projects/${projectId}/assets/${encodeURIComponent(assetId)}/music-join/heard`, json({ heard })),
   // ----- «כלים מוקלטים» (wave 7 instruments; apps/server/src/instruments/routes.ts) -----
   musicKits: () => call<{ kits: MusicKitStatus[] }>('/music/kits'),

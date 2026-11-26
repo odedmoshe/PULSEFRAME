@@ -200,3 +200,11 @@ export * from './audienceOps.ts';
 export * from './mapContract.ts';
 export * from './tripMap.ts';
 export * from './mapOps.ts';
+// «למדו אותי פעם אחת» teach once (wave 8 teach track): the contract (the LEARN table, the lesson format, the catalogue parameter
+// classes), the validation and apply_lesson are lead-built; lesson.ts (derive, the apply routine, the plan) is W1's. pairRun.ts is
+// the per-pair helper paste attributes and teach share (saveTarget / restoreTarget are exported through pasteAttributes.ts).
+export * from './lessonContract.ts';
+export * from './lessonValidate.ts';
+export * from './lesson.ts';
+export * from './lessonOps.ts';
+export { inFixedOrder, runRegisteredOp, type SavedClip } from './pairRun.ts';

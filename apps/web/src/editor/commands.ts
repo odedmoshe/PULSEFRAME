@@ -20,6 +20,7 @@ import { angleForDigit } from './multicamSession.ts';
 import { MULTICAM_STRINGS } from './multicam.strings.ts';
 import { CRAFT_CHANGES_SELECTION, CRAFT_COMMANDS } from './craft/craft.commands.ts';
 import { STABILISE_CHANGES_SELECTION, STABILISE_COMMANDS } from './stabilise/stabilise.commands.ts';
+import { TEACH_CHANGES_SELECTION, TEACH_COMMANDS } from './teach/teach.commands.ts';
 import { PEARLS_COMMANDS } from './pearls/pearls.commands.ts';
 import { MUSICFIT_COMMANDS } from './musicfit/musicFit.commands.ts';
 
@@ -442,6 +443,8 @@ export const COMMANDS: Command[] = [
   ...BOOTH_COMMANDS,
   // «שמירת הסרט כתבנית» (wave 8 owntemplate): owner's own session only (owntemplate/ownTemplate.commands.ts; empty until builder W3)
   ...OWN_TEMPLATE_COMMANDS,
+  // «למדו אותי פעם אחת» (wave 8 teach): «החילו את העריכות האחרונות על…», no default key (teach/teach.commands.ts; empty until builder W3)
+  ...TEACH_COMMANDS,
 ];
 
 /** Canonical chord for an event: modifiers in fixed order + physical key code. */
@@ -483,6 +486,6 @@ export function chordLabel(chord: string, mac = typeof navigator !== 'undefined'
 }
 
 // Commands that change the selected clips do nothing while a selected clip is on a locked track.
-const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.deleteKeepGap', 'cut.rollEarlier', 'cut.rollLater', 'cut.rollEarlier5', 'cut.rollLater5', 'cut.toBeat', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove', ...CRAFT_CHANGES_SELECTION, ...STABILISE_CHANGES_SELECTION]);
+const CHANGES_SELECTION = new Set(['edit.rollLater', 'edit.rollEarlier', 'edit.slideLater', 'edit.slideEarlier', 'edit.split', 'edit.delete', 'edit.deleteKeepGap', 'cut.rollEarlier', 'cut.rollLater', 'cut.rollEarlier5', 'cut.rollLater5', 'cut.toBeat', 'edit.cut', 'edit.duplicate', 'edit.trimStart', 'edit.trimEnd', 'edit.nudgeLeft', 'edit.nudgeRight', 'edit.nudgeLeft10', 'edit.nudgeRight10', 'edit.slipLater', 'edit.slipEarlier', 'edit.slipLater10', 'edit.slipEarlier10', 'keyframe.remove', ...CRAFT_CHANGES_SELECTION, ...STABILISE_CHANGES_SELECTION, ...TEACH_CHANGES_SELECTION]);
 for (const c of COMMANDS) if (CHANGES_SELECTION.has(c.id)) { const was = c.enabled; c.enabled = (e) => !e.selectionLocked && (!was || was(e)); }
 
