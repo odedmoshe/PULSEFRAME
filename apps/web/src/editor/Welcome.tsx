@@ -56,6 +56,15 @@ export function Welcome() {
     setFilmNext(false);
     editor.openFilm(src);
   }, [filmNext, uploading, doc]); // eslint-disable-line react-hooks/exhaustive-deps
+  // «גדלים מול העיניים» (wave 8) the same way: its card of an empty project chooses files first; the dialog opens on them once in
+  const growingIntent = useRef(false);
+  const [growingNext, setGrowingNext] = useState(false);
+  useEffect(() => {
+    if (!growingNext || !doc || uploading) return;
+    if (!Object.values(doc.assets).some((a) => a.kind === 'image' || a.kind === 'video')) return;
+    setGrowingNext(false);
+    editor.openGrowing();
+  }, [growingNext, uploading, doc]); // eslint-disable-line react-hooks/exhaustive-deps
   const load = () => {
     setOffline(false);
     api.listProjectsFull().then((r) => setProjects(r.projects)).catch(() => { setOffline(true); setProjects([]); });
@@ -95,7 +104,7 @@ export function Welcome() {
             </button>
           )}
           <input ref={inputRef} type="file" multiple accept={ACCEPT} hidden tabIndex={-1} data-testid="welcome-input"
-            onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length && filmIntent.current) setFilmNext(true); filmIntent.current = false; take(fs); }} />
+            onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length && filmIntent.current) setFilmNext(true); if (fs.length && growingIntent.current) setGrowingNext(true); filmIntent.current = false; growingIntent.current = false; take(fs); }} />
         </div>
 
         {/* life line: files of this day of an earlier year; absent when there are none or this is not the owner's session; «פתיחה» opens that project with the event in view */}
@@ -144,7 +153,7 @@ export function Welcome() {
         <section className="pf-hub-sec" aria-labelledby="pf-hub-start">
           <div className="pf-hub-hrow"><h3 id="pf-hub-start" className="pf-hub-h">{C.hubStart}</h3>{templates && templates.length > 0 && <span className="pf-hub-sub">{C.hubStartNote}</span>}</div>
           {/* the family film (ADR-0026) beside the moments: in an empty project it asks for the files first */}
-          <div className="pf-hub-film"><FamilyFilmEntry variant="start-hub" source={null} lang={lang} onEmpty={() => { filmIntent.current = true; inputRef.current?.click(); }} /><StoryEntry variant="start-hub" source={null} lang={lang} /><GrowingEntry variant="start-hub" lang={lang} /></div>
+          <div className="pf-hub-film"><FamilyFilmEntry variant="start-hub" source={null} lang={lang} onEmpty={() => { filmIntent.current = true; inputRef.current?.click(); }} /><StoryEntry variant="start-hub" source={null} lang={lang} /><GrowingEntry variant="start-hub" lang={lang} onEmpty={() => { growingIntent.current = true; inputRef.current?.click(); }} /></div>
           {templates && templates.length > 0 && (
             <ul className="pf-hub-cards">
               {templates.slice(0, 6).map((tp) => (

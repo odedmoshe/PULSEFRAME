@@ -7,14 +7,18 @@
  * Every expected number is computed here from the fixture's design and this file's own arithmetic (the targets L and R from the
  * face size and eye line; the capture order from the dates typed here; the frames from the hold), never read back from the plan.
  * Stills and exports need the web bundle (render.html) and the headless renderer: without them those checks say BLOCKED.
- * G2 and G17's browser half compare with the editor's preview: they need the ui part (W3) and say so until integration.
+ * Integration: G2, G5's preview half and G17's browser half open the editor as the owner in headless Chromium (one browser per check):
+ * the paused preview canvas is read pixel for pixel and compared with the owner's server still; core's planGrowing, bundled for
+ * the browser by the esbuild tsx ships, runs in that Chromium on the very inputs Node's run gets, and the two plans are compared.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as T from '@pulseframe/time';
-import { GROWING, GROWING_RECORD_KEYS, growingPickKey, type ProjectDocument } from '@pulseframe/core';
+import { createRequire } from 'node:module';
+import { chromium, type Page } from 'playwright';
+import { GROWING, GROWING_RECORD_KEYS, growingPickKey, planGrowing, shownCapture, type GrowingPlan, type ProjectDocument } from '@pulseframe/core';
 import { evaluate } from '@pulseframe/engine';
 import { translateRefusal } from '../../i18n/src/index.ts';
 import { startServer, type RunningServer } from '@pulseframe/server';
@@ -106,7 +110,10 @@ async function exportMp4(e: Env, pid: string): Promise<{ file: string; job: any 
   const job = await waitJob(e, st.body.jobId);
   if (job.status !== 'succeeded') throw new Error(`export ${job.status}: ${j(job.error)}`);
   const file = path.join(art, `export-${pid}.mp4`);
-  fs.writeFileSync(file, (await e.call(`/jobs/${job.id}/output`)).body as Buffer);
+  // as the owner: the film carries family fields (the age caption), so an agent may not take the rendered file (assertMayTakeRendered)
+  const out = await e.owner(`/jobs/${job.id}/output`);
+  if (out.status !== 200 || !Buffer.isBuffer(out.body)) throw new Fail(`export download → ${out.status} ${j(out.body?.error ?? '')}`, out);
+  fs.writeFileSync(file, out.body as Buffer);
   return { file, job };
 }
 const decodeFrames = (file: string, frames: number[]) => { const sel = frames.map((n) => `eq(n\\,${n})`).join('+'); const raw = ff(['-i', file, '-vf', `select='${sel}'`, '-fps_mode', 'passthrough', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']); const per = W * H * 3; return frames.map((_, i) => raw.subarray(i * per, (i + 1) * per)); };
@@ -184,6 +191,94 @@ function onPicture(p: any, shown: { width: number; height: number }, px: number,
 }
 const shownOf = (e: Env, name: string) => (name === 'video.mp4' ? { width: e.fx.video.width, height: e.fx.video.height } : e.fx.faces.find((f) => f.name === name)!);
 
+// ---------- the browser half (integration) ----------
+/** The owner's server still (rgb24): the film shows family fields (the age caption), which the owner's editor shows too. */
+async function ownerStill(e: Env, pid: string, n: number): Promise<Buffer> {
+  if (!e.rendered) throw new Fail('BLOCKED: no web bundle (render.html) here, so no still can be rendered; run pnpm build');
+  const r = await e.owner(`/projects/${pid}/frame?index=${n}`);
+  if (r.status !== 200) throw new Fail(`owner still ${n} → ${r.status} ${j(r.body?.error ?? '')}`, r);
+  return rgbOfPng(r.body as Buffer);
+}
+/** Opens the editor as the owner on a project in a fresh headless Chromium; `run` gets the page; the browser is closed after. */
+async function withEditor<R>(e: Env, pid: string | null, run: (page: Page) => Promise<R>): Promise<R> {
+  let browser;
+  try { browser = await chromium.launch(); } catch (x) { throw new Fail(`BLOCKED: Chromium could not start: ${(x as Error).message}`); }
+  try {
+    const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+    await page.addInitScript('globalThis.__name = (f) => f; try { localStorage.setItem("pf.lang", "en"); } catch {}');
+    if (pid) { await page.goto(`${e.s.ownerUrl}&project=${pid}`); await page.getByTestId('timecode').waitFor({ timeout: 60_000 }); }
+    return await run(page);
+  } finally { await browser.close(); }
+}
+/** The paused editor preview at `frame` (rgb24, W×H): the editor's «go to frame» entry (G, as craft-proof.ui.ts seeks). */
+async function previewAt(page: Page, frame: number, _from: number | null): Promise<Buffer> {
+  // G is enabled once the player knows the film's length (craft.commands.ts transport.gotoTime): ask again until the entry opens
+  const input = page.getByTestId('craft-time-input');
+  let opened = false;
+  for (let i = 0; i < 30 && !opened; i++) {
+    await page.evaluate(() => { const t = document.activeElement ?? document.body; t.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyG', key: 'g', bubbles: true, cancelable: true })); });
+    opened = await input.waitFor({ timeout: 1000 }).then(() => true, () => false);
+  }
+  if (!opened) throw new Fail('the «go to frame» entry (G) did not open in 30 s');
+  await input.fill(String(frame));
+  await page.keyboard.press('Enter');
+  await page.getByTestId('craft-time-entry').waitFor({ state: 'detached', timeout: 10_000 }).catch(() => undefined);
+  const ok = await page.waitForFunction((n) => { const c = document.querySelector('canvas[data-testid=preview]') as HTMLCanvasElement | null; return c?.dataset.frame === String(n) && c.dataset.quality === 'full'; }, frame, { timeout: 60_000 }).then(() => true, () => false);
+  if (!ok) {
+    const st = await page.evaluate(() => { const c = document.querySelector('canvas[data-testid=preview]') as HTMLCanvasElement | null; return c ? { ...c.dataset } : null; });
+    throw new Fail(`the preview did not show frame ${frame} at full quality in 60 s (canvas ${j(st)})`);
+  }
+  await sleep(300);
+  const b64: string = await page.evaluate(() => {
+    const c = document.querySelector<HTMLCanvasElement>('canvas[data-testid=preview]')!;
+    const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+    const out = new Uint8Array((d.length / 4) * 3);
+    for (let i = 0, k = 0; i < d.length; i += 4) { out[k++] = d[i]!; out[k++] = d[i + 1]!; out[k++] = d[i + 2]!; }
+    let s2 = ''; for (let i = 0; i < out.length; i += 0x8000) s2 += String.fromCharCode(...out.subarray(i, i + 0x8000));
+    return `${c.width}x${c.height}:${btoa(s2)}`;
+  });
+  const [size, data] = b64.split(':');
+  if (size !== `${W}x${H}`) throw new Fail(`the preview canvas is ${size}, not ${W}x${H}`);
+  return Buffer.from(data ?? '', 'base64');
+}
+const differing = (a: Buffer, b: Buffer) => { let n = 0, max = 0; for (let i = 0; i < a.length; i++) { const d = Math.abs(a[i]! - b[i]!); if (d) { n++; if (d > max) max = d; } } return { n, max, same: a.length === b.length && n === 0 }; };
+/** Preview against the owner's still at each frame (ascending), in one editor session. */
+async function previewVsStill(e: Env, pid: string, frames: number[]): Promise<string[]> {
+  const out: string[] = [];
+  const sorted = [...new Set(frames)].sort((a, b) => a - b);
+  await withEditor(e, pid, async (page) => {
+    let at: number | null = null;
+    for (const n of sorted) {
+      const pv = await previewAt(page, n, at); at = n;
+      const d = differing(pv, await ownerStill(e, pid, n));
+      if (!d.same) out.push(`frame ${n}: ${d.n} bytes differ (at most ${d.max} levels)`);
+    }
+  });
+  return out;
+}
+/** core's planGrowing bundled for the browser (the esbuild that tsx ships), as one script. */
+let bundle: string | null = null;
+async function plannerBundle(): Promise<string> {
+  if (bundle) return bundle;
+  const esbuild = createRequire(createRequire(import.meta.url).resolve('tsx'))('esbuild') as { build(o: unknown): Promise<{ outputFiles: { text: string }[] }> };
+  const r = await esbuild.build({ stdin: { contents: "export { planGrowing } from '@pulseframe/core';", resolveDir: import.meta.dirname, loader: 'ts' }, bundle: true, format: 'iife', globalName: 'PFGrowing', platform: 'browser', write: false, logLevel: 'error' });
+  return (bundle = r.outputFiles[0]!.text);
+}
+/** Every number of two plans, walked together: the largest absolute difference and the first place the shapes differ. */
+function compareNumbers(a: unknown, b: unknown, at = 'plan'): { max: number; where: string; shape: string | null } {
+  let max = 0, where = '', shape: string | null = null;
+  const walk = (x: unknown, y: unknown, p: string) => {
+    if (shape) return;
+    if (typeof x === 'number' && typeof y === 'number') { const d = Math.abs(x - y); if (d > max) { max = d; where = p; } return; }
+    if (typeof x !== typeof y || Array.isArray(x) !== Array.isArray(y)) { shape = p; return; }
+    if (Array.isArray(x)) { const ya = y as unknown[]; if (x.length !== ya.length) { shape = `${p} (length)`; return; } x.forEach((v, i) => walk(v, ya[i], `${p}[${i}]`)); return; }
+    if (x && typeof x === 'object') { const xo = x as Record<string, unknown>, yo = y as Record<string, unknown>; const keys = Object.keys(xo); if (keys.join() !== Object.keys(yo).join()) { shape = `${p} (keys)`; return; } for (const k of keys) walk(xo[k], yo[k], `${p}.${k}`); return; }
+    if (x !== y) shape = `${p} (${String(x).slice(0, 30)} vs ${String(y).slice(0, 30)})`;
+  };
+  walk(a, b, at);
+  return { max, where, shape };
+}
+
 export const GROWING_PROOF_SERVER: GrowingProofPart = {
   built: true,
   checks: {
@@ -199,7 +294,17 @@ export const GROWING_PROOF_SERVER: GrowingProofPart = {
       }
       return m.applied.picks.length < 12 ? `only ${m.applied.picks.length} picks placed: ${j(m.applied.excluded)}` : fails(out);
     }),
-    G2: async () => 'needs the ui part (W3): the paused editor preview is compared with these server stills at integration',
+    G2: () => guarded(async (e) => {
+      const m = await main(e);
+      const sorted = [...m.applied.picks].sort((a: any, b: any) => a.startFrame - b.startFrame);
+      const withDissolve = sorted.find((p: any, i: number) => i > 0 && p.dissolveFrames > 1);
+      if (!withDissolve) return 'no dissolve in the film';
+      const inside = withDissolve.startFrame + Math.floor(withDissolve.dissolveFrames / 2);
+      const frames = [mid(sorted[0]), inside, mid(sorted[1]), mid(sorted[2]), mid(sorted[3]), sorted[3].startFrame + 1];
+      const out = await previewVsStill(e, m.pid, frames);
+      console.log(`  G2: paused editor preview vs the owner's server still at frames ${[...new Set(frames)].sort((a, b) => a - b).join(', ')} (${inside} inside a dissolve)`);
+      return fails(out);
+    }),
     G3: () => guarded(async (e) => {
       const m = await main(e);
       const { file } = await exportMp4(e, m.pid);
@@ -225,17 +330,23 @@ export const GROWING_PROOF_SERVER: GrowingProofPart = {
       const out: (string | false)[] = [!clip?.freeze && 'the video pick is not a held frame (add_clip freeze)'];
       // the eyes drift 2 px a frame in the source: a neighbouring frame would put them about 2·√2·m px off, so 1 px names the frame
       for (const n of [p.startFrame + p.dissolveFrames, mid(p), p.startFrame + p.frames - 1]) { const r = centroidError(await still(e, m.pid, n)); out.push(typeof r === 'string' ? `frame ${n}: ${r}` : r.worst > 1 && `frame ${n}: ${r3(r.worst)} px (${r.at}; magnification ${r3(p.magnification)})`); }
-      return fails([...out, 'the preview half needs the ui part (W3)']);
+      // the preview half: the paused editor preview at the same frames is the owner's still, byte for byte
+      const pv = await previewVsStill(e, m.pid, [p.startFrame + p.dissolveFrames, mid(p), p.startFrame + p.frames - 1]);
+      return fails([...out, ...pv.map((x) => `preview ${x}`)]);
     }),
     G6: () => guarded(async (e) => {
-      const m = await main(e);
-      const sorted = [...m.applied.picks].sort((a: any, b: any) => a.startFrame - b.startFrame);
-      const vi = sorted.findIndex((p: any) => m.nameOf(p.assetId) === 'video.mp4');
-      const next = sorted[vi + 1];
-      if (vi < 0 || !next) return 'no pick after the held video frame';
+      // its own film without captions (integration): the main film's captions cut at the slot boundary while the pictures dissolve,
+      // so its frames on either side of a dissolve differ in the caption band by more than any mix
+      const pid = await newProject(e, 'G6');
+      const v = e.fx.video, face = e.fx.faces.find((f) => f.name === 'f06.png')!;
+      const picks = [{ assetId: await upload(e, pid, v.file), frame: 12, eyes: marksOf({ ...v.eyesAt(12), width: v.width, height: v.height }) }, { assetId: await upload(e, pid, face.file), frame: null, eyes: marksOf(face) }];
+      const applied = must(built(await e.owner(`/projects/${pid}/recipes/growing/apply`, { params: { picks, sort: 'given', holdFrames: 30, dissolve: 'short', caption: null } })), 'apply');
+      const sorted = [...applied.picks].sort((a: any, b: any) => a.startFrame - b.startFrame);
+      const next = sorted[1];
+      if (sorted.length !== 2 || sorted[0].assetId !== picks[0]!.assetId || !next) return `expected the held frame then the face: ${j(sorted)}`;
       if (!next.dissolveFrames) return `the pick after the held frame has no dissolve (${j(next)})`;
       const s = next.startFrame, D = next.dissolveFrames;
-      const [out, inn, mixed] = [await still(e, m.pid, s - 1), await still(e, m.pid, s + D), await still(e, m.pid, s + Math.floor(D / 2))];
+      const [out, inn, mixed] = [await still(e, pid, s - 1), await still(e, pid, s + D), await still(e, pid, s + Math.floor(D / 2))];
       // the progress p is fitted by least squares over every byte (the engine's own p is not read back), then each byte is compared
       let num = 0, den = 0;
       for (let i = 0; i < mixed.length; i++) { const d = inn[i]! - out[i]!; num += (mixed[i]! - out[i]!) * d; den += d * d; }
@@ -465,7 +576,8 @@ export const GROWING_PROOF_SERVER: GrowingProofPart = {
       await expect('no frame', await planned({ picks: [base, { assetId: video, frame: null, eyes }] }), 'invalid_request', /^a video needs the number of the frame to hold$/);
       await expect('no such frame', await planned({ picks: [base, { assetId: video, frame: 600, eyes }] }), 'out_of_bounds', /^the video has no such frame$/);
       await expect('missing asset', await planned({ picks: [base, { assetId: 'ast_nope', frame: null, eyes }] }), 'not_found', /^a chosen picture is not in this project$/);
-      await expect('bad params', await planned({ picks: [base] }), 'invalid_request', /^the growing parameters are not valid: /);
+      await expect('too few', await planned({ picks: [base] }), 'invalid_request', /^at least two pictures are needed$/);
+      await expect('bad params', await planned({ picks: [base, { assetId: video, frame: 3, eyes }], dissolve: 'sideways' }), 'invalid_request', /^the growing parameters are not valid: /);
       return fails(out);
     }),
     G17: () => guarded(async (e) => {
@@ -473,7 +585,26 @@ export const GROWING_PROOF_SERVER: GrowingProofPart = {
       const strip = (v: any) => { const { revision: _r, ...rest } = v; return JSON.stringify(rest); };
       const again = must(await e.owner(`/projects/${m.pid}/recipes/growing/plan`, { params: m.params }), 'plan again');
       const a = sha(strip(again)), b = sha(strip(must(await e.owner(`/projects/${m.pid}/recipes/growing/plan`, { params: m.params }), 'plan a third time')));
-      return a !== b ? `the plan digest differs between two runs (${a.slice(0, 12)} vs ${b.slice(0, 12)})` : `server half: the plan digest is the same in two runs (${a.slice(0, 12)}); needs the ui part (W3) for the browser's transforms within ${GROWING.agreeWithin}`;
+      if (a !== b) return `the plan digest differs between two runs (${a.slice(0, 12)} vs ${b.slice(0, 12)})`;
+      // across engines: the same planner, the same document, params and context, in Node and in the editor's Chromium
+      const doc = await getDoc(e, m.pid);
+      const capture: Record<string, string | null> = {};
+      for (const p of (m.params.picks as { assetId: string }[])) capture[p.assetId] = shownCapture(doc, p.assetId)?.wall ?? null;
+      const ctx = { capture };
+      const inNode = JSON.parse(JSON.stringify(planGrowing(doc, m.params, ctx))) as GrowingPlan;
+      const code = await plannerBundle();
+      const inBrowser = await withEditor(e, null, async (page) => {
+        await page.setContent('<!doctype html><meta charset="utf-8"><title>planner</title>');
+        await page.addScriptTag({ content: code });
+        return await page.evaluate(([d, p, c]) => JSON.parse(JSON.stringify((globalThis as any).PFGrowing.planGrowing(d, p, c))), [doc, m.params, ctx] as const) as GrowingPlan;
+      });
+      const cmp = compareNumbers(inNode, inBrowser);
+      // and the browser's transforms against the server's own answer of the apply (planned before the film existed: other frames, same transforms)
+      let vsServer = 0;
+      for (const sp of m.applied.picks) { const bp = inBrowser.picks.find((x) => x.key === sp.key); if (!bp) { vsServer = Infinity; break; } for (const k of ['x', 'y', 'scale', 'rotation'] as const) vsServer = Math.max(vsServer, Math.abs(bp.transform[k] - sp.transform[k])); }
+      const engine = await withEditor(e, null, async (page) => page.evaluate(() => navigator.userAgent));
+      console.log(`  G17: Node ${process.version} vs ${/HeadlessChrome\/[\d.]+|Chrome\/[\d.]+/.exec(engine)?.[0] ?? engine}: largest difference of any number of the plan ${cmp.max}${cmp.where ? ` (${cmp.where})` : ''}; browser transforms vs the server's applied transforms: largest ${vsServer}; digest ${a.slice(0, 12)} twice`);
+      return fails([cmp.shape && `the two plans differ in shape at ${cmp.shape}`, cmp.max > GROWING.agreeWithin && `Node and Chromium differ by ${cmp.max} at ${cmp.where} (tolerance ${GROWING.agreeWithin})`, vsServer > GROWING.agreeWithin && `the browser's transforms differ from the server's by ${vsServer}`]);
     }),
   },
 };

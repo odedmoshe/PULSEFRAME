@@ -7,7 +7,7 @@
  * api.applyGrowing / api.regenerateGrowing and are dropped when the dialog closes.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react';
-import { GROWING_BUILT, GROWING, planGrowing, suggestEyeOrder, type Asset, type ProjectDocument, type SuggestEyeOrder } from '@pulseframe/core';
+import { GROWING_BUILT, GROWING, growingPickKey, planGrowing, suggestEyeOrder, type Asset, type ProjectDocument, type SuggestEyeOrder } from '@pulseframe/core';
 import { Button, Dialog } from '../../ds/index.ts';
 import { isolate } from '../../ds/util.tsx';
 import { api } from '../../api.ts';
@@ -19,7 +19,7 @@ import { GROWING_TESTIDS as ID } from './growing.testids.ts';
 import { setGrowingLast, takeGrowingIntent } from './growing.link.ts';
 import {
   agePerson, buildParams, buildPreview, closeLosesMarks, createBlocker, currentGrowingRun, dateWords, defaultSettings, emptyMark, failureWords, fpsOf, holdFrames, listCandidates,
-  markedCount, markWords, minHoldFrames, moveUndated, pickId, refusalWords, restoreParams, secondsText, shownSizeOf, type Candidate, type Mark, type Settings,
+  markedCount, markWords, mergeOrder, minHoldFrames, moveUndated, pickId, refusalWords, restoreParams, secondsText, shownSizeOf, type Candidate, type Mark, type Settings,
 } from './growing.logic.ts';
 import './growing.css';
 
@@ -45,6 +45,8 @@ function GrowingDialogBody({ lang }: { lang: 'he' | 'en' }): ReactElement {
   const cands = useMemo(() => listCandidates(doc), [doc]);
   const byId = useMemo(() => Object.fromEntries(cands.map((c) => [c.assetId, c])) as Record<string, Candidate>, [cands]);
   const [order, setOrder] = useState<string[]>(() => cands.map((c) => c.assetId));
+  // files that come in after the dialog opened (the start hub's card opens it when the import queue is idle) join the list
+  useEffect(() => { setOrder((o) => mergeOrder(o, cands) as string[]); }, [cands]);
   const [ticked, setTicked] = useState<string[]>(() => (runView ? runView.deleted.map((d) => d.assetId) : []));
   const [step, setStep] = useState<Step>(runView ? 'mark' : 'pick');
   const [marks, setMarks] = useState<Record<string, Mark>>(() => Object.fromEntries((runView?.deleted ?? []).map((d) => [d.assetId, emptyMark(d.frame)]))); // by asset id; MEMORY ONLY (C8)
@@ -188,14 +190,14 @@ function GrowingDialogBody({ lang }: { lang: 'he' | 'en' }): ReactElement {
                 </div>
               </>
             )}
-            {!runView && <PreviewBlock lang={lang} preview={preview} />}
+            {!runView && <PreviewBlock lang={lang} preview={preview} showKey={curRef ? growingPickKey(curRef.assetId, curRef.frame) : null} />}
             {error && <p className="pf-growing-error" role="alert" data-testid={ID.error}>{error}</p>}
           </section>
         )}
 
         {step === 'settings' && (
           <section aria-label={S.stepSettings}>
-            <PreviewBlock lang={lang} preview={preview} />
+            <PreviewBlock lang={lang} preview={preview} showKey={null} />
             <div className="pf-growing-field">
               <label htmlFor="gd-hold">{S.hold}</label>
               <input id="gd-hold" type="number" min={0.1} step={0.1} value={settings.holdSeconds} data-testid={ID.hold}
@@ -246,7 +248,11 @@ function GrowingDialogBody({ lang }: { lang: 'he' | 'en' }): ReactElement {
 }
 
 /** The live preview, labelled; the planner's refusal in words when it refuses. Plays the copy with the same Player. */
-function PreviewBlock({ lang, preview }: { lang: 'he' | 'en'; preview: ReturnType<typeof buildPreview> | null }): ReactElement {
+/**
+ * `showKey`: the pick being marked. While the preview is paused it shows the middle of that picture's hold, so a mark or «החליפו»
+ * (S) on it is seen at once (C10, C13); null leaves the frame where it is.
+ */
+function PreviewBlock({ lang, preview, showKey }: { lang: 'he' | 'en'; preview: ReturnType<typeof buildPreview> | null; showKey: string | null }): ReactElement {
   const { editor } = useEditorState();
   const S = growingStrings(lang);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -263,10 +269,12 @@ function PreviewBlock({ lang, preview }: { lang: 'he' | 'en'; preview: ReturnTyp
     return () => { playerRef.current = null; p.dispose(); };
   }, [!!pdoc, editor]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (pdoc) playerRef.current?.setDoc(pdoc); }, [pdoc]);
+  const showAt = preview?.ok && showKey ? (() => { const p = preview.plan.picks.find((x) => x.key === showKey); return p ? p.startFrame + Math.floor(p.frames / 2) : null; })() : null;
+  useEffect(() => { const p = playerRef.current; if (p && showAt !== null && !p.playing) p.seek(showAt); }, [showAt, pdoc]);
   if (!preview) return <p className="pf-growing-muted" data-testid="growing-preview-wait">{S.previewNeedsTwo}</p>;
   if (!preview.ok) return <p className="pf-growing-error" role="alert" data-testid={ID.error}>{refusalWords(lang, preview.message)}</p>;
   const playing = playerRef.current?.playing ?? false;
-  const toggle = () => { const p = playerRef.current; if (!p) return; if (p.playing) p.pause(); else void p.play(); setTick((x) => x + 1); };
+  const toggle = () => { const p = playerRef.current; if (!p) return; if (p.playing) p.pause(); else { p.seek(0); void p.play(); } /* the preview plays from its start */ setTick((x) => x + 1); };
   return (
     <div className="pf-growing-preview" data-testid={ID.preview} dir="ltr">
       <p className="pf-growing-previewlabel" data-testid={ID.previewLabel} dir={lang === 'he' ? 'rtl' : 'ltr'}>{S.preview}</p>

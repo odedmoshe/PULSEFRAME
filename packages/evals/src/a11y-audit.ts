@@ -48,6 +48,7 @@ import { instrumentsA11yScenarios } from './a11y-instruments.ts';
 import { assistantLocalA11yScenarios } from './assistant-local-proof.ui.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
+import { growingA11yScenarios } from './a11y-growing.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
@@ -853,6 +854,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «גדלים מול העיניים» (wave 8 growing): the dialog's three steps and the bar (a11y-growing.ts, integration)
+      for (const sc of growingA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // «חיפוש בצילומים» (wave 7 search): results, «לא נמצא דבר», the picture status line, the forget confirmation (a11y-search.ts, builder C)
       for (const sc of searchA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -1193,6 +1200,12 @@ async function main() {
       }
       // «ספרו מה היה» in the light theme too: the dialog, the recorder recording and refused, the «סיפור» tab, the bar (a11y-story.ts, integration)
       for (const sc of storyA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid: emptyPid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid: emptyPid });
+      }
+      // «גדלים מול העיניים» in the light theme too (a11y-growing.ts, integration)
+      for (const sc of growingA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid: emptyPid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid: emptyPid });

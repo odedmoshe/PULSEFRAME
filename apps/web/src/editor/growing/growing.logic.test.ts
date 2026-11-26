@@ -10,7 +10,7 @@ import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, GROWING_RUN_RECIPE_ID, growingPickKey, type Asset, type EyePoint, type GrowingPlan, type PlanGrowing, type ProjectDocument } from '@pulseframe/core';
 import { sourceDocument } from '../sourceDocument.ts';
 import {
-  buildParams, buildPreview, clearMark, closeLosesMarks, createBlocker, currentGrowingRun, emptyMark, eyesFarEnough, holdFrames, listCandidates, markedCount, markWords, moveCrosshair,
+  buildParams, buildPreview, clearMark, closeLosesMarks, createBlocker, currentGrowingRun, emptyMark, eyesFarEnough, holdFrames, listCandidates, markedCount, markWords, mergeOrder, moveCrosshair,
   moveUndated, pickId, pixelToUv, placePoint, removeLastMark, restoreParams, secondsText, shownSizeOf, stepFrame, swapEyes, uvFromClient, uvToPixel, withFrame, whyRows,
 } from './growing.logic.ts';
 
@@ -177,6 +177,17 @@ describe('the run in the document', () => {
     d2.recipeRuns = { r1: { ...d.recipeRuns.r1!, params: { picked: [{ key: k3, assetId: 'a3', frame: null }, { key: growingPickKey('a1', null), assetId: 'a1', frame: null }], removedPicks: [{ key: k2, assetId: 'a2', frame: null }] }, slots: [] } };
     expect(restoreParams(currentGrowingRun(d2)!, { [pickId('a2', null)]: eyes })!.picks.map((x) => [x.assetId, !!x.eyes])).toEqual([['a3', false], ['a1', false], ['a2', true]]);
     expect(whyRows([{ assetId: 'a2', frame: null, capture: null, magnification: 1.23456, uncoveredShare: 0.0123 } as never])).toEqual([{ assetId: 'a2', frame: null, date: null, magnification: 1.23, uncoveredPercent: 1.2 }]);
+  });
+});
+
+describe('the list while files come in (integration)', () => {
+  it('mergeOrder keeps the order (and a hand move), drops what left, puts a new file after its capture-order neighbour', () => {
+    const c = (assetId: string) => ({ assetId }) as never;
+    const o = ['b', 'u', 'd'];
+    expect(mergeOrder(o, [c('b'), c('d'), c('u')])).toBe(o); // nothing changed: the same array (u was moved by hand)
+    expect(mergeOrder(o, [c('a'), c('b'), c('c'), c('d'), c('u')])).toEqual(['a', 'b', 'c', 'u', 'd']);
+    expect(mergeOrder(o, [c('b'), c('u')])).toEqual(['b', 'u']);
+    expect(mergeOrder([], [c('x'), c('y')])).toEqual(['x', 'y']);
   });
 });
 

@@ -38,6 +38,8 @@ export interface GrowingStrings {
   blockerFew: string; blockerUnmarked: string; closeKeep: string; closeConfirm: string;
   creating: string; created: string; staleProject: string; failed: string;
   holdFramesText(frames: number, min: number): string; faceSuggestTitle: string; captionNeedsDate: string;
+  /** The bar's «ביטול» when the step that made the film is not among the recent actions (its disabled reason). */
+  undoUnavailable: string;
   rebuilding: string; rebuilt: string; whyTitle: string; whyRow(name: string, date: string, mag: string, unc: string): string; whyAfterReload: string; noExclusions: string;
   restoreTitle: string; restoreCreate: string; needsMarksList(n: number): string;
 }
@@ -88,6 +90,7 @@ const HE: GrowingStrings = {
   blockerFew: 'סמנו שתי עיניים לפחות בשתי תמונות', blockerUnmarked: 'בחלק מהתמונות שבחרתם אין עדיין סימון. סמנו אותן או בטלו את הבחירה שלהן', closeKeep: 'להמשיך לסמן', closeConfirm: 'לסגור בכל זאת',
   creating: 'יוצרים…', created: 'נוצר', staleProject: 'הפרויקט השתנה בינתיים. פתחו את החלון שוב.', failed: 'לא הצלחנו ליצור',
   holdFramesText: (f, m) => `${f} פריימים (המינימום ${m})`, faceSuggestTitle: 'מדידה על רשת נקודות, לא הבטחה', captionNeedsDate: 'הכיתוב מופיע רק בתמונות עם תאריך',
+  undoUnavailable: 'הצעד שיצר את הסרט לא נמצא בין הפעולות האחרונות (אולי כבר בוטל, או שהדף נטען מחדש מאז). אפשר למחוק את התמונות שלו מציר הזמן, או לבנות מחדש.',
   rebuilding: 'בונים מחדש…', rebuilt: 'נבנה מחדש', whyTitle: 'מה נעשה בכל תמונה', whyRow: (n, d, m, u) => `${n} · ${d} · הגדלה ${m} · לא מכוסה ${u}%`, whyAfterReload: 'המספרים מוצגים מיד אחרי יצירה או בנייה מחדש.', noExclusions: 'אף תמונה לא הוצאה.',
   restoreTitle: 'סמנו מחדש את התמונות שנמחקו', restoreCreate: 'החזירו', needsMarksList: (n) => `${n} תמונות צריכות סימון מחדש`,
 };
@@ -133,6 +136,7 @@ const EN: GrowingStrings = {
   blockerFew: 'Mark both eyes in at least two pictures', blockerUnmarked: 'Some chosen pictures are not marked yet. Mark them or untick them', closeKeep: 'Keep marking', closeConfirm: 'Close anyway',
   creating: 'Creating…', created: 'Created', staleProject: 'The project changed meanwhile. Open this again.', failed: 'Could not create it',
   holdFramesText: (f, m) => `${f} frames (minimum ${m})`, faceSuggestTitle: 'Measured on a grid of points, not a promise', captionNeedsDate: 'The caption shows only on pictures with a date',
+  undoUnavailable: 'The step that made this film is not among the recent actions (it may be undone already, or the page was reloaded since). Delete its pictures on the timeline, or rebuild.',
   rebuilding: 'Rebuilding…', rebuilt: 'Rebuilt', whyTitle: 'What was done with each picture', whyRow: (n, d, m, u) => `${n} · ${d} · magnified ${m} · uncovered ${u}%`, whyAfterReload: 'The numbers are shown right after creating or rebuilding.', noExclusions: 'No picture was left out.',
   restoreTitle: 'Mark the deleted pictures again', restoreCreate: 'Bring back', needsMarksList: (n) => `${n} pictures need marking again`,
 };

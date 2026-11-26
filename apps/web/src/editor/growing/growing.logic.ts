@@ -69,6 +69,23 @@ export function moveUndated(order: readonly string[], cands: Readonly<Record<str
   [next[i], next[j]] = [next[j]!, next[i]!];
   return next;
 }
+/**
+ * The list after the library changed while the dialog is open (files still coming in from the start hub's card, a file deleted):
+ * files that left are dropped, the order of those that stay is kept (an undated one moved by hand stays where it was put), and a new
+ * file goes right after the nearest file before it in capture order (or first). The same array when nothing changed.
+ */
+export function mergeOrder(order: readonly string[], cands: readonly Candidate[]): readonly string[] {
+  const ids = cands.map((c) => c.assetId), have = new Set(ids);
+  const out = order.filter((id) => have.has(id));
+  const fresh = ids.filter((id) => !out.includes(id));
+  if (!fresh.length && out.length === order.length) return order;
+  for (const id of fresh) {
+    let at = 0;
+    for (let k = ids.indexOf(id) - 1; k >= 0; k--) { const i = out.indexOf(ids[k]!); if (i >= 0) { at = i + 1; break; } }
+    out.splice(at, 0, id);
+  }
+  return out;
+}
 /** The key of a pick in the dialog's maps. */
 export const pickId = (assetId: string, frame: number | null) => `${assetId}:${frame === null ? 'still' : frame}`;
 

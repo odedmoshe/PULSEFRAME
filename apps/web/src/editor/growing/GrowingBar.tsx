@@ -45,7 +45,7 @@ export function GrowingBar({ lang }: { lang: 'he' | 'en' }): ReactElement | null
     <div className="pf-growing-bar" data-testid={ID.bar} role="region" aria-label={S.made}>
       <b>{S.made}</b>
       <span className="pf-growing-muted">{S.notWatched}</span>
-      <Button size="sm" data-testid={ID.barUndo} disabled={busy !== null} disabledReason={txn ? undefined : S.undo} onClick={() => void undo()}>{S.undo}</Button>
+      <Button size="sm" data-testid={ID.barUndo} disabled={busy !== null} disabledReason={txn ? undefined : S.undoUnavailable} onClick={() => void undo()}>{S.undo}</Button>
       <Button size="sm" data-testid={ID.barRebuild} busy={busy === 'rebuild'} onClick={() => void rebuild()}>{S.rebuild}</Button>
       {view.deleted.length > 0 && <Button size="sm" data-testid={ID.barRestore} onClick={restore}>{S.restoreRemoved}</Button>}
       <Button size="sm" data-testid={ID.barWhy} aria-expanded={whyOpen} onClick={() => setWhyOpen((v) => !v)}>{S.why}</Button>
