@@ -29,7 +29,8 @@
  * delete (undone again). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
  * In both themes, «תא הבדיקה» (wave 8 booth, a11y-booth.ts): the first screen, the self-check, a music card, a picture card (or its
  * «דורש כרטיס מסך» state), the report.
- * delete (undone again). In both themes, wave 8: the audience panel open on a calm version (a11y-audiences.ts). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
+ * delete (undone again). In both themes, wave 8: the audience panel open on a calm version (a11y-audiences.ts); «תמונה חיה»: the block offered and
+ * on, and the depth dialog (a11y-living.ts). The untimed copy and the reviewed translation are typed fixtures: no provider and no model ran.
  *   pnpm build && pnpm audit:a11y
  */
 import { execFileSync } from 'node:child_process';
@@ -56,6 +57,7 @@ import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
 import { audiencesA11yScenarios } from './a11y-audiences.ts';
+import { livingA11yScenarios } from './a11y-living.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -898,6 +900,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // «תמונה חיה» (wave 8 living): the block offered, the block on, the depth dialog (modal), on their own scratch project (a11y-living.ts)
+      for (const sc of livingA11yScenarios) {
+        const r = await sc.prepare({ page, lang });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang });
+      }
       if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
       if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();
       if (await page.getByTestId('export-sheet').count()) { await page.keyboard.press('Escape'); await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); }
@@ -1268,6 +1276,12 @@ async function main() {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
+      }
+      // «תמונה חיה» (wave 8 living): the block offered, the block on, the depth dialog (modal), on their own scratch project in the light theme (a11y-living.ts)
+      for (const sc of livingA11yScenarios) {
+        const r = await sc.prepare({ page, lang });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang });
       }
       for (const st of states) console.log(`[${lang} light] state ${st.state}: controls=${st.controls} unnamed=${st.unnamed.length} lowContrast=${st.lowContrast.length} tabIssues=${st.tabIssues.length} noFocusRing=${st.noFocusRing.length}${st.shown !== undefined ? ` shown=${st.shown}` : ''}`);
       report.runs.push({ ...found, uiLanguage: lang, theme: 'light', focus, states });

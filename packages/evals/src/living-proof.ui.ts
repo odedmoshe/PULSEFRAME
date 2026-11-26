@@ -3,7 +3,9 @@
  * `runLivingUi(ctx)` drives the real editor page with the keyboard and reads the document back from the server; it never decides
  * for the caller: each check returns {id, ok, detail}, and `blocked` names a reason when the editor cannot take the step
  * (e.g. set_living_picture not built). Fixtures: the synthetic PNG of a11y-living.ts. Nothing here says how anything looks.
- * 14 needs a page whose browser has no GPU (PF_RENDER_GPU=off): the caller passes it as `ctx.noGpuPage`.
+ * 14 needs a page whose browser has no WebGPU: the caller passes it as `ctx.noGpuPage` (the still's refusal with PF_RENDER_GPU=off is the
+ * entry point's). 15, 16 and 18 read the server's history and document: one transaction per Save, and an undo that restores the
+ * sequences exactly (JSON with sorted keys).
  */
 import type { Page } from 'playwright';
 import { syntheticPng } from './a11y-living.ts';
@@ -38,7 +40,31 @@ async function open(page: Page, pid: string, clipId: string): Promise<void> {
   await page.getByTestId('living-block').waitFor({ timeout: 8000 });
 }
 const history = async (page: Page, pid: string) => (await api(page, 'GET', `/projects/${pid}/history`)).body;
-const doc = async (page: Page, pid: string) => (await api(page, 'GET', `/projects/${pid}`)).body;
+const doc = async (page: Page, pid: string) => (await api(page, 'GET', `/projects/${pid}`)).body.project;
+/** JSON with sorted keys: two documents are the same when this is (key order is not meaning). */
+const canon = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, (x as Record<string, unknown>)[k]])) : x));
+const clipOf = (d: any, clipId: string) => { for (const sq of Object.values<any>(d?.sequences ?? {})) for (const t of sq.tracks) for (const c of t.clips) if (c.id === clipId) return c; return null; };
+const lastRevision = async (page: Page, pid: string) => { const ev = (await history(page, pid)).events as { revision: number }[]; return ev.length ? ev[ev.length - 1]!.revision : 0; };
+const txSince = async (page: Page, pid: string, rev: number) => ((await api(page, 'GET', `/projects/${pid}/history?since=${rev}`)).body.events as { ops: string[]; kind?: string; undoes?: string | null }[]);
+/** The editor's undo from the keyboard (Ctrl+Z, focus on the page body), then wait for the server's document to change. */
+async function undo(page: Page, pid: string): Promise<void> {
+  const rev = await lastRevision(page, pid);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('Control+z');
+  for (let i = 0; i < 100 && (await lastRevision(page, pid)) === rev; i++) await page.waitForTimeout(100);
+}
+/** The preview canvas as RGB once it holds still (two reads 300 ms apart equal), at most ~10 s. */
+async function stablePreview(page: Page): Promise<Buffer> {
+  const read = async () => Buffer.from(await page.evaluate(() => { const c = document.querySelector<HTMLCanvasElement>('canvas[data-testid=preview]')!; const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data; const o: number[] = []; for (let i = 0; i < d.length; i += 4) o.push(d[i]!, d[i + 1]!, d[i + 2]!); return o; }));
+  let a = await read();
+  for (let i = 0; i < 33; i++) { await page.waitForTimeout(300); const b = await read(); if (b.equals(a)) return b; a = b; }
+  return a;
+}
+async function seek(page: Page, frame: number): Promise<boolean> {
+  const rb = (await page.getByTestId('ruler').boundingBox())!;
+  await page.mouse.click(rb.x + frame * 3 + 0.5, rb.y + rb.height / 2); // 90 px/s = 3 px a frame at 30 fps (keyframes-proof.ts)
+  return page.waitForFunction((f0) => document.querySelector('[data-testid=playhead]')?.getAttribute('data-frame') === String(f0), frame, { timeout: 5000 }).then(() => true, () => false);
+}
 
 export async function check14(ctx: LivingUiCtx): Promise<LivingUiResult> {
   const page = ctx.noGpuPage;
@@ -53,55 +79,95 @@ export async function check15(ctx: LivingUiCtx): Promise<LivingUiResult> {
   const { page } = ctx;
   const { pid, clipId } = await project(page);
   await open(page, pid, clipId);
-  const before = JSON.stringify((await doc(page, pid)).sequences ?? null);
+  const before = await doc(page, pid);
+  const r0 = await lastRevision(page, pid);
   const apply = page.getByTestId('living-apply');
   await apply.focus(); await page.keyboard.press('Enter');
   await page.getByTestId('depth-dialog').waitFor({ timeout: 8000 });
   const startRamp = await page.getByTestId('depth-canvas').getAttribute('aria-valuenow');
-  const h0 = (await history(page, pid)) as unknown;
-  await page.getByTestId('depth-save').click();
+  await page.getByTestId('depth-save').focus(); await page.keyboard.press('Enter');
   const done = await page.getByTestId('living-block').and(page.locator('[data-state=on]')).waitFor({ timeout: 10_000 }).then(() => true, () => false);
   if (!done) return { id: 15, ok: false, blocked: 'set_living_picture did not commit (not built, or refused)', detail: { ramp: startRamp, refusal: await page.getByTestId('living-refusal').textContent().catch(() => null) } };
-  const h1 = JSON.stringify(await history(page, pid));
-  await page.getByTestId('living-move-slide').focus(); await page.keyboard.press('Enter');
+  const applied = await txSince(page, pid, r0);
+  const afterApply = await doc(page, pid);
+  const r1 = await lastRevision(page, pid);
+  // arrow to «גלישה הצידה» (the radio group moves and selects with the arrow keys)
+  await page.getByTestId('living-move-push').focus();
+  await page.keyboard.press('ArrowDown');
   await page.waitForFunction(() => document.querySelector('[data-testid=living-move-slide]')?.getAttribute('aria-checked') === 'true', null, { timeout: 8000 }).catch(() => {});
   const slide = await page.getByTestId('living-move-slide').getAttribute('aria-checked');
-  void h0; void h1;
-  return { id: 15, ok: startRamp === '450' && slide === 'true', detail: { rampHorizon: startRamp, slideChecked: slide, before: before.length, note: 'frames 0 vs 89 and the one-undo entity diff are read by the caller from render_frame and /undo' } };
+  for (let i = 0; i < 50 && (await lastRevision(page, pid)) === r1; i++) await page.waitForTimeout(100);
+  const afterSlide = await doc(page, pid);
+  // the preview at frames 0 and 89
+  const seeks = [await seek(page, 0)]; const p0 = await stablePreview(page);
+  seeks.push(await seek(page, 89)); const p89 = await stablePreview(page);
+  let differing = 0; for (let i = 0; i < p0.length; i++) if (Math.abs(p0[i]! - p89[i]!) > 2) differing++;
+  // one Ctrl+Z undoes the move change exactly; a second undoes the living picture with its depth exactly (one step)
+  await undo(page, pid);
+  const undo1 = await doc(page, pid);
+  await undo(page, pid);
+  const undo2 = await doc(page, pid);
+  const fx = clipOf(afterApply, clipId)?.effects?.find((e: any) => e.type === 'depth.living');
+  const ok = startRamp === '450' && applied.length === 1 && canon(applied[0]!.ops) === canon(['set_living_picture']) && !!clipOf(afterApply, clipId)?.depth && !!fx
+    && slide === 'true' && clipOf(afterSlide, clipId)?.effects?.find((e: any) => e.type === 'depth.living')?.params?.move === 'slide' && seeks.every(Boolean) && differing > 0
+    && canon(undo1.sequences) === canon(afterApply.sequences) && canon(undo2.sequences) === canon(before.sequences);
+  return { id: 15, ok, detail: { rampHorizon: startRamp, transactionsOnSave: applied.map((t) => t.ops), depthStored: !!clipOf(afterApply, clipId)?.depth, slideChecked: slide, previewBytesDifferingFrame0vs89: differing, seeked: seeks,
+    firstUndoEqualsAfterSave: canon(undo1.sequences) === canon(afterApply.sequences), secondUndoEqualsBefore: canon(undo2.sequences) === canon(before.sequences) } };
 }
 
 export async function check16(ctx: LivingUiCtx): Promise<LivingUiResult> {
   const { page } = ctx;
   const { pid, clipId } = await project(page);
-  await api(page, 'POST', `/projects/${pid}/transactions`, { ops: [{ op: 'set_clip_depth', args: { clipId, depth: { v: 1, base: { kind: 'ramp', horizon: 450 }, strokes: [] } } }] });
+  const made = await api(page, 'POST', `/projects/${pid}/transactions`, { ops: [{ op: 'set_living_picture', args: { clipId, depth: { v: 1, base: { kind: 'ramp', horizon: 450 }, strokes: [] } } }] });
+  if (made.status !== 200) return { id: 16, ok: false, blocked: 'set_living_picture was refused (not built?)', detail: { status: made.status } };
   await open(page, pid, clipId);
-  // the block is "offer" (no living picture): «ציירו עומק» exists only when on, so open through the apply button
-  await page.getByTestId('living-apply').click();
+  const r0 = await lastRevision(page, pid);
+  await page.getByTestId('living-depth-open').click();
   const canvas = page.getByTestId('depth-canvas');
   await canvas.waitFor({ timeout: 8000 });
   await canvas.focus(); await page.keyboard.press('ArrowDown');
   const h = await canvas.getAttribute('aria-valuenow');
   await page.getByTestId('depth-tool-near').click();
   const box = (await canvas.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 + 20, box.y + box.height / 2 + 10); await page.mouse.up();
-  const strokes = await page.locator('[data-testid=depth-dialog] .living-row bdi').first().textContent();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 + 20, box.y + box.height / 2 + 10, { steps: 4 }); await page.mouse.up();
+  await page.getByTestId('depth-save').click();
+  await page.getByTestId('depth-dialog').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+  for (let i = 0; i < 50 && (await lastRevision(page, pid)) === r0; i++) await page.waitForTimeout(100);
+  const saved = await txSince(page, pid, r0);
+  const depth = clipOf(await doc(page, pid), clipId)?.depth;
+  // a second open closed with Escape: nothing is saved and focus returns to «ציירו עומק»
+  const r1 = await lastRevision(page, pid);
+  await page.getByTestId('living-depth-open').click();
+  await page.getByTestId('depth-dialog').waitFor({ timeout: 8000 });
   await page.keyboard.press('Escape');
-  await page.getByTestId('depth-dialog').waitFor({ state: 'detached', timeout: 5000 });
+  await page.getByTestId('depth-dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
   const focused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid'));
-  const saved = (await doc(page, pid)).sequences;
-  return { id: 16, ok: h === '460' && /^1\//.test(strokes ?? '') && focused === 'living-apply', detail: { horizonAfterKey: h, strokeCounter: strokes, focusAfterEscape: focused, savedByEscape: JSON.stringify(saved).includes('"strokes":[{'), note: 'the Save path (exactly one set_clip_depth) needs a block that is on; read after W1 merges. Escape returns focus to the opener (living-apply here, living-depth-open when the block is on)' } };
+  await page.waitForTimeout(500);
+  const afterEscape = await txSince(page, pid, r1);
+  const ok = h === '460' && saved.length === 1 && canon(saved[0]!.ops) === canon(['set_clip_depth']) && depth?.base?.horizon === 460 && depth?.strokes?.length === 1 && depth.strokes[0].layer === 'near'
+    && afterEscape.length === 0 && focused === 'living-depth-open';
+  return { id: 16, ok, detail: { horizonAfterKey: h, transactionsOnSave: saved.map((t) => t.ops), storedHorizon: depth?.base?.horizon, storedStrokes: depth?.strokes?.map((x: any) => [x.layer, x.pts.length]), transactionsAfterEscape: afterEscape.length, focusAfterEscape: focused } };
 }
 
 export async function check18(ctx: LivingUiCtx): Promise<LivingUiResult> {
   const { page } = ctx;
   const { pid, clipId } = await project(page, true);
+  const before = await doc(page, pid);
+  const kbKeys = Object.keys(clipOf(before, clipId)?.keyframes ?? {}).filter((k) => /^(scale|x|y|rotation)$/.test(k));
   await open(page, pid, clipId);
+  const r0 = await lastRevision(page, pid);
   await page.getByTestId('living-apply').click();
   await page.getByTestId('depth-save').click();
   const done = await page.getByTestId('living-block').and(page.locator('[data-state=on]')).waitFor({ timeout: 10_000 }).then(() => true, () => false);
   if (!done) return { id: 18, ok: false, blocked: 'set_living_picture did not commit (not built, or refused)', detail: {} };
   const line = await page.getByText(/התנועה הקודמת הוחלפה|previous move was replaced/).count();
-  return { id: 18, ok: line > 0, detail: { replacedLine: line, note: 'one undo bringing both back is read by the caller (entity diff)' } };
+  const applied = await txSince(page, pid, r0);
+  const after = await doc(page, pid);
+  const leftKeys = Object.keys(clipOf(after, clipId)?.keyframes ?? {}).filter((k) => kbKeys.includes(k) && (clipOf(after, clipId).keyframes[k]?.length ?? 0) > 0);
+  await undo(page, pid);
+  const back = await doc(page, pid);
+  const ok = kbKeys.length > 0 && line > 0 && applied.length === 1 && leftKeys.length === 0 && !!clipOf(after, clipId)?.effects?.some((e: any) => e.type === 'depth.living') && canon(back.sequences) === canon(before.sequences);
+  return { id: 18, ok, detail: { kenBurnsKeys: kbKeys, replacedLine: line, transactions: applied.map((t) => t.ops), moveKeysLeft: leftKeys, oneUndoRestoresBoth: canon(back.sequences) === canon(before.sequences) } };
 }
 
 export async function runLivingUi(ctx: LivingUiCtx): Promise<LivingUiResult[]> {

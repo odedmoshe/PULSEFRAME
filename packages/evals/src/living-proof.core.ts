@@ -20,6 +20,8 @@ export interface LivingCoreCtx {
   /** A folder for this part's fixture; the entry point deletes it. */
   art: string;
   check(id: number, name: string, ok: boolean, detail?: unknown): void;
+  /** Check 20's imported project (an enabled living picture with no depth), for the entry point's preview-notice part. */
+  noDepthProject?(pid: string, clipId: string): void;
 }
 export const LIVING_PROOF_CORE = { built: true as boolean, checks: [11, 13, 20] as const };
 
@@ -103,6 +105,7 @@ export async function runLivingCore(ctx: LivingCoreCtx): Promise<void> {
     const edited = rewriteProjectJson(tar, (doc) => { for (const sq of Object.values<any>(doc.sequences)) for (const t of sq.tracks) for (const c of t.clips) if (c.id === clipId) delete c.depth; });
     const imp = await fetch(`${ctx.url}/api/v1/projects/import`, { method: 'POST', headers: { ...h, 'content-type': 'application/x-tar' }, body: new Uint8Array(edited) });
     const pid2 = ((await imp.json()) as any)?.project?.id as string | undefined;
+    if (pid2) ctx.noDepthProject?.(pid2, clipId);
     const still = pid2 ? await call('GET', `/projects/${pid2}/frame?index=45`) : { status: 0, body: null };
     const text = JSON.stringify(still.body ?? '').slice(0, 600);
     const plan = pid2 ? await call('POST', `/projects/${pid2}/exports/plan`, {}) : { status: 0, body: null };
