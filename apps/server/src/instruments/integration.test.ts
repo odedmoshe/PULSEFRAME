@@ -53,7 +53,7 @@ function wholeBank(bank: ResolvedBank, lib: SyntheticKit): ResolvedBank {
       whole = { ...p, instrument: { ...p.instrument, zones } };
       memo.set(p.instrument.id, whole);
     }
-    parts[role] = { ...whole, gainDb: p.gainDb, vel: p.vel, ...(p.attackMax !== undefined ? { attackMax: p.attackMax } : {}), ...(p.releaseMax !== undefined ? { releaseMax: p.releaseMax } : {}) };
+    parts[role] = { ...whole, gainDb: p.gainDb, vel: p.vel, ...(p.attackMax !== undefined ? { attackMax: p.attackMax } : {}), ...(p.releaseMax !== undefined ? { releaseMax: p.releaseMax } : {}), ...(p.edge !== undefined ? { edge: p.edge } : {}) };
   }
   return { ...bank, parts };
 }
@@ -93,6 +93,36 @@ describe('W1 plan meets W2 decode: a recorded track from files on disk', () => {
     await expect(renderMusic('music.calm', 4, 1, { bank: partial, kit: { ...kit, styleId: 'music.pop' } })).rejects.toThrow(/not the kit of music\.calm/);
     // and it is not the synthesiser's track
     expect((await renderMusic('music.calm', 4, 1)).wav.equals(a.wav)).toBe(false);
+  }, 60_000);
+
+  it('edge notes (kit part edge): with strings regions C ± 5 up to C5 only, pad 66 (a gap) and double 78 (above the range) play with edge 2; the partial decode equals the whole one', async () => {
+    const w = world({ pianoSeconds: 3, stringsSeconds: 2 });
+    // the strings keep the regions of C2..C5 (keys c − 5 .. c + 5): 42, 54, 66 are gaps, 78 and above are past the top (77)
+    const sfz = path.join(w.lib.items.strings.dir, 'strings.sfz');
+    fs.writeFileSync(sfz, fs.readFileSync(sfz, 'utf8').split('\n').filter((l) => !/pitch_keycenter=c[67]/.test(l))
+      .map((l) => l.replace(/lokey=(\d+) hikey=(\d+)/, (_m, lo: string, hi: string) => `lokey=${Number(lo) + 1} hikey=${hi}`)).join('\n'));
+    const table = refreshKitTable(w.lib);
+    const without: MusicKit = table as MusicKit;
+    const kit: MusicKit = { ...table, parts: { ...table.parts, pad: { ...table.parts.pad!, edge: 2 }, double: { ...table.parts.double!, edge: 2 } } } as MusicKit;
+    const notes = kitNotes(kit, 'music.calm', 4, 1);
+    expect(notes.some((n) => n.part === 'pad' && n.midi === 66) && notes.some((n) => n.part === 'double' && n.midi === 78)).toBe(true);
+    // without edge the same kit is refused before anything is decoded (instruments_range); with edge it loads
+    expect(await codeOf(loadBank(await ready(w.cfg, without), without, notes))).toBe('409:instruments_range');
+    const check = await ready(w.cfg, kit);
+    expect(check.bank).not.toBe((await ready(w.cfg, without)).bank); // the bank names the edge
+    const partial = await loadBank(check, kit, notes);
+    expect(partial.parts.pad!.edge).toBe(2);
+    const whole = wholeBank(partial, w.lib);
+    const zones = Object.values(partial.parts).flatMap((p) => p!.instrument.zones), wholeZones = Object.values(whole.parts).flatMap((p) => p!.instrument.zones);
+    expect(zones.some((z, i) => z.frames > 0 && z.frames < wholeZones[i]!.frames)).toBe(true);
+    const plan = planZones(notes, whole);
+    expect(plan.outOfRange).toBeNull();
+    const byId = new Map(Object.values(partial.parts).map((p) => [p!.instrument.id, p!.instrument] as const));
+    const wholeById = new Map(Object.values(whole.parts).map((p) => [p!.instrument.id, p!.instrument] as const));
+    for (const n of plan.needs) expect(byId.get(n.instrument)!.zones[n.zone]!.frames).toBe(Math.min(n.frames, wholeById.get(n.instrument)!.zones[n.zone]!.frames));
+    const a = await renderMusic('music.calm', 4, 1, { bank: partial, kit });
+    const b = await renderMusic('music.calm', 4, 1, { bank: whole, kit });
+    expect(a.wav.equals(b.wav)).toBe(true);
   }, 60_000);
 
   it('the production queue and makeMusic: the made asset is the recorded render, MUSIC_RECORDED_GENERATOR, the kit\'s records, the name, one commit, one undo', async () => {
