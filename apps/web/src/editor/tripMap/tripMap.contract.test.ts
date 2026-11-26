@@ -8,7 +8,9 @@ import { drawnPanel } from '../drawnPanels.tsx';
 import './register.ts';
 import { TRIPMAP_TESTIDS } from './tripMap.testids.ts';
 import { tripMapLabel, tripMapT } from './tripMap.strings.ts';
-import { TRIPMAP_UI_BUILT } from './TripMapDialog.tsx';
+import { TRIPMAP_ENTRY_SHOWN, TRIPMAP_UI_BUILT } from './TripMapDialog.tsx';
+import { MAP_OPS_BUILT } from '@pulseframe/core';
+import { MAP_PAINTER_BUILT } from '@pulseframe/engine';
 
 const map: MapPayload = {
   kind: 'map', v: 1, look: 'paper', camera: 'whole', timing: 'even',
@@ -33,5 +35,8 @@ describe('trip map web contract', () => {
   it('the panel is registered with the carrier; the entry is offered once the dialog is built', () => {
     expect(drawnPanel('map')).toBeTruthy();
     expect(TRIPMAP_UI_BUILT).toBe(true);
+    // the entry needs all three parts: never shown before the painter draws
+    expect(TRIPMAP_ENTRY_SHOWN).toBe(TRIPMAP_UI_BUILT && MAP_OPS_BUILT && MAP_PAINTER_BUILT);
+    expect(TRIPMAP_ENTRY_SHOWN).toBe(true);
   });
 });

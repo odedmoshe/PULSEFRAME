@@ -10,7 +10,7 @@ import { cameraAt, MapPayloadSchema, mapIssues, searchPlaces, toScreen, mercator
 import { dictionaries } from '@pulseframe/i18n';
 import {
   barsState, createPlan, defaultFrames, draftOf, draftProblems, framesOfSeconds, hitLabel, initialPicker, minFrames, moveStop, pickerBox, pickerKey, pickerPayload, pixelToPlace,
-  placeToPixel, project, retimePlan, savePlan, secondsText, stopFromHit, stopsArg, suggestionsFor, unproject, MAX_SUGGESTIONS, PICKER_SIZE, type Draft, type DraftStop,
+  draftPayload, hiddenLabelNames, placeToPixel, project, retimePlan, savePlan, secondsText, stopFromHit, stopsArg, suggestionsFor, unproject, MAX_SUGGESTIONS, PICKER_SIZE, type Draft, type DraftStop,
 } from './tripMap.logic.ts';
 
 const R30 = { num: 30, den: 1 }, R2997 = { num: 30000, den: 1001 };
@@ -220,5 +220,17 @@ describe('strings used by the surfaces exist in both languages', () => {
   });
   it('Hebrew has no gendered address forms in the new lines', () => {
     for (const [k, v] of Object.entries(dictionaries.he)) if (k.startsWith('tripMap.')) expect(v, k).not.toMatch(/\b(לחץ|בחר|הקלד|הוסף)\b/);
+  });
+});
+
+describe('names that are not shown (the painter\'s own layout: engine mapLabelLayout over core placeLabels)', () => {
+  const measure = (name: string) => name.length * 0.6 * 28.8; // a fixed width per letter: the dialog measures with the label font
+  it('«יפו» 4 km from «תל אביב» is listed as not shown; a draft with problems lists nothing', () => {
+    const d = draft({ stops: [A, stop('j', 'יפו', 34_750_000, 32_050_000), stop('c', 'אילת', 34_950_000, 29_560_000)], seconds: '12' });
+    const p = draftPayload(d, R30)!;
+    expect(p.stops.map((s) => s.at)).toEqual([30, 173, 315]) // 1 s intro, 1.5 s outro: 30 + 285/2 rounded once, ties up;
+    expect(MapPayloadSchema.safeParse(p).success).toBe(true);
+    expect(hiddenLabelNames(p, { width: 1280, height: 720 }, measure)).toEqual(['יפו']);
+    expect(draftPayload(draft({ stops: [A] }), R30)).toBeNull();
   });
 });

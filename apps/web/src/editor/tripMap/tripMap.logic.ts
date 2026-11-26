@@ -9,9 +9,10 @@
 import * as T from '@pulseframe/time';
 import {
   DEFAULT_TRANSFORM, MAP_COORD_QUANTUM, MAP_INTRO_SECONDS, MAP_KIND, MAP_MIN_LEG_SECONDS, MAP_OUTRO_SECONDS, MAX_LAT_MICRO, MAX_LON_MICRO, MAX_MAP_STOPS,
-  MAX_STOP_NAME, MIN_MAP_STOPS, mapFrames, quantiseMicro, searchPlaces, latOfMercY, mercator, mercY, toScreen, type DrawnClip, type MapCamera, type MapLook, type MapMode, type MapPayload, type MapSize, type MercPoint,
+  MAX_STOP_NAME, MIN_MAP_STOPS, evenStopFrames, mapFrames, quantiseMicro, searchPlaces, latOfMercY, mercator, mercY, toScreen, type DrawnClip, type MapCamera, type MapLook, type MapMode, type MapPayload, type MapSize, type MercPoint,
   type PlaceHit, type PlaceRow, type ProjectDocument,
 } from '@pulseframe/core';
+import { mapLabelLayout } from '@pulseframe/engine/map/labels.ts';
 
 // ---------- the draft ----------
 export interface DraftStop { id: string; name: string; hidden: boolean; lon: number; lat: number; via: MapMode; placeId?: number }
@@ -208,6 +209,22 @@ export function savePlan(clip: DrawnClip, before: Draft, d: Draft, rate: T.Rate)
 }
 /** The «retime» button: time_trip_map bars again (music or length changed). */
 export const retimePlan = (clipId: string): OpCallLike[] => [{ op: 'time_trip_map', args: { clipId, to: 'bars' } }];
+
+/** The draft as the map payload Create would make (even timing), or null while it has problems: the input of the names check. */
+export function draftPayload(d: Draft, rate: T.Rate): MapPayload | null {
+  const f = framesOfSeconds(d.seconds, rate);
+  if (f === null || draftProblems(d, rate).length) return null;
+  const at = evenStopFrames(d.stops.length, f, rate);
+  return {
+    kind: MAP_KIND, v: 1, look: d.look, camera: 'whole', timing: 'even',
+    stops: d.stops.map((s, i) => ({ id: s.id, name: s.name, lon: s.lon, lat: s.lat, at: at[i]!, ...(s.hidden ? { hidden: true as const } : {}), ...(s.placeId ? { placeId: s.placeId } : {}), ...(i > 0 ? { via: s.via } : {}) })),
+  };
+}
+/** The shown names the painter will not draw at this output size (no room: the painter's own layout, a heuristic), in stop order. */
+export function hiddenLabelNames(p: MapPayload, size: MapSize, measure: (name: string, rtl: boolean) => number): string[] {
+  const l = mapLabelLayout(p, size, measure);
+  return p.stops.filter((s, i) => !s.hidden && !l.placements[i]?.box).map((s) => s.name);
+}
 
 /** Whether the bars box can be ticked: musicAt finds music with bars at the start in its own sequence (injected so a test needs no document). */
 export type BarsState = { ok: true } | { ok: false; reason: 'barsNoMusic' | 'barsNoBars' };

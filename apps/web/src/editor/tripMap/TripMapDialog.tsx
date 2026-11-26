@@ -13,21 +13,24 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { ArrowDown, ArrowUp, EyeOff, Map as MapIcon, X } from 'lucide-react';
 import { translateRefusal } from '@pulseframe/i18n';
-import { drawGraph, MAP_NOT_BUILT_WHY, type RenderGraph } from '@pulseframe/engine';
-import { cameraAt, musicAt, MAP_MODES, MAX_MAP_STOPS, MAX_STOP_NAME, isMapPayload, type DrawnClip, type MapCamera, type MapLook, type MapMode, type PlaceHit, type PlaceRow } from '@pulseframe/core';
+import { drawGraph, MAP_NOT_BUILT_WHY, MAP_PAINTER_BUILT, type RenderGraph } from '@pulseframe/engine';
+import { labelFont } from '@pulseframe/engine/map/labels.ts';
+import { cameraAt, musicAt, MAP_MODES, MAP_OPS_BUILT, MAX_MAP_STOPS, MAX_STOP_NAME, isMapPayload, type DrawnClip, type MapCamera, type MapLook, type MapMode, type PlaceHit, type PlaceRow } from '@pulseframe/core';
 import * as T from '@pulseframe/time';
 import { Button, Dialog, Seg } from '../../ds/index.ts';
 import { useEditorState } from '../store.ts';
 import { TRIPMAP_TESTIDS as TID } from './tripMap.testids.ts';
 import { tripMapT } from './tripMap.strings.ts';
 import {
-  barsState, createPlan, defaultFrames, degText, draftOf, draftProblems, framesOfSeconds, hitLabel, initialPicker, loadPlaces, moveStop, newStopId, PICKER_SIZE,
+  barsState, createPlan, defaultFrames, degText, draftOf, draftPayload, hiddenLabelNames, draftProblems, framesOfSeconds, hitLabel, initialPicker, loadPlaces, moveStop, newStopId, PICKER_SIZE,
   pickerKey, pickerLayer, pickerPayload, pixelToPlace, placeToPixel, retimePlan, savePlan, secondsText, stopFromHit, stopFromPoint, suggestionsFor, type Draft, type OpCallLike, type PickerState, type PickerViewId,
 } from './tripMap.logic.ts';
 import './tripMap.css';
 
 /** True once W3 has built the dialog, the panel and the entry against built ops and a built painter. */
 export const TRIPMAP_UI_BUILT = true;
+/** The entry shows only when all three parts are in: the ops (core), the painter (engine) and this interface (never before the painter draws). */
+export const TRIPMAP_ENTRY_SHOWN = TRIPMAP_UI_BUILT && MAP_OPS_BUILT && MAP_PAINTER_BUILT;
 
 const LOOKS: readonly MapLook[] = ['paper', 'night'];
 let stopCounter = 0;
@@ -87,6 +90,23 @@ export function TripMapDialog({ clip, onClose }: { clip?: DrawnClip; onClose: ()
   const music = doc && !picker ? musicAt(doc, at, clip ? seqId : seqId) : null;
   const bars = barsState(music);
   const frames = framesOfSeconds(draft.seconds, rate);
+  // the names the painter will not draw at the project's size: the painter's own layout, measured in the label font once it is loaded
+  const [hiddenNames, setHiddenNames] = useState<string[]>([]);
+  const outW = doc?.settings.width ?? 0, outH = doc?.settings.height ?? 0;
+  useEffect(() => {
+    const p = outW && outH ? draftPayload(draft, rate) : null;
+    if (!p) { setHiddenNames([]); return; }
+    let on = true;
+    const size = { width: outW, height: outH }, font = labelFont(outH);
+    const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
+    Promise.resolve(fonts ? fonts.load(font, 'אבג ABC') : null).then(() => {
+      const c = on ? document.createElement('canvas').getContext('2d') : null;
+      if (!c) return;
+      c.font = font;
+      setHiddenNames(hiddenLabelNames(p, size, (name, rtl) => { c.direction = rtl ? 'rtl' : 'ltr'; return c.measureText(name).width; }));
+    }, () => { if (on) setHiddenNames([]); });
+    return () => { on = false; };
+  }, [draft, rate, outW, outH]);
 
   const change = (f: (d: Draft) => Draft) => { setDraft(f); setError(''); };
   const addStop = (s: ReturnType<typeof stopFromPoint>) => { if (draft.stops.length >= MAX_MAP_STOPS) return; change((d) => ({ ...d, stops: [...d.stops, s] })); setQuery(''); };
@@ -215,6 +235,7 @@ export function TripMapDialog({ clip, onClose }: { clip?: DrawnClip; onClose: ()
               </li>
             ))}
           </ol>
+          {hiddenNames.map((n, i) => <p key={`${i}:${n}`} className="muted pf-trip-note" data-testid={TID.labelHidden}>{t('labelHidden', { name: n })}</p>)}
         </section>
 
         {/* ---- look, camera, length, timing ---- */}
@@ -314,7 +335,7 @@ function Picker({ st, look, lang, rate, onState, onPlace, onCancel, boxRef }: {
 }
 
 /**
- * The entry in the Text pane (Library.tsx mounts it only once TRIPMAP_UI_BUILT): the secondary button «מפת טיול חדשה»
+ * The entry in the Text pane (Library.tsx mounts it only once TRIPMAP_ENTRY_SHOWN): the secondary button «מפת טיול חדשה»
  * (TRIPMAP_TESTIDS.newButton) after «הוספת טקסט», which opens TripMapDialog at the playhead.
  */
 export function TripMapEntry(): ReactElement {
