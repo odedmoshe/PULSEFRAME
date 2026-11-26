@@ -7,14 +7,14 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AudienceChange, AudienceChanges } from '@pulseframe/core';
 import { AUDIENCE_DEFAULT_NAMES } from '@pulseframe/core';
-import { appliedCount, changeText, isDiverged, jumpRows, keepOp, keepRuleOf, overrideCount, sizeToCommit, snapRange, stageNote } from './audience.logic.ts';
+import { appliedCount, changeField, changeText, isDiverged, jumpable, jumpRows, keepOp, keepRuleOf, overrideCount, sizeToCommit, snapRange, stageNote } from './audience.logic.ts';
 import { audienceMenuChoice, audienceMenuItems, isAudienceMenuId } from './audienceMenu.ts';
 import { AUDIENCE_TESTIDS } from './audience.testids.ts';
 
 const dir = path.dirname(new URL(import.meta.url).pathname);
 const read = (f: string) => fs.readFileSync(path.join(dir, f), 'utf8');
 // STAND-IN (test only): what the server's list could look like; not a measurement of anything
-const change = (p: Partial<AudienceChange>): AudienceChange => ({ key: 'effect:c1:strobe', rule: 'effect', clipId: 'c1', trackId: 't1', startFrame: 30, endFrame: 60, before: 'strobe', after: null, keepable: true, kept: false, ...p });
+const change = (p: Partial<AudienceChange>): AudienceChange => ({ key: 'effect:c1:strobe', rule: 'effect', clipId: 'c1', trackId: 't1', sequenceId: 'seq_main', startFrame: 30, endFrame: 60, before: 'strobe', after: null, keepable: true, kept: false, ...p });
 const list = (changes: AudienceChange[]): AudienceChanges => ({ projectId: 'p', variantId: 'v', revision: 1, profile: 'calm', rules: 1, musicDb: -6, changes, fastCuts: [{ startFrame: 90, endFrame: 120, cuts: 5, limit: 4, windowSeconds: 2 }], soundRoles: [], notHandled: ['pace', 'keys', 'not_medical', 'flash_check', 'sound_unheard'], method: 'stand-in' } as AudienceChanges);
 
 describe('the «+» menu group', () => {
@@ -73,6 +73,29 @@ describe('the change rows', () => {
     expect(appliedCount(r)).toBe(1);
     expect(stageNote('גרסה רגועה', 3, 'he')).toBe('גרסה רגועה · 3 שינויים · לא נצפתה');
     expect(stageNote('Calm version', 3, 'en')).toBe('Calm version · 3 changes · not watched');
+  });
+});
+
+describe('rows of another sequence and caption rows (integration)', () => {
+  it('a row of a short is listed without a jump; the roving group holds only main-sequence rows and fast cuts', () => {
+    const r = list([change({ key: 'effect:c1:fx1' }), change({ key: 'effect:c9:fx2', clipId: 'c9', sequenceId: 'seq_short', startFrame: 40 })]);
+    expect(jumpable(r.changes[1]!, 'seq_main')).toBe(false);
+    expect(jumpable(r.changes[0]!, 'seq_main')).toBe(true);
+    expect(jumpRows(r, 'seq_main').map((j) => j.key)).toEqual(['effect:c1:fx1', 'fast:0:90']);
+    const src = read('AudiencePanel.tsx');
+    expect(src).toMatch(/!jumpable\(c, main\) \?/);
+    expect(src).toMatch(/t\('elsewhere', \{ name: seqName\(c\.sequenceId\) \}\)/);
+  });
+  it('the four caption rows of one track are worded by their field, not one sentence four times', () => {
+    const rows = ['sizeFrac', 'maxCharsPerLine', 'background', 'preset'].map((d) => change({ key: `caption_look:t2:${d}`, rule: 'caption_look', clipId: null, trackId: 't2', after: d === 'maxCharsPerLine' ? 26 : null, keepable: false }));
+    expect(rows.map(changeField)).toEqual(['sizeFrac', 'maxCharsPerLine', 'background', 'preset']);
+    expect(changeField({ key: 'effect:c1:fx1#2' })).toBe('fx1');
+    for (const lang of ['he', 'en'] as const) {
+      const words = rows.map((c) => changeText(c, lang));
+      expect(new Set(words).size).toBe(4);
+      expect(words[1]).toContain('26');
+      expect(words.join(' ')).not.toMatch(/audience\.|rule\.|\{/);
+    }
   });
 });
 

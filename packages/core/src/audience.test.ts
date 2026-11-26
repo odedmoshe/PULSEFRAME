@@ -65,4 +65,21 @@ describe('the change list', () => {
     expect(soundRoles(doc, a)[0]).toEqual({ trackId: audio[0]!.id, role: 'music', why: 'owner' });
     expect(audienceChanges(doc, id, 1).soundRoles).toEqual(soundRoles(doc, doc.variants[id]!.audience));
   });
+  it('every row names the sequence it is in; a row of a short has frames on the short\'s own clock (W1 note: nested sequences)', () => {
+    let doc = fastFilm();
+    const main = doc.mainSequenceId;
+    const r = applyTransaction(doc, [{ op: 'add_sequence', args: { name: 'קצר' } }], { idSeed: 'seq_', actor: 'user:owner' });
+    const short = r.results[0]!.output!.sequenceId as string;
+    doc = applyTransaction(r.doc, [
+      { op: 'add_clip', args: { sequenceId: short, assetId: 'ast_v', start: f(40), duration: f(20), withLinkedAudio: false } },
+      { op: 'add_clip', args: { assetId: 'ast_v', start: f(500), duration: f(20), withLinkedAudio: false } },
+    ], { idSeed: 'sc_', actor: 'test' }).doc;
+    const inShort = doc.sequences[short]!.tracks.flatMap((t) => t.clips)[0]!;
+    const inMain = doc.sequences[main]!.tracks.flatMap((t) => t.clips).find((c) => T.eq(c.start, f(500)))!;
+    doc = applyTransaction(doc, [{ op: 'add_effect', args: { clipId: inShort.id, type: 'light.strobe' } }, { op: 'add_effect', args: { clipId: inMain.id, type: 'light.strobe' } }], { idSeed: 'fx_', actor: 'test' }).doc;
+    const id = Object.keys(doc.variants)[0]!;
+    const rows = audienceChanges(doc, id, 9).changes.filter((c) => c.rule === 'effect');
+    expect(rows.map((c) => [c.clipId, c.sequenceId, c.startFrame, c.endFrame])).toEqual(expect.arrayContaining([[inShort.id, short, 40, 60], [inMain.id, main, 500, 520]]));
+    expect(rows).toHaveLength(2);
+  });
 });

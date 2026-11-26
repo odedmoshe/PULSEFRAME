@@ -89,7 +89,7 @@ export function applyAudience(out: ProjectDocument, v: Variant, report?: Audienc
         const keep: ReadonlySet<KeepRule> = new Set(own(overrides, clip.id)?.keep ?? []);
         const at = clipFrames(clip, rate);
         const row = (rule: AudienceRule, detail: string, before: AudienceChange['before'], after: AudienceChange['after'], kept: boolean) =>
-          push({ rule, detail, clipId: clip.id, trackId: track.id, ...at, before, after, keepable: true, kept });
+          push({ rule, detail, clipId: clip.id, trackId: track.id, sequenceId: seq.id, ...at, before, after, keepable: true, kept });
         for (const e of clip.effects ?? []) {
           if (e.enabled && stirsEffect(e.type)) {
             const kept = keep.has('effect');
@@ -140,7 +140,7 @@ export function applyAudience(out: ProjectDocument, v: Variant, report?: Audienc
         const at = trackFrames(seq, track, rate);
         const next = { ...style };
         const row = (detail: string, before: AudienceChange['before'], after: AudienceChange['after']) =>
-          push({ rule: 'caption_look', detail, clipId: null, trackId: track.id, ...at, before, after, keepable: false, kept: false });
+          push({ rule: 'caption_look', detail, clipId: null, trackId: track.id, sequenceId: seq.id, ...at, before, after, keepable: false, kept: false });
         if (typeof style.sizeFrac === 'number') {
           const s = audienceCaptionSize(style.sizeFrac, mine.sizeFrac, profile);
           if (s !== style.sizeFrac) { next.sizeFrac = s; row('sizeFrac', style.sizeFrac, s); }
@@ -170,7 +170,7 @@ export function applyAudience(out: ProjectDocument, v: Variant, report?: Audienc
         const next = Math.min(AUDIENCE_TABLE_V1.gainMax, Math.max(AUDIENCE_TABLE_V1.gainMin, cur * gain));
         if (next !== cur) {
           track.audio = { ...(track.audio ?? { gain: 1, pan: 0, duck: null }), gain: next };
-          push({ rule: 'music_level', detail: 'gain', clipId: null, trackId: track.id, ...at, before: cur, after: next, keepable: false, kept: false });
+          push({ rule: 'music_level', detail: 'gain', clipId: null, trackId: track.id, sequenceId: seq.id, ...at, before: cur, after: next, keepable: false, kept: false });
         }
       }
       const duck = track.audio?.duck;
@@ -178,7 +178,7 @@ export function applyAudience(out: ProjectDocument, v: Variant, report?: Audienc
         const next = Math.min(AUDIENCE_TABLE_V1.duckMaxDb, duck.reductionDb + AUDIENCE_TABLE_V1.duckExtraDb);
         if (next !== duck.reductionDb) {
           track.audio = { ...track.audio!, duck: { ...duck, reductionDb: next } };
-          push({ rule: 'ducking', detail: 'reductionDb', clipId: null, trackId: track.id, ...at, before: duck.reductionDb, after: next, keepable: false, kept: false });
+          push({ rule: 'ducking', detail: 'reductionDb', clipId: null, trackId: track.id, sequenceId: seq.id, ...at, before: duck.reductionDb, after: next, keepable: false, kept: false });
         }
       }
     }

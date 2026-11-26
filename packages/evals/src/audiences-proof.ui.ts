@@ -7,7 +7,7 @@
  *   20  «+» → «גרסה רגועה» is ONE transaction; a chip with the profile glyph appears and is viewed; the panel lists the changes; the
  *       menu is still there with all four formats added (C14); Ctrl+Z returns the document hash.
  *   21  by keyboard only: Tab reaches a row, Enter moves the playhead to its frame and leaves the focus where it was, «להשאיר כמו במקור»
- *       commits once (one revision); in Hebrew (RTL) and in English.
+ *       commits once (one revision); «לשליחה» opens the export sheet with the version alone chosen; in Hebrew (RTL) and in English.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -130,6 +130,12 @@ async function check21Lang(c: Ctx, lang: 'he' | 'en'): Promise<true | string> {
     await sleep(500);
     if ((await getDoc(c, p.pid)).revision !== rev + 1) return `${lang}: keeping committed more than once`;
     if (!(await until(async () => (await p.page.locator(`[data-testid=${ID.change}][data-kept=true]`).count()) > 0))) return `${lang}: the row is not marked as kept after the keep`;
+    // «לשליחה» opens the export sheet ON this version: its format row is the only one chosen (openExportSheet({ variantId }))
+    const vid = Object.values((await getDoc(c, p.pid)).doc.variants).find((x) => x.audience)!.id;
+    await p.page.getByTestId(ID.send).click();
+    if (!(await until(async () => (await p.page.locator(`[data-testid=export-format][data-key="variant:${vid}"] input:checked`).count()) === 1))) return `${lang}: «לשליחה» did not open the export sheet on the version`;
+    const chosen = await p.page.locator('[data-testid=export-format] input:checked').count();
+    if (chosen !== 1) return `${lang}: the sheet opened with ${chosen} formats chosen, not the version alone`;
     return true;
   } finally { await p.close(); }
 }

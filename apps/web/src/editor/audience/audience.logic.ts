@@ -27,7 +27,11 @@ export function changeText(c: AudienceChange, lang: Lang): string {
     case 'transition': return t('rule.transition', { name: nameOf(TRANSITIONS, c.before, lang) });
     case 'text_loop': return t('rule.text_loop');
     case 'title_size': return t('rule.title_size');
-    case 'caption_look': return t('rule.caption_look');
+    case 'caption_look': {
+      // one row per changed field of the caption style (audienceContract AudienceChange granularity), each worded for its field
+      const f = changeField(c);
+      return f === 'maxCharsPerLine' ? t('rule.caption_look.maxCharsPerLine', { n: Number(c.after) }) : f === 'background' ? t('rule.caption_look.background') : f === 'preset' ? t('rule.caption_look.preset') : t('rule.caption_look');
+    }
     case 'music_level': return t('rule.music_level', { db: absDb(c) });
     case 'ducking': return t('rule.ducking', { db: absDb(c) });
   }
@@ -47,11 +51,20 @@ export function fastCutText(f: AudienceFastCuts, lang: Lang): string {
   return audienceT(lang)('fastCut', { cuts: f.cuts, seconds: f.windowSeconds, limit: f.limit });
 }
 
-/** The rows a person can jump to, in the order shown: changes, then fast cuts (one roving group). */
+/** The field a row is about: the `detail` part of its key (`${rule}:${clipId ?? trackId}:${detail}`, `#n` on a repeat). */
+export const changeField = (c: Pick<AudienceChange, 'key'>): string => (c.key.split(':')[2] ?? '').replace(/#\d+$/, '');
+/**
+ * True when a row's frames are on the clock the editor shows. A version is viewed on the main sequence only (setActiveSequence drops the
+ * viewed format), so a row of another sequence (a short) has frames on that short's own clock: it is listed with its sequence's name and
+ * has no jump (jumping there would land on the wrong moment of the main edit).
+ */
+export const jumpable = (c: Pick<AudienceChange, 'sequenceId'>, mainSequenceId: string | null | undefined): boolean =>
+  !mainSequenceId || !c.sequenceId || c.sequenceId === mainSequenceId;
+/** The rows a person can jump to, in the order shown: changes of the main sequence, then fast cuts (one roving group). */
 export interface JumpRow { kind: 'change' | 'fastCut'; key: string; startFrame: number }
-export function jumpRows(r: Pick<AudienceChanges, 'changes' | 'fastCuts'>): JumpRow[] {
+export function jumpRows(r: Pick<AudienceChanges, 'changes' | 'fastCuts'>, mainSequenceId?: string | null): JumpRow[] {
   return [
-    ...r.changes.map((c): JumpRow => ({ kind: 'change', key: c.key, startFrame: c.startFrame })),
+    ...r.changes.filter((c) => jumpable(c, mainSequenceId)).map((c): JumpRow => ({ kind: 'change', key: c.key, startFrame: c.startFrame })),
     ...r.fastCuts.map((f, i): JumpRow => ({ kind: 'fastCut', key: `fast:${i}:${f.startFrame}`, startFrame: f.startFrame })),
   ];
 }

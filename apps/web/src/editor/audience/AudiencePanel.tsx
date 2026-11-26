@@ -5,7 +5,7 @@
  * changes); each row a button (one roving tab stop, ds rovingNext) whose Enter or click moves the playhead to its startFrame and moves
  * no focus; «להשאיר כמו במקור» / «להחזיר את השינוי» commits set_audience_keep once; sound rows with role, reason and a role select
  * (update_audience_version.sound) and the integer-dB music level (musicDb) said «ביחס לשאר הקול», every sound row «לא נשמע»;
- * «לשליחה» opens the export sheet. A 501 shows audience.notBuilt. Ids: AUDIENCE_TESTIDS. No focus is moved in a later task
+ * «לשליחה» opens the export sheet on this version (openExportSheet({ variantId }) chooses its target). A 501 shows audience.notBuilt. Ids: AUDIENCE_TESTIDS. No focus is moved in a later task
  * (CAPABILITIES "Keyboard focus is never moved in a later task").
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
@@ -16,7 +16,7 @@ import { useEditorState } from '../store.ts';
 import { openExportSheet } from '../ExportSheet.tsx';
 import { audienceT } from './audience.strings.ts';
 import { AUDIENCE_TESTIDS as ID } from './audience.testids.ts';
-import { appliedCount, changeText, fastCutText, frameClock, jumpRows, keepOp, keepRuleOf } from './audience.logic.ts';
+import { appliedCount, changeText, fastCutText, frameClock, jumpable, jumpRows, keepOp, keepRuleOf } from './audience.logic.ts';
 import './audience.css';
 
 /** True once the editor surfaces (the menu group, the chip mark, this panel, the stage note) are built; the server answers them. */
@@ -53,7 +53,10 @@ export function AudiencePanel({ variant }: { variant: Variant }) {
   const [level, setLevel] = useState<string | null>(null); // the music level being typed; null = the stored value
   const stored = variant.audience?.musicDb;
   const data = load.state === 'list' ? load.data : null;
-  const jumps = data ? jumpRows(data) : [];
+  const main = state.rawDoc?.mainSequenceId ?? doc?.mainSequenceId ?? null;
+  const jumps = data ? jumpRows(data, main) : [];
+  const jumpAt = new Map(jumps.map((j, n) => [j.key, n]));
+  const seqName = (id: string) => state.rawDoc?.sequences[id]?.name || id;
   const at = Math.min(active, Math.max(0, jumps.length - 1));
   const wrapDir = lang === 'he' ? 'rtl' : 'ltr';
 
@@ -94,10 +97,19 @@ export function AudiencePanel({ variant }: { variant: Variant }) {
             <>
               <h5>{t('changes')}</h5>
               <ul className="aud-rows" aria-label={t('changes')}>
-                {data.changes.map((c, i) => {
+                {data.changes.map((c) => {
                   const op = keepOp(variant.id, c);
+                  const i = jumpAt.get(c.key) ?? -1;
                   return (
                     <li key={c.key} className={c.kept ? 'is-kept' : undefined}>
+                      {!jumpable(c, main) ? (
+                        // a row of another sequence (a short): its frames are on that sequence's clock, so it is listed without a jump
+                        <span className="aud-row is-elsewhere" data-testid={ID.change} data-rule={c.rule} data-clip-id={c.clipId ?? undefined} data-sequence-id={c.sequenceId} data-kept={String(c.kept)}>
+                          <span dir="auto">{changeText(c, lang)}</span>
+                          <span className="muted" dir="auto">{t('elsewhere', { name: seqName(c.sequenceId) })}</span>
+                          {c.kept && <span className="aud-kept">{t('kept')}</span>}
+                        </span>
+                      ) : (
                       <button type="button" className="aud-row" ref={(el) => { rows.current[i] = el; }} tabIndex={i === at ? 0 : -1} onFocus={() => setActive(i)} onKeyDown={(e) => onKey(e, i)} onClick={() => jump(c.startFrame)}
                         aria-label={`${changeText(c, lang)}${c.kept ? ` · ${t('kept')}` : ''} · ${t('jump', { time: frameClock(c.startFrame, rate) })}`}
                         data-testid={ID.change} data-rule={c.rule} data-clip-id={c.clipId ?? undefined} data-start-frame={c.startFrame} data-kept={String(c.kept)}>
@@ -105,6 +117,7 @@ export function AudiencePanel({ variant }: { variant: Variant }) {
                         <bdi dir="ltr" className="num aud-time">{frameClock(c.startFrame, rate)}</bdi>
                         {c.kept && <span className="aud-kept">{t('kept')}</span>}
                       </button>
+                      )}
                       {op && keepRuleOf(c) && (
                         <button type="button" className="ghost small" data-testid={ID.keep} onClick={() => void editor.commit([op], 'Keep as in the original')}>{c.kept ? t('giveBack') : t('keep')}</button>
                       )}
@@ -119,7 +132,7 @@ export function AudiencePanel({ variant }: { variant: Variant }) {
               <h5>{t('fastCuts')}</h5>
               <ul className="aud-rows" aria-label={t('fastCuts')}>
                 {data.fastCuts.map((f, k) => {
-                  const i = data.changes.length + k;
+                  const i = jumpAt.get(`fast:${k}:${f.startFrame}`) ?? -1;
                   return (
                     <li key={`fast:${k}:${f.startFrame}`}>
                       <button type="button" className="aud-row" ref={(el) => { rows.current[i] = el; }} tabIndex={i === at ? 0 : -1} onFocus={() => setActive(i)} onKeyDown={(e) => onKey(e, i)} onClick={() => jump(f.startFrame)}
@@ -163,8 +176,7 @@ export function AudiencePanel({ variant }: { variant: Variant }) {
       <ul className="aud-not">
         {(data?.notHandled ?? ['pace', 'keys', 'not_medical', 'flash_check', 'sound_unheard']).map((code) => <li key={code} data-testid={ID.notHandled} data-code={code} dir="auto">{t(`notHandled.${code}`)}</li>)}
       </ul>
-      <p className="muted">{t('sendNote')}</p>
-      <button type="button" className="primary small" data-testid={ID.send} onClick={() => openExportSheet()}>{t('send')}…</button>
+      <button type="button" className="primary small" data-testid={ID.send} onClick={() => openExportSheet({ variantId: variant.id })}>{t('send')}…</button>
     </section>
   );
 }

@@ -108,7 +108,13 @@ export interface AudienceChange {
   rule: AudienceRule;
   clipId: string | null;
   trackId: string | null;
-  /** where jump-to goes (inside the clip, or the track's first clip); endFrame exclusive */
+  /**
+   * The sequence the clip or track is in. The rules apply to every sequence of the project (the main edit and each short), and the
+   * frames below are on THAT sequence's own clock: the panel jumps only to rows of the main sequence (the only one a version is viewed
+   * on) and lists the others with their sequence's name and no jump.
+   */
+  sequenceId: string;
+  /** where jump-to goes (inside the clip, or the track's first clip), on the clock of `sequenceId`; endFrame exclusive */
   startFrame: number; endFrame: number;
   /** registry ids, sizes, dB: machine values the panel words (never a sentence) */
   before: string | number | null; after: string | number | null;

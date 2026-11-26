@@ -7,6 +7,8 @@
 .aud-rows li { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); align-items: center; }
 .aud-row { display: flex; flex: 1; min-inline-size: 0; gap: var(--pf-sp-3); align-items: baseline; justify-content: space-between; text-align: start; padding: var(--pf-sp-2) var(--pf-sp-3); background: transparent; color: var(--pf-text); border: 1px solid transparent; border-radius: var(--pf-r-sm); font: inherit; cursor: pointer; }
 .aud-row:hover { background: var(--pf-surface-2); }
+.aud-row.is-elsewhere { cursor: default; flex-wrap: wrap; }
+.aud-row.is-elsewhere:hover { background: transparent; }
 .aud-row:focus-visible { outline: 2px solid var(--pf-focus, var(--pf-frame)); outline-offset: 1px; }
 .aud-time { color: var(--pf-text-3); flex: none; }
 .aud-kept { color: var(--pf-text-2); font-style: italic; }

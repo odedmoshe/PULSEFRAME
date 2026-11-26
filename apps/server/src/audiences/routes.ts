@@ -30,7 +30,7 @@ export function audienceView(c: AudienceChanges): AudienceChanges {
   const machine = (x: unknown): string | number | null => (typeof x === 'number' && Number.isFinite(x)) || (typeof x === 'string' && REGISTRY_VALUE.test(x)) ? x : null;
   return {
     projectId: c.projectId, variantId: c.variantId, revision: c.revision, profile: c.profile, rules: c.rules, musicDb: c.musicDb,
-    changes: c.changes.map((x) => ({ key: x.key, rule: x.rule, clipId: x.clipId, trackId: x.trackId, startFrame: x.startFrame, endFrame: x.endFrame, before: machine(x.before), after: machine(x.after), keepable: x.keepable, kept: x.kept })),
+    changes: c.changes.map((x) => ({ key: x.key, rule: x.rule, clipId: x.clipId, trackId: x.trackId, sequenceId: x.sequenceId, startFrame: x.startFrame, endFrame: x.endFrame, before: machine(x.before), after: machine(x.after), keepable: x.keepable, kept: x.kept })),
     fastCuts: c.fastCuts.map((x) => ({ startFrame: x.startFrame, endFrame: x.endFrame, cuts: x.cuts, limit: x.limit, windowSeconds: x.windowSeconds })),
     soundRoles: c.soundRoles.map((x) => ({ trackId: x.trackId, role: x.role, why: x.why })),
     notHandled: [...c.notHandled], method: c.method,
