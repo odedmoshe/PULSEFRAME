@@ -27,7 +27,10 @@ describe('living lines for agents', () => {
     const before = summarize(r.doc);
     const d = tx(r.doc, [{ op: 'set_living_picture', args: { clipId: one!, depth: DEPTH } }]).doc;
     expect(livingSummary(d)).toEqual({ livingPictures: [{ clipId: one, line: 'living picture: push, amount 0.5; depth: drawn (3 strokes, horizon 450/1000)' }] });
-    expect(Object.keys(summarize(d))).toEqual(Object.keys(before)); // the shared summary itself is unchanged
+    // core summarize carries the lines (get_summary, REST /summary and the summary resource share it); without one it is unchanged
+    expect(summarize(d).livingPictures).toEqual(livingSummary(d).livingPictures);
+    expect(Object.keys(summarize(d))).toEqual([...Object.keys(before), 'livingPictures']);
+    expect('livingPictures' in before).toBe(false);
     const at10 = withLivingLines(d, describeMoment(d, f(10)));
     expect(at10.layers.map((l) => (l as { living?: string }).living)).toEqual(['living picture: push, amount 0.5; depth: drawn (3 strokes, horizon 450/1000)']);
     const at200 = withLivingLines(d, describeMoment(d, f(200)));

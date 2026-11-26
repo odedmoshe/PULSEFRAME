@@ -77,3 +77,12 @@ export function livingSummaryLine(clip: Clip): string | null {
   const why = livingEffectOf(clip) ? livingUnavailable(clip) : null;
   return `living picture${fx.enabled ? '' : ' (off)'}: ${livingMoveOf(fx.params)}, amount ${amount}; depth: ${depth}${why ? `; not shown: ${why === 'no_depth' ? 'no drawn depth' : 'rotated'}` : ''}`;
 }
+
+/**
+ * One line per living picture of the main edit, for agents and the summary (core summarize, so get_summary, REST /summary and the
+ * summary resource show the same): only when the main edit has one, so every other summary is unchanged. Nobody has looked at it.
+ */
+export function livingPictures(doc: { sequences: Record<string, { tracks: readonly { clips: readonly Clip[] }[] }>; mainSequenceId: string }): { livingPictures?: { clipId: string; line: string }[] } {
+  const rows = (doc.sequences[doc.mainSequenceId]?.tracks ?? []).flatMap((t) => t.clips.flatMap((c) => { const line = livingSummaryLine(c); return line ? [{ clipId: c.id, line }] : []; }));
+  return rows.length ? { livingPictures: rows } : {};
+}

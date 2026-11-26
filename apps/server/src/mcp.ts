@@ -38,7 +38,7 @@ import { libraryError } from './library/contract.ts';
 import { creditsFor } from './library/credits.ts';
 import { useLibraryItemFor } from './library/routes.ts';
 import { MadeRenderRequestSchema } from '@pulseframe/core';
-import { findClip, livingSummaryLine, type ProjectDocument as LivingDoc } from '@pulseframe/core';
+import { findClip, livingPictures, livingSummaryLine, type ProjectDocument as LivingDoc } from '@pulseframe/core';
 import { madeError } from './made/contract.ts';
 import { SOURCE_JOB_TYPE, SourceImportBodySchema, SourceLinkBodySchema, SourceSearchQuerySchema, SEARCHABLE_SOURCES } from '@pulseframe/core';
 import { notBuiltSourcesRuntime, type SourcesRuntime } from './sources/contract.ts';
@@ -107,7 +107,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
 
     server.registerTool('list_projects', { description: 'List projects with their current revision.', inputSchema: z.object({}), annotations: ro }, () => run('observe', () => ({ projects: store.listProjects().filter((x) => !principal.grant?.projectIds || principal.grant.projectIds.includes(x.id)) })));
     server.registerTool('get_summary', { description: 'Project settings, duration, assets and tracks at the current revision.', inputSchema: z.object({ projectId: pid }), annotations: ro }, ({ projectId }) =>
-      run('observe', () => { const p = read(projectId); return { revision: p.revision, agentsPaused: gov.isPaused(projectId), ...summarize(p.doc), ...livingSummary(p.doc), ...peopleNote(principal, p.doc) }; }));
+      run('observe', () => { const p = read(projectId); return { revision: p.revision, agentsPaused: gov.isPaused(projectId), ...summarize(p.doc), ...peopleNote(principal, p.doc) }; }));
     // shorts (ADR-0018): a project may hold other sequences besides the main edit (list_sequences); sequenceId reads one of them
     const sid = z.string().optional().describe('A sequence of the project (list_sequences), for example a short; default the main edit');
     server.registerTool('get_timeline', { description: 'All tracks and clips with exact times, source references and ids, of the main edit or of another sequence of the project (sequenceId). A drawn clip (type drawn: a drawing or a map on a titles track) shows its kind and the kind\'s short summary only; it has no words, and text operations refuse it (drawn_not_text).', inputSchema: z.object({ projectId: pid, sequenceId: sid }), annotations: ro }, ({ projectId, sequenceId }) =>
@@ -461,13 +461,10 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
 
 /**
  * «תמונה חיה» (wave 8 living): one line per living picture for agents — "living picture: push, amount 0.5; depth: drawn (3 strokes, …)"
- * (core livingSummaryLine). get_summary lists them under `livingPictures` (only when the main edit has one, so other summaries are
- * unchanged); describe_moment adds `living` to the layer of such a clip. A description of the document: nobody has looked at it.
+ * (core livingSummaryLine). get_summary shows them under `livingPictures` through core summarize (only when the main edit has one);
+ * describe_moment adds `living` to the layer of such a clip. A description of the document: nobody has looked at it.
  */
-export function livingSummary(doc: LivingDoc): { livingPictures?: { clipId: string; line: string }[] } {
-  const rows = (doc.sequences[doc.mainSequenceId]?.tracks ?? []).flatMap((t) => t.clips.flatMap((c) => { const line = livingSummaryLine(c); return line ? [{ clipId: c.id, line }] : []; }));
-  return rows.length ? { livingPictures: rows } : {};
-}
+export const livingSummary = (doc: LivingDoc) => livingPictures(doc);
 export function withLivingLines<M extends { layers: readonly object[] }>(doc: LivingDoc, moment: M): M {
   return { ...moment, layers: moment.layers.map((l) => {
     const id = (l as { clipId?: unknown }).clipId;

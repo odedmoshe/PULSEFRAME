@@ -4,10 +4,15 @@
  * the amount; living_no_depth and living_rotated when the picture is not drawn. Warnings only. Documents are built through the
  * operations (the no-depth case is written straight into the document, as a split or an agent can leave it); synthetic files only.
  */
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, findClip, LIVING_EFFECT, LIVING_PREFLIGHT, livingComfort, type ClipDepth, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { Exporter } from './export.ts';
 import { livingPreflightIssues } from './preflight.ts';
+import { Store } from './store.ts';
 
 const R = { num: 30, den: 1 };
 const f = (k: number) => T.frameTime(k, R);
@@ -72,5 +77,33 @@ describe('preflight: living pictures', () => {
     const hidden = structuredClone(bare);
     hidden.sequences[hidden.mainSequenceId]!.tracks.find((t) => t.clips.some((x) => x.id === s.clipId))!.hidden = true;
     expect(codes(hidden)).toEqual([]);
+  });
+});
+
+describe('export plan: a living picture that cannot be drawn blocks the export and the still (proof check 20)', () => {
+  let dir: string, store: Store, exporter: Exporter;
+  beforeAll(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-living-plan-')); store = new Store(dir); exporter = new Exporter(store, null as never, () => '', path.join(dir, 'no-web-dist')); });
+  afterAll(() => { store.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  const living = (doc: ProjectDocument, format: 'mp4-h264-aac' | 'png', frame?: number) => exporter.plan(doc, 1, { format, ...(frame !== undefined ? { frame } : {}) }).blockers.filter((b) => b.code === 'living_unavailable');
+  it('none for a drawable living picture; no_depth and rotated name the clip, depth.living and the reason, with the next step', () => {
+    const s = scene();
+    expect(living(s.doc, 'mp4-h264-aac')).toEqual([]);
+    const bare = structuredClone(s.doc);
+    const c = findClip(bare, s.clipId)!.clip;
+    if (c.type === 'media') delete c.depth;
+    const b = living(bare, 'mp4-h264-aac');
+    expect(b).toHaveLength(1);
+    expect(b[0]!.ids).toEqual([s.clipId]);
+    expect(b[0]!.message).toMatch(/depth\.living/);
+    expect(b[0]!.message).toMatch(/no drawn depth/);
+    expect(b[0]!.hint).toMatch(/set_clip_depth/);
+    const rot = tx(s.doc, [{ op: 'set_clip_transform', args: { clipId: s.clipId, transform: { rotation: 10 } } }]).doc;
+    const r = living(rot, 'png', 60);
+    expect(r).toHaveLength(1);
+    expect(r[0]!.message).toMatch(/depth\.living.*rotated/);
+    // a still outside the clip's frames is not stopped by it
+    expect(living(rot, 'png', 5)).toEqual([]);
+    // bypassed: not drawn, not blocking
+    expect(living(tx(rot, [{ op: 'update_effect', args: { clipId: s.clipId, effectId: s.fxId, enabled: false } }]).doc, 'mp4-h264-aac')).toEqual([]);
   });
 });
