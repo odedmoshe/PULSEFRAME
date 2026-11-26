@@ -3,14 +3,12 @@
  * (cut edges never stroked: C2), the look table's flash rule through flashCells (C6), the painter's inputs (C4), the camera grid
  * (C5), the world copies at ±360° and the label cache (C10).
  *
- * The painter calls core's map functions (cameraAt, progressAt, legPath, placeLabels, mercator, unwrapLongitudes: W1). Where core
- * still answers map_not_built, a LABELLED TEST STAND-IN below answers instead (simple versions of the contract, never shipped);
- * once W1's bodies are in, the real ones run and the stand-ins are unused. There is no canvas in Node: the context and Path2D are
+ * The painter calls core's map functions (cameraAt, progressAt, legPath, pathPointAt, placeLabels, stopPoints, toScreen: W1); the
+ * tests run core's real bodies (only the honest-state test forces cameraAt to answer map_not_built). There is no canvas in Node: the context and Path2D are
  * RECORDING STAND-INS that log the calls the painter makes (they show what is asked of the canvas, not what Chromium draws; the
  * pixels are checked by proof:tripmap on the pinned Chromium render page).
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import * as core from '@pulseframe/core';
 import { MAP_COAST_MAX_STEP, MAP_KIND_DEF, MAP_LOOK_COLOURS, MAP_LOOKS, type MapPayload, type MapStop } from '@pulseframe/core';
 import { referenceDecode } from '../../../../tools/tripmap/referenceDecoder.ts';
 import { drawnPainter, drawnUnready, loadOutlines, MAP_PAINTER_BUILT, paintMap, prepareDrawn, decodeGroup, mapLevelFor, type OutlineData } from '../index.ts';
@@ -18,58 +16,16 @@ import { FlashAnalyser, flashCells } from '../flashAnalysis.ts';
 import { decodeQuanta, mercYOfLat, latOfMercY } from './outlines.ts';
 import { buildGroupPaths, builtGroupPaths, coastRuns, type PathSink } from './pathCache.ts';
 import { copiesFor, lastMapFrame, levelForView, MAP_NOT_BUILT_WHY } from './paintMap.ts';
-import { clearLabelLayouts, setLabelFontCheckForTests } from './labels.ts';
+import { clearLabelLayouts, mapLabelLayout, setLabelFontCheckForTests } from './labels.ts';
+import { cameraAt, legPath, pathPointAt, progressAt, stopPoints as coreStopPoints, toScreen } from '@pulseframe/core';
 import { clearRoutes, routePointAt } from './route.ts';
 
-// ---------- TEST STAND-IN of core's map functions (used only while core answers map_not_built) ----------
-const standIn = vi.hoisted(() => ({ used: new Set<string>(), forceNotBuilt: false }));
+// ---------- a build without the core map functions (honest-state test only): cameraAt throws MapNotBuiltError while forced ----------
+// (integration 2026-11-26: the labelled stand-in of W1's functions that stood here is gone; every test runs core's real bodies)
+const standIn = vi.hoisted(() => ({ forceNotBuilt: false }));
 vi.mock('@pulseframe/core', async (importOriginal) => {
   const real = await importOriginal<typeof import('@pulseframe/core')>();
-  const R2D = 180 / Math.PI;
-  const mY = (lat: number) => R2D * Math.log(Math.tan(Math.PI / 4 + (Math.max(-80, Math.min(80, lat)) * Math.PI) / 360));
-  const snap = (v: number) => Math.round(v * 64) / 64;
-  const fallbacks: Record<string, (...a: any[]) => unknown> = {
-    mercator: (lon: number, lat: number) => ({ x: lon / 1e6, y: mY(lat / 1e6) }),
-    unwrapLongitudes: (m: MapPayload) => { const out: number[] = []; m.stops.forEach((s, i) => { let x = s.lon / 1e6; if (i) { while (x - out[i - 1]! > 180) x -= 360; while (x - out[i - 1]! < -180) x += 360; } out.push(x); }); return out; },
-    progressAt: (m: MapPayload, f: number) => {
-      const s = m.stops;
-      if (f < s[0]!.at) return { leg: 0, s: 0 };
-      for (let i = 1; i < s.length; i++) if (f < s[i]!.at) { const t = (f - s[i - 1]!.at) / (s[i]!.at - s[i - 1]!.at); return { leg: i, s: t * t * (3 - 2 * t) }; }
-      return { leg: s.length - 1, s: 1 };
-    },
-    cameraAt: (m: MapPayload, f: number, size: { width: number; height: number }) => {
-      const xs = (fallbacks.unwrapLongitudes!(m) as number[]), ys = m.stops.map((s) => mY(s.lat / 1e6));
-      const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
-      const push = f <= m.stops[0]!.at ? 1 : f >= m.stops.at(-1)!.at ? 0.9 : 1 - 0.1 * ((f - m.stops[0]!.at) / (m.stops.at(-1)!.at - m.stops[0]!.at));
-      const spanY = Math.max(1.5, Math.max(h, (w * size.height) / size.width) / 0.64) * push;
-      const px = size.height / spanY;
-      return { cx: snap(((Math.max(...xs) + Math.min(...xs)) / 2) * px) / px, cy: snap(((Math.max(...ys) + Math.min(...ys)) / 2) * px) / px, spanY };
-    },
-    legPath: (a: { x: number; y: number }, b: { x: number; y: number }, mode: string) => {
-      if (mode !== 'flight') return Float64Array.of(a.x, a.y, b.x, b.y);
-      const out = new Float64Array(130), L = Math.hypot(b.x - a.x, b.y - a.y);
-      for (let k = 0; k <= 64; k++) { const s = k / 64; out[2 * k] = a.x + (b.x - a.x) * s; out[2 * k + 1] = a.y + (b.y - a.y) * s + 0.15 * L * 4 * s * (1 - s); }
-      return out;
-    },
-    placeLabels: (labels: { stopId: string; x: number; y: number; width: number; height: number; rtl: boolean }[]) => {
-      const placed: { x: number; y: number; w: number; h: number }[] = [];
-      return labels.map((l) => {
-        const box = { x: l.rtl ? l.x - 12 - l.width : l.x + 12, y: l.y - l.height / 2, w: l.width, h: l.height };
-        if (placed.some((p) => p.x < box.x + box.w && box.x < p.x + p.w && p.y < box.y + box.h && box.y < p.y + p.h)) return { stopId: l.stopId, box: null, side: null };
-        placed.push(box);
-        return { stopId: l.stopId, box, side: 'start' as const };
-      });
-    },
-  };
-  const wrapped: Record<string, unknown> = {};
-  for (const [name, fb] of Object.entries(fallbacks)) {
-    const fn = (real as unknown as Record<string, (...a: unknown[]) => unknown>)[name]!;
-    wrapped[name] = (...a: unknown[]) => {
-      if (standIn.forceNotBuilt) throw new real.MapNotBuiltError(name);
-      try { return fn(...a); } catch (e) { if (!(e instanceof real.MapNotBuiltError)) throw e; standIn.used.add(name); return fb(...a); }
-    };
-  }
-  return { ...real, ...wrapped };
+  return { ...real, cameraAt: (...a: Parameters<typeof real.cameraAt>) => { if (standIn.forceNotBuilt) throw new real.MapNotBuiltError('cameraAt'); return real.cameraAt(...a); } };
 });
 
 // ---------- RECORDING STAND-INS of Path2D and the 2D context ----------
@@ -344,8 +300,28 @@ describe('the painter on a recording context', () => {
   });
 });
 
-it('records which core functions ran as the labelled stand-in in this build', () => {
-  // informational: empty once W1's bodies are in
-  expect([...standIn.used].every((n) => ['mercator', 'unwrapLongitudes', 'progressAt', 'cameraAt', 'legPath', 'placeLabels'].includes(n))).toBe(true);
-  void core;
+describe('where the parts meet (integration)', () => {
+  it('labels are placed against EVERY stop\'s dot, hidden via-points included (core placeLabels\' reading): a via-point beside a name pushes it to the other side', () => {
+    const measure = (name: string) => name.length * 0.6 * 28.8;
+    const shownOnly = trip([stop('a', 'תל אביב', 34.78, 32.08, 30), stop('c', 'אילת', 34.95, 29.56, 140)]);
+    const withVia = trip([stop('a', 'תל אביב', 34.78, 32.08, 30), stop('v', '', 34.4, 32.08, 80, { hidden: true }), stop('c', 'אילת', 34.95, 29.56, 140)]);
+    const size = { width: 1280, height: 720 };
+    expect(mapLabelLayout(shownOnly, size, measure).placements[0]!.side).toBe('end');
+    const l = mapLabelLayout(withVia, size, measure);
+    // the via-point's dot lies inside the 'end' box (to the left of an RTL name), so that side is taken by the dot
+    expect(l.anchors[1]!.x).toBeLessThan(l.anchors[0]!.x);
+    expect(l.placements[0]!.side).not.toBe('end');
+    expect(l.placements[0]!.box).not.toBeNull();
+  });
+  it('the marker on a flight leg is at core pathPointAt of the leg (arc length), the position the proof predicts', () => {
+    const flight = trip([stop('t', 'תל אביב', 34.78, 32.08, 30), stop('l', 'לונדון', -0.12, 51.5, 150, { via: 'flight' })]);
+    const size = { width: 1280, height: 720 };
+    for (const f of [60, 90, 120]) {
+      paintMap(recordingCtx().ctx, flight, env(f));
+      const pts = coreStopPoints(flight), leg = legPath(pts[0]!, pts[1]!, 'flight');
+      const want = toScreen(cameraAt(flight, f, size), size, pathPointAt(leg, progressAt(flight, f).s));
+      const got = lastMapFrame()!.marker;
+      expect(Math.hypot(got.x - want.x, got.y - want.y), `frame ${f}`).toBeLessThan(1 / 32);
+    }
+  });
 });

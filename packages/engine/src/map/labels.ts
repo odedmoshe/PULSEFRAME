@@ -5,7 +5,7 @@
  * anchor and never changes side, so nothing jumps or blinks. A stop whose label does not fit is not drawn and is reported (hidden).
  * The font is the bundled Heebo 700 (MAP_LABEL_FONT, loaded by ensureFonts on every page): nothing font-related is keyed.
  */
-import { cameraAt, MAP_LABEL_FONT, MAP_LABEL_SIZE_FRAC, mercator, placeLabels, unwrapLongitudes, type LabelPlacement, type MapCamera, type MapPayload, type MapSize, type MercPoint } from '@pulseframe/core';
+import { cameraAt, MAP_LABEL_FONT, MAP_LABEL_SIZE_FRAC, placeLabels, stopPoints as coreStopPoints, toScreen, type LabelPlacement, type MapCamera, type MapPayload, type MapSize, type MercPoint } from '@pulseframe/core';
 
 /** Line height of a label box, as a multiple of the font size. */
 export const MAP_LABEL_LINE = 1.25;
@@ -17,15 +17,12 @@ export const isRtlName = (name: string): boolean => { const m = /[A-Za-zÀ-ɏͰ-
 
 /** Pixel snapping of the map (1/MAP_PIXEL_GRID of an output pixel). */
 export const snapPx = (v: number): number => Math.round(v * 64) / 64;
-/** A stop's position in Mercator units, longitude unwrapped relative to stop 0. */
-export function stopPoints(p: MapPayload): MercPoint[] {
-  const lon = unwrapLongitudes(p);
-  return p.stops.map((s, i) => ({ x: lon[i]!, y: mercator(s.lon, s.lat).y }));
-}
-/** A Mercator point in output pixels (top-left origin) under a camera, snapped to the 1/64-px grid. */
+/** A stop's position in Mercator units, longitude unwrapped relative to stop 0: core stopPoints (hidden via-points included). */
+export const stopPoints = (p: MapPayload): MercPoint[] => coreStopPoints(p);
+/** A Mercator point in output pixels (top-left origin) under a camera: core toScreen, snapped to the 1/64-px grid. */
 export function toPixels(pt: MercPoint, cam: MapCamera, size: MapSize): { x: number; y: number } {
-  const k = size.height / cam.spanY;
-  return { x: snapPx((pt.x - cam.cx) * k + size.width / 2), y: snapPx(size.height / 2 - (pt.y - cam.cy) * k) };
+  const q = toScreen(cam, size, pt);
+  return { x: snapPx(q.x), y: snapPx(q.y) };
 }
 
 export interface LabelLayout { placements: LabelPlacement[]; /** each stop's anchor in the whole-trip view, output pixels */ anchors: { x: number; y: number }[]; px: number }
@@ -39,7 +36,7 @@ export function mapLabelLayout(p: MapPayload, size: MapSize, measure: (name: str
   const anchors = pts.map((pt) => toPixels(pt, whole, size));
   const px = labelPx(size.height), h = px * MAP_LABEL_LINE;
   const shown = p.stops.map((s, i) => ({ s, i })).filter(({ s }) => !s.hidden);
-  const placed = placeLabels(shown.map(({ s, i }) => { const rtl = isRtlName(s.name); return { stopId: s.id, x: anchors[i]!.x, y: anchors[i]!.y, width: measure(s.name, rtl), height: h, rtl }; }), shown.map(({ i }) => anchors[i]!), size);
+  const placed = placeLabels(shown.map(({ s, i }) => { const rtl = isRtlName(s.name); return { stopId: s.id, x: anchors[i]!.x, y: anchors[i]!.y, width: measure(s.name, rtl), height: h, rtl }; }), anchors, size); // every stop's dot, hidden via-points included (core placeLabels' reading)
   const byId = new Map(placed.map((l) => [l.stopId, l]));
   return { placements: p.stops.map((s) => byId.get(s.id) ?? { stopId: s.id, box: null, side: null }), anchors, px };
 }
