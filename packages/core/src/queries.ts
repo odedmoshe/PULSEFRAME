@@ -117,3 +117,23 @@ export function transcriptView(doc: ProjectDocument, assetId: string) {
     })),
   };
 }
+
+/**
+ * One page of a transcript view (MCP get_transcript paging, wave 8 autonomy C11): the segments that overlap the SOURCE window
+ * [fromSeconds, toSeconds), at most `limit` of them, and `nextFromSeconds` (the start of the first segment left out, or null).
+ * `compact` replaces each segment by one line `id start-end text` (no words): an hour of speech in a few thousand tokens; ask the
+ * same window without compact for the word ids. Without any option the view is returned as it is (the answer of before).
+ */
+export type TranscriptView = NonNullable<ReturnType<typeof transcriptView>>;
+export interface TranscriptPageOptions { fromSeconds?: number; toSeconds?: number; limit?: number; compact?: boolean }
+export function transcriptPage(view: TranscriptView, o: TranscriptPageOptions) {
+  if (o.fromSeconds === undefined && o.toSeconds === undefined && o.limit === undefined && !o.compact) return view;
+  const from = o.fromSeconds ?? 0, to = o.toSeconds ?? Number.POSITIVE_INFINITY;
+  const inWindow = view.segments.filter((s) => s.endSeconds > from && s.startSeconds < to);
+  const kept = o.limit === undefined ? inWindow : inWindow.slice(0, o.limit);
+  const next = kept.length < inWindow.length ? inWindow[kept.length]!.startSeconds : null;
+  const page = { fromSeconds: from, toSeconds: Number.isFinite(to) ? to : null, segments: kept.length, totalSegments: view.segments.length, nextFromSeconds: next };
+  const { segments: _all, ...head } = view;
+  if (o.compact) return { ...head, page, lines: kept.map((s) => `${s.id} ${s.startSeconds.toFixed(2)}-${s.endSeconds.toFixed(2)} ${s.text}`) };
+  return { ...head, page, segments: kept };
+}

@@ -4,6 +4,7 @@
  * better-sqlite3 is synchronous, so commits for a project are naturally serialized in this process.
  */
 import Database from 'better-sqlite3';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
@@ -74,6 +75,14 @@ export function revisionWithChanges(e: RevisionEvent, changes: readonly EntityCh
   if (json === undefined) { json = JSON.stringify({ ...e, changes: changes.map((c) => ({ id: c.id, after: c.after })) }); withChangesJson.set(e, json); }
   return json;
 }
+/**
+ * An idempotency key for the FIRST durable edit commit made inside `fn` (wave 8 autonomy C8): the MCP tools that plan and then
+ * commit (make_shorts, apply_template, apply_recipe and the recipes it dispatches to) run inside it, so their one commit records the
+ * key without threading it through every planner. Commits that carry their own key, dry runs, undos, redos and background commits
+ * never take it; a commit that changes nothing does not use it up. Callers check Store.findTransactionByKey BEFORE planning.
+ */
+const commitKeyScope = new AsyncLocalStorage<{ key: string; used: boolean }>();
+export function withCommitKey<R>(key: string | undefined, fn: () => R): R { return key ? commitKeyScope.run({ key, used: false }, fn) : fn(); }
 const id = (prefix: string, bytes = 8) => `${prefix}_${randomBytes(bytes).toString('base64url').replace(/[-_]/g, 'x')}`;
 const now = () => new Date().toISOString();
 
@@ -190,6 +199,8 @@ export class Store {
 
   // ---------- commits ----------
   commit(req: CommitRequest): CommitResult {
+    const scoped = !req.idempotencyKey && !req.dryRun && (req.kind ?? 'edit') === 'edit' ? commitKeyScope.getStore() : undefined;
+    if (scoped && !scoped.used) req = { ...req, idempotencyKey: scoped.key };
     let live: { seq: number; changes: EntityChange[] } | null = null;
     const run = this.db.transaction((): CommitResult & { privacyChanged?: true } => {
       const { doc, revision } = this.wholeProject(req.projectId); // a write: the whole document, whoever commits
@@ -274,6 +285,7 @@ export class Store {
       try { this.onPrivacyChange(req.projectId, result.revision); } catch (e) { console.error('privacy purge of the render cache failed', e); }
     }
     if (result.committed && !result.replayed) this.drainOutbox();
+    if (scoped && result.committed) scoped.used = true;
     return result;
   }
 
@@ -318,6 +330,34 @@ export class Store {
       if (e instanceof ApiError && e.code === 'invalid_result') throw new ApiError(409, 'undo_conflict', `cannot ${mode}: ${e.message}`, { transactionId: req.undoes });
       throw e;
     }
+  }
+
+  /**
+   * «ביטול הכול» (wave 8 autonomy Part 2; verifier C6). LEAD PRE-PASS: the contract; BUILDER W1 (opus) writes the body here and the
+   * composite branch of undo('redo') above, and nothing else in this file.
+   *  1. Walk EVERY transaction of `actor` with revision > sinceRevision (kinds edit, undo, redo, background), in revision order, and
+   *     compose per entity its FIRST `before` and its LAST `after` from the stored `changes` (an undo or redo by the same actor is
+   *     part of the walk, so the run's own undos never read as conflicts and never yield a wrong state).
+   *  2. CONFLICT (never erase someone else's edit): any transaction by ANOTHER actor with revision in [the entity's first touch, now]
+   *     whose stored `changes` name that entity, or a current state unequal to the composed last `after`. Default: nothing is
+   *     applied and 409 undo_conflict lists {entityId, changedAtRevision, by}. `partial: true` («ביטול מה שאפשר») skips exactly the
+   *     conflicting entities and restores the rest.
+   *  3. ONE transaction: restore_entities with each entity's first `before` (allowInternal, kind 'undo', label «ביטול ריצת סוכן»
+   *     or «ביטול כל העריכות של <actor>»), committed by `byActor` (the caller: the owner, or the run's own actor). In the SAME SQLite
+   *     transaction every reversed transaction gets undone_by = the composite id, and the composite's stored result carries
+   *     `undoesAll: [ids]` (`undoes` holds the first id, so ADR-0027 receipts still read one). A redo of the composite clears every
+   *     undone_by it set and restores the composed last `after`s (W1's branch in undo()).
+   *  4. Nothing to undo → { transactionId: null, … } (not an error). dryRun computes 1–2 and writes nothing.
+   *  Files the actor made stay in the library, as with every undo; jobs and non-op effects are the caller's (UndoAllAnswer.notUndone).
+   */
+  undoActor(projectId: string, actor: string, sinceRevision: number, opts: { byActor: string; dryRun?: boolean; partial?: boolean; guard?: CommitRequest['guard'] }): { transactionId: string | null; revision: number; undoes: string[]; entities: number; conflicts: { entityId: string; changedAtRevision: number; by: string }[] } {
+    void projectId; void actor; void sinceRevision; void opts;
+    throw new ApiError(501, 'agent_not_built', 'undoing every edit of an agent at once is not built in this build yet', {}, 'Undo its edits one by one from the receipts meanwhile.');
+  }
+  /** The transaction an actor committed with this idempotency key, if any: tools that plan before committing check it FIRST (wave 8 autonomy C8), so a resend never re-plans on a moved document. */
+  findTransactionByKey(projectId: string, actor: string, key: string): CommitResult | null {
+    const r = this.db.prepare('SELECT id, revision, result FROM transactions WHERE project_id = ? AND actor = ? AND idempotency_key = ?').get(projectId, actor, key) as { id: string; revision: number; result: string } | undefined;
+    return r ? { ...JSON.parse(r.result), transactionId: r.id, revision: r.revision, committed: true, replayed: true } : null;
   }
 
   /** Publish committed-but-unpublished outbox rows in order. Safe to call any time, including after a crash. */

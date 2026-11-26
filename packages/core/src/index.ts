@@ -228,3 +228,5 @@ export * from './inkSimplify.ts';
 // lead-built; the table maths (gradeCurveTable / gradeCurveTables / gradeCurveTablesRgba / gradeCurveTablesDigest) is W1's
 export * from './gradeCurves.ts';
 export * from './gradeCurvesOps.ts';
+// the in-editor agent «סוכן» (wave 8 autonomy Part 2): runs, steps, statuses, limits, routes, what undo-all cannot undo (lead pre-pass)
+export * from './agentContract.ts';

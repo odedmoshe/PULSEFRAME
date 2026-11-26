@@ -17,6 +17,7 @@ import type { DerivedLessonView } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 import type { MusicKitStatus } from '@pulseframe/core';
 import type { OwnTemplateDeleteAnswer, OwnTemplatePreviewAnswer, OwnTemplatePreviewBody, OwnTemplateSaveAnswer, OwnTemplateSaveBody } from '@pulseframe/core';
+import type { AgentProbeAnswer, AgentProvidersAnswer, AgentRunAnswer, AgentRunListAnswer, AgentStartAnswer, AgentStartBody, UndoAllAnswer } from '@pulseframe/core';
 import type { BoothAnswerBody, BoothAnswerResult, BoothCheckRow, BoothServerCheckId, BoothView } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
@@ -333,6 +334,19 @@ export const api = {
   putBoothAnswer: (itemId: string, body: BoothAnswerBody) => call<BoothAnswerResult>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
   deleteBoothAnswer: (itemId: string) => call<void>(`/booth/answers/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
   runBoothCheck: (rowId: BoothServerCheckId, signal?: AbortSignal) => call<BoothCheckRow>(`/booth/checks/${encodeURIComponent(rowId)}`, { method: 'POST', ...(signal ? { signal } : {}) }),
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2; core AGENT_ROUTES). 501 agent_not_built until built. Providers/keys answer keySet only.
+  startAgentRun: (projectId: string, body: AgentStartBody) => call<AgentStartAnswer>(`/projects/${projectId}/agent/runs`, json(body)),
+  listAgentRuns: (projectId: string) => call<AgentRunListAnswer>(`/projects/${projectId}/agent/runs`),
+  getAgentRun: (projectId: string, runId: string) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}`),
+  cancelAgentRun: (projectId: string, runId: string) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/cancel`, json({})),
+  continueAgentRun: (projectId: string, runId: string, addSteps?: number) => call<AgentRunAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/continue`, json(addSteps ? { addSteps } : {})),
+  undoAgentRun: (projectId: string, runId: string, opts: { dryRun?: boolean; partial?: boolean } = {}) => call<UndoAllAnswer>(`/projects/${projectId}/agent/runs/${encodeURIComponent(runId)}/undo-all`, json(opts)),
+  agentProviders: () => call<AgentProvidersAnswer>('/agent/providers'),
+  setAgentProvider: (providerId: string, body: { baseUrl?: string; model?: string | null }) => call<unknown>(`/agent/providers/${encodeURIComponent(providerId)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  setAgentKey: (providerId: string, key: string) => call<{ keySet: boolean; keyAddedAt: string | null }>(`/agent/providers/${encodeURIComponent(providerId)}/key`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key }) }),
+  deleteAgentKey: (providerId: string) => call<{ keySet: boolean; keyAddedAt: string | null }>(`/agent/providers/${encodeURIComponent(providerId)}/key`, { method: 'DELETE' }),
+  probeAgentProvider: (providerId: string) => call<AgentProbeAnswer>(`/agent/providers/${encodeURIComponent(providerId)}/probe`, json({})),
+  agentModels: () => call<{ rows: unknown[] }>('/agent/models'),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

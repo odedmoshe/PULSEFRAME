@@ -15,3 +15,7 @@ export { LOCAL_TOOLS } from './local-registry.ts';
 export const ALL_CAPABILITIES: CapabilityDescriptor[] = [...BUILTIN_CAPABILITIES, ...LOCAL_TOOLS];
 // the LOCAL language assistant (wave 7 assistant track): loopback-only model path, its own descriptor and prompt pin
 export * from './localChat.ts';
+// the in-editor agent «סוכן» (wave 8 autonomy Part 2): adapter interface, the two wire families, presets, the model table (data), the labelled scripted double
+export * from './agentModel.ts';
+export * from './agentModels.ts';
+export * from './agentScripted.ts';
