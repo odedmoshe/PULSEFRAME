@@ -203,6 +203,8 @@ export const LEARN: Readonly<Record<string, LearnRow>> = {
   set_clip_impact: no('clip_content'), sync_impact: no('clip_content'),
   add_fitted_music: no('internal'), mark_join_heard: no('internal'),
   add_audience_version: no('formats'), update_audience_version: no('formats'), set_audience_keep: no('formats'),
+  // trip map (wave 8 tripmap; rows added by the lead at the merge): a map is its own content at its own place, never a habit to replay
+  add_trip_map: no('placement'), update_trip_map: no('clip_content'), time_trip_map: no('clip_content'),
   apply_lesson: no('replaces'),
 };
 export const learnRow = (op: string): LearnRow | undefined => (Object.hasOwn(LEARN, op) ? LEARN[op] : undefined);
