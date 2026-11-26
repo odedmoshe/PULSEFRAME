@@ -37,6 +37,8 @@ import { createLlamaAdapter } from './assistant/local/llamaAdapter.ts'; // the l
 import type { MusicKit, SizeFitFault } from '@pulseframe/core';
 import { SEARCH_LANE_PREFIX, type Embedder } from './search/contract.ts';
 import { createSearchRuntime } from './search/runtime.ts';
+import type { PictureModelsTestSeams } from './picmodels/contract.ts';
+import { createPictureModelsRuntime } from './picmodels/runtime.ts';
 
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
@@ -50,7 +52,7 @@ export interface RunningServer {
  * `deps.assistant`: the command bar assistant's installed adapters (ADR-0027). Wave 1 ships none, so the CLI passes nothing and
  * the setup state is honest (provider_not_configured); tests and pnpm proof:command-bar install the labelled MOCK adapter here.
  */
-export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[] } = {}): Promise<RunningServer> {
+export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 8 picmodels proof): the labelled fake worker, its digest, a synthetic registry and library root; never from the environment */ picmodelsTest?: PictureModelsTestSeams; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[] } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
   if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
@@ -75,6 +77,8 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const speech = new Speech(store, cfg, lane);
   // picture search «חיפוש בצילומים» (wave 7 search track; search/runtime.ts, builder B): the not-built runtime until built
   const search = createSearchRuntime({ cfg, store, lane, ...(deps.searchEmbedder ? { embedder: deps.searchEmbedder } : {}) });
+  // the local picture-model runtime and eyes (wave 8 picmodels; picmodels/runtime.ts, W1): outside the lane (eyes is one process per request)
+  const pictureModels = createPictureModelsRuntime({ cfg, store, ...(deps.picmodelsTest ?? {}) });
   lane.onBeforeHeavy(async (label) => {
     if (!/^(speech recognition|narration) /.test(label)) await speech.releaseKept();
     if (!/^local\./.test(label)) await localTools.releaseKept();
@@ -110,7 +114,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // when the owner chose it and asks) and the compute lane; tests may pass their own (a labelled MOCK) in deps.assistant.local
   const assistantDeps: AssistantDeps = { ...(deps.assistant ?? { adapters: new Map(), endpoint: () => null }), lane, local: deps.assistant?.local !== undefined ? deps.assistant.local : createLlamaAdapter() };
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache, search });
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const bound = (server.address() as AddressInfo).port;
@@ -149,6 +153,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       await speech.stop();
       await stopTrackingJobs(store); // the rows stay running: they are tracked again after a restart
       await stopStabiliseJobs(store); // likewise: measured again after a restart
+      await pictureModels.stop(); // a running eyes process is killed (wave 8 picmodels)
       await search.stop(); // picture search (wave 7): workers let go; a running scan's row stays running for recover()
       await stopStillsJobs(store); // likewise (wave 8 cover)
       await stopMomentsJobs(store); // likewise: measured again after a restart (cached files make it cheap)

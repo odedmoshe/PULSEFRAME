@@ -1,0 +1,24 @@
+# Picture models («הציעו עיניים», wave 8 picmodels) - added ON TOP OF the picture search lock (requirements-search-win-cpu.txt, which
+# stays untouched) in the same tools Python: Windows x64, CPython 3.13 (cp313, win_amd64). Hash-locked; every requirement pinned to one
+# version and to the SHA-256 of its wheel(s) as PyPI's JSON API lists them (https://pypi.org/pypi/<name>/<version>/json, read
+# 2026-11-26), cross-checked by downloading each listed wheel into a new empty folder outside the repository, comparing its SHA-256 and
+# reading its METADATA (never installed, never run), then deleting the folder.
+#
+#   "%PF_TOOLS_PYTHON%" -m pip install --require-hashes --only-binary=:all: --no-deps -r apps\server\tools\requirements-picture-win-cpu.txt
+#   "%PF_TOOLS_PYTHON%" -m pip check        (laptop check PM1: the closure test, "No broken requirements found.")
+#
+# onnxruntime 1.29.0 is the CPU package. NEVER install onnxruntime-gpu in the same environment: it is a separate package with the same
+# import name. The worker asks for providers=['CPUExecutionProvider'] and intra_op_num_threads=2 (verify C14). onnxruntime's
+# Requires-Dist (from the wheel's METADATA): flatbuffers, numpy>=1.21.6, packaging, protobuf>=4.25.8 (sympy and ml_dtypes only for
+# extras that are not installed). numpy 2.5.4 and packaging 26.4 come from the search lock.
+# protobuf 7.36.2 publishes a cp310-abi3-win_amd64 wheel, which pip prefers on Windows over the pure py3-none-any one, so both hashes are
+# listed (pip accepts either). Licence text after each pin is what the wheel's metadata says; it is not a legal review.
+
+# onnxruntime: MIT License (onnxruntime-1.29.0-cp313-cp313-win_amd64.whl, 14,001,310 bytes)
+onnxruntime==1.29.0 --hash=sha256:2945e1f82f81f27e88decea88c7861f45baea23818950d467bf3909aa303119e
+
+# flatbuffers: Apache 2.0 (flatbuffers-25.12.19-py2.py3-none-any.whl, 26,661 bytes)
+flatbuffers==25.12.19 --hash=sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4
+
+# protobuf: 3-Clause BSD License (protobuf-7.36.2-cp310-abi3-win_amd64.whl, 456,514 bytes; protobuf-7.36.2-py3-none-any.whl, 179,806 bytes)
+protobuf==7.36.2 --hash=sha256:a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353 --hash=sha256:bdb3a345d48db958e6ce1f18e508beb0cc981d64f24088427549c866cd039f1e

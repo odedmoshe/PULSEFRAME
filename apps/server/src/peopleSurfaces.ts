@@ -248,6 +248,10 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   // owner's «שמעתי» mark answers the owner's own session only (403 owner_required for every agent, observer and the phone drop)
   'GET /api/v1/music/kits': ['no-document'],
   'POST /api/v1/music/kits/:kitId/heard': ['owner-only'],
+  // the local picture-model runtime (wave 8 picmodels; picmodels/contract.ts): the state report holds no document (codes and numbers;
+  // the yunet row only for the owner's own session); eye suggestions answer the owner's own session only and are never stored
+  'GET /api/v1/picture-models': ['no-document'],
+  [`POST ${P}/eyes/propose`]: ['owner-only'],
   // «תא הבדיקה» (wave 8 booth track; booth/contract.ts): machine state of the owner's computer, no project, no people; every route
   // the owner's own session only (403 owner_required for every agent, observer and propose credential, GET included)
   'GET /api/v1/booth': ['owner-only'],
