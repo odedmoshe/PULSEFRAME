@@ -5,8 +5,8 @@
  * this table first and the shared one second, fills the {placeholders}, and shows the key when a word is missing, never nothing.
  * Nobody has listened to any recorded kit: no string says a recorded kit sounds better, real, warm, natural or rich (core
  * INSTRUMENTS_FORBIDDEN_WORDS; instruments.logic.test.ts checks this table against them in both languages).
- * `state.not_calibrated` here says plainly that the instrument set was not downloaded and checked yet (the shared word only says the
- * files were not checked); a lead decision whether the shared key should say the same.
+ * The words that overrode a shared key (`state.not_calibrated`, which says plainly that the instrument set was not downloaded and checked
+ * yet, and `parts`) moved into packages/i18n/src/instruments.ts at integration; no key here shadows a shared one (the logic test checks).
  */
 import { dictionaries, type Lang } from '@pulseframe/i18n';
 
@@ -14,7 +14,6 @@ const HE = {
   // what each choice means
   'soundHelp': '«מסונתז» — המוזיקה נוצרת כמו קודם. «כלים מוקלטים» — חלק מהכלים מנוגנים מקובצי הקלטות בספרייה שלכם; כל החלקים של הערכה מוקלטים, או שהמוזיקה לא נוצרת והסיבה מוצגת.',
   // the state of the kit, in words (the shared `state.*` words cover the rest)
-  'state.not_calibrated': 'ערכת הכלים עוד לא הורדה ולא נבדקה במחשב הזה',
   'state.no_kit': 'לסגנון הזה אין כלים מוקלטים בגרסה הזו',
   'state.failed': 'אי אפשר היה לבדוק את הכלים המוקלטים',
   // the next step for every state
@@ -39,7 +38,6 @@ const HE = {
   'licenceWhy.unknown': 'רישיון שיומן הספרייה לא מכיר, ולכן הערכה לא מתווספת.',
   'licenceWhy.other': 'הרישיון ביומן הספרייה לא מתיר שימוש בדגימות בקטע.',
   // what the kit asks of a film, said before it is added
-  'parts': '{recorded} מנוגנים מקובצי הספרייה; שאר החלקים מסונתזים',
   'dutiesHeading': 'מה הערכה מחייבת, לפני שמוסיפים',
   'dutyNone': '{title}: אין חובת קרדיט ואין הגבלה לשימוש מסחרי',
   'dutyNonCommercialMore': 'סרט עם הכלים האלה מסומן לשימוש לא מסחרי בלבד, והייצוא מזהיר על כך.',
@@ -71,7 +69,6 @@ const HE = {
 type Key = keyof typeof HE;
 const EN: Record<Key, string> = {
   'soundHelp': '«Synthesised» — the music is made as before. «Recorded instruments» — some instruments play from recording files in your library; every part of the kit is recorded, or the music is not made and the reason is shown.',
-  'state.not_calibrated': 'The instrument set has not been downloaded and checked on this computer yet',
   'state.no_kit': 'This style has no recorded instruments in this build',
   'state.failed': 'The recorded instruments could not be checked',
   'next.not_built': 'You can carry on with «Synthesised» — the music is made as before.',
@@ -93,7 +90,6 @@ const EN: Record<Key, string> = {
   'licenceWhy.nd': 'A licence that forbids derivative works. Mixing the samples into a piece makes a derivative work, so the kit is not added.',
   'licenceWhy.unknown': 'A licence the library ledger does not know, so the kit is not added.',
   'licenceWhy.other': 'The licence in the library ledger does not allow using the samples in a piece.',
-  'parts': '{recorded} play from the library files; the other parts stay synthesised',
   'dutiesHeading': 'What the kit asks of a film, before you add it',
   'dutyNone': '{title}: no credit is required and commercial use is not restricted',
   'dutyNonCommercialMore': 'A film made with these instruments is marked for non-commercial use only, and the export warns about it.',

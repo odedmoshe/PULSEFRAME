@@ -33,7 +33,7 @@ import { dataDirBytes, setStorageHooks } from './storage.ts';
 import { recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
 import type { AssistantDeps } from './assistant/contract.ts';
 import { createLlamaAdapter } from './assistant/local/llamaAdapter.ts'; // the local assistant's loopback adapter (wave 7)
-import type { SizeFitFault } from '@pulseframe/core';
+import type { MusicKit, SizeFitFault } from '@pulseframe/core';
 import { SEARCH_LANE_PREFIX, type Embedder } from './search/contract.ts';
 import { createSearchRuntime } from './search/runtime.ts';
 
@@ -49,7 +49,7 @@ export interface RunningServer {
  * `deps.assistant`: the command bar assistant's installed adapters (ADR-0027). Wave 1 ships none, so the CLI passes nothing and
  * the setup state is honest (provider_not_configured); tests and pnpm proof:command-bar install the labelled MOCK adapter here.
  */
-export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder } = {}): Promise<RunningServer> {
+export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[] } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
   if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
@@ -109,7 +109,7 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // when the owner chose it and asks) and the compute lane; tests may pass their own (a labelled MOCK) in deps.assistant.local
   const assistantDeps: AssistantDeps = { ...(deps.assistant ?? { adapters: new Map(), endpoint: () => null }), lane, local: deps.assistant?.local !== undefined ? deps.assistant.local : createLlamaAdapter() };
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { imports, renderCache, search });
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, assistant: assistantDeps });
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { imports, door, renderCache, search, assistant: assistantDeps, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   if ((server.address() as AddressInfo).port !== cfg.port) throw new Error('unexpected port');

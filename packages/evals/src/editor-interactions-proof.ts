@@ -29,7 +29,7 @@ import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
-import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, MUSIC_GENERATOR, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 import { chooseFormat, openInspectorPage, startExport } from './editor-ui.ts';
 import { MUSICFIT_TESTIDS } from '../../../apps/web/src/editor/musicfit/musicFit.testids.ts';
@@ -2560,6 +2560,59 @@ async function main() {
       } finally {
         await ctx.close();
         await stand.close();
+      }
+    }
+
+    // recorded instruments «כלים מוקלטים» (wave 7 instruments, integration): the calm row's «צליל» radiogroup from the keyboard; with
+    // the kit unavailable (this server has no library folder: library_not_set) a recorded add sends no request and adds nothing; the
+    // ordinary add is the request it always was, byte for byte, and makes the synthesised track.
+    console.log('\n# Recorded instruments: «צליל» from the keyboard; a recorded add while the kit is unavailable sends nothing; the ordinary add unchanged');
+    {
+      const ip = (await call('/projects', { name: 'instruments keys', width: 640, height: 360 })).body.project.id as string;
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const posts: string[] = [];
+      await ctx.route('**/api/v1/projects/*/music', (r) => { if (r.request().method() === 'POST') posts.push(r.request().postData() ?? ''); void r.continue(); });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      try {
+        await pg.goto(`${s.ownerUrl}&project=${ip}`);
+        await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+        if ((await pg.evaluate(() => document.documentElement.lang)) !== 'he') await pg.getByTestId('lang-toggle').click();
+        await pg.getByTestId('rail-audio').click();
+        await pg.getByTestId('music-tab').click({ timeout: 8000 });
+        const irow = pg.locator('[data-testid=music-row][data-style-id="music.calm"]');
+        await irow.getByTestId('instruments-state').waitFor({ timeout: 10000 });
+        await pg.waitForFunction(() => !document.querySelector('[data-testid=instruments-state][data-state=checking]'), undefined, { timeout: 8000 }).catch(() => undefined);
+        const radio = (c: string) => irow.locator(`[data-testid=instruments-choice-option][data-choice=${c}]`);
+        await irow.locator('[data-testid=music-bars]').last().focus();
+        await pg.keyboard.press('Tab');
+        const landed = await pg.evaluate(() => { const a = document.activeElement as HTMLElement; return `${a.dataset.testid}/${a.dataset.choice}/${a.getAttribute('aria-checked')}`; });
+        await pg.keyboard.press('ArrowLeft'); // right to left: the next radio is to the left
+        const moved = (await radio('recorded').getAttribute('aria-checked')) === 'true' && (await pg.evaluate(() => (document.activeElement as HTMLElement).dataset.choice)) === 'recorded';
+        const role = await irow.getByTestId('instruments-choice').getAttribute('role');
+        check('instruments: «צליל» is a radiogroup; Tab from the length chips lands on «מסונתז» (chosen), ArrowLeft chooses «כלים מוקלטים» and moves the focus', role === 'radiogroup' && landed === 'instruments-choice-option/synth/true' && moved, { role, landed, moved });
+        const kitState = await irow.getByTestId('instruments-state').getAttribute('data-state');
+        const before = Object.keys(s.store.getProject(ip).doc.assets).length;
+        const add = irow.getByTestId('music-add');
+        const disabled = await add.getAttribute('aria-disabled');
+        await add.focus();
+        await pg.keyboard.press('Enter');
+        await add.click({ force: true });
+        await sleep(400);
+        check('instruments: with the kit unavailable (library_not_set) the recorded add is disabled with its reason; Enter and a click send no request and add nothing', kitState === 'library_not_set' && disabled === 'true' && posts.length === 0 && Object.keys(s.store.getProject(ip).doc.assets).length === before, { kitState, disabled, posts: posts.length });
+        await radio('recorded').focus();
+        await pg.keyboard.press('ArrowRight'); // right to left: back to the first radio
+        const back = (await radio('synth').getAttribute('aria-checked')) === 'true';
+        await add.click();
+        await pg.waitForFunction(() => /./.test(document.querySelector('.pf-music-status.is-ok,.pf-music-status.is-err')?.textContent ?? ''), undefined, { timeout: 60000 }).catch(() => undefined);
+        const assets = Object.values(s.store.getProject(ip).doc.assets);
+        const body = '{"styleId":"music.calm","bars":16,"seed":1,"start":{"value":"0","timescale":1}}';
+        check('instruments: back on «מסונתז» the ordinary add sends exactly the request it always sent and makes the synthesised track (MUSIC_GENERATOR, the old name)', back && posts.length === 1 && posts[0] === body && assets.length === before + 1 && assets[0]!.provenance.procedural?.generator === MUSIC_GENERATOR && !assets[0]!.provenance.instruments && assets[0]!.name.endsWith(' · 16 bars.wav'), { back, posts, names: assets.map((a) => a.name) });
+        check('instruments rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      } finally {
+        await ctx.close();
       }
     }
 

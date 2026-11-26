@@ -15,8 +15,8 @@
  */
 import { ApiError } from '../store.ts';
 
-/** True once builder W2 has built the recorded path (loader + music.ts) and W1 the sampler; flipped at integration. */
-export const INSTRUMENTS_BUILT: boolean = false;
+/** True: the recorded path (loader + music.ts, builder W2) and the sampler (W1) are built and wired (flipped at integration). */
+export const INSTRUMENTS_BUILT: boolean = true;
 /** In the data directory (never in a project, archive or backup): the owner's «שמעתי» marks, 0600, written atomically. */
 export const KITS_HEARD_FILE = 'music-kits-heard.json';
 /** Every route of this track, as Hono registers it (peopleSurfaces.ts classifies each; openapi.ts documents each). */

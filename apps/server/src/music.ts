@@ -21,8 +21,8 @@
  *   MUSIC_RECORDED_GENERATOR and provenance.instruments { kitId, kitVersion, sampler, bank, records } (the ledger's records, so every
  *   credit, the non-commercial line, the export warning and the archive rule follow the file), and its name ends " · recorded
  *   instruments.wav". All-or-nothing: never silently synthesised. A request without `instruments` (or 'synth') is byte for byte the
- *   request it was before: the same key, name, params and provenance. The server passes its Config (MusicMakeOptions.cfg); without it
- *   the recorded path is not wired and answers 501 instruments_not_built.
+ *   request it was before: the same key, name, params and provenance. The routes pass the server's Config (MusicMakeOptions.cfg; MCP
+ *   through registerMusicOptions); a host without it has no library to read and answers 501 instruments_not_built.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -102,12 +102,12 @@ export interface MusicQueue {
   stats(): { running: boolean; waiting: Record<MusicLane, number>; cached: number; cachedBytes: number };
 }
 /** A recorded render's part of a queue request: its key and its bank loader (run inside the turn). */
-export interface RecordedJob { key: string; load: (signal?: AbortSignal) => Promise<ResolvedBank> }
-type Renderer = (styleId: string, bars: number, seed: number, opts: { cancel: { cancelled: boolean }; endFrames?: number; bank?: ResolvedBank }) => Promise<RenderedMusic>;
+export interface RecordedJob { key: string; kit: MusicKit; load: (signal?: AbortSignal) => Promise<ResolvedBank> }
+type Renderer = (styleId: string, bars: number, seed: number, opts: { cancel: { cancelled: boolean }; endFrames?: number; bank?: ResolvedBank; kit?: MusicKit }) => Promise<RenderedMusic>;
 /**
- * The production renderer: renderMusic, which plays a bank only once the sampler is built. Until the build flag is flipped at
- * integration a bank is refused here (501 instruments_not_built) rather than handed to a renderer that would ignore it and make
- * synthesised bytes under a recorded name.
+ * The production renderer: renderMusic, which plays a bank with the sampler (music/sampler.ts). Were the build flag ever off, a bank
+ * would be refused here (501 instruments_not_built) rather than handed to a renderer that ignores it and makes synthesised bytes under a
+ * recorded name.
  */
 const productionRenderer: Renderer = (styleId, bars, seed, opts) => {
   if (opts.bank && !INSTRUMENTS_BUILT) return Promise.reject(instrumentsError('notBuilt', { styleId }));
@@ -166,7 +166,7 @@ export function createMusicQueue(limits: Partial<MusicQueueLimits> = {}, rendere
           // the bank is loaded inside the turn: one render's decoded samples in memory at a time, dropped with the render
           const bank = recorded ? await recorded.load(signal) : undefined;
           if (job.cancel.cancelled) throw new MusicCancelled();
-          const r = await renderer(styleId, bars, seed, { cancel: job.cancel, ...(endFrames === undefined ? {} : { endFrames }), ...(bank ? { bank } : {}) });
+          const r = await renderer(styleId, bars, seed, { cancel: job.cancel, ...(endFrames === undefined ? {} : { endFrames }), ...(bank ? { bank, kit: recorded!.kit } : {}) });
           if (lane === 'preview') remember(key, r);
           return r;
         } catch (e) {
@@ -235,8 +235,16 @@ async function recordedFor(opts: MusicMakeOptions, styleId: string): Promise<{ k
   if (!opts.cfg) throw instrumentsError('notBuilt', { styleId, instruments: 'recorded' });
   return recordedKitFor(opts.cfg, styleId, opts.kits ?? MUSIC_KITS, opts.signal);
 }
+/**
+ * The options of the routes of one store (http.ts createApp registers its Config, and in tests a labelled kit list): MCP
+ * add_builtin_music reads them here, the way use_library_item reaches the library's Config (library/routes.ts). A host that never
+ * registered its routes has no Config: the recorded path is not wired there and answers 501 instruments_not_built.
+ */
+const registeredMusic = new WeakMap<Store, MusicMakeOptions>();
+export function registerMusicOptions(store: Store, opts: Pick<MusicMakeOptions, 'cfg' | 'kits'>): void { registeredMusic.set(store, opts); }
+export const musicOptionsFor = (store: Store): MusicMakeOptions => ({ ...(registeredMusic.get(store) ?? {}) });
 const recordedJob = (rec: { kit: MusicKit; check: ReadyKit }, styleId: string, layout: MusicLayout, seed: number, deps?: LoadDeps): RecordedJob => ({
-  key: kitKey(rec.kit),
+  key: kitKey(rec.kit), kit: rec.kit,
   load: (signal) => loadBank(rec.check, rec.kit, kitNotes(rec.kit, styleId, layout.bars, seed, exactEnding(layout)), signal, deps),
 });
 /** The answer's part about a recorded track: the kit, its bank, the parts it played and its label (unheard until the owner's mark). */
@@ -246,19 +254,23 @@ function recordedResult(cfg: Config, rec: { kit: MusicKit; check: ReadyKit }): R
 /** The library name of a recorded track: the synth name with " · recorded instruments" before ".wav". */
 export const recordedFileName = (name: string): string => `${name.replace(/\.wav$/, '')}${RECORDED_NAME_SUFFIX}.wav`;
 
+const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
 /** Synthesise, validate and store one track; the asset is not attached to any project yet. */
 export async function makeMusic(store: Store, req: MusicRequest, actor: string, queue: MusicQueue = musicQueue, opts: MusicMakeOptions = {}): Promise<{ asset: Omit<Asset, 'id'>; grid: KnownGrid; layout: MusicLayout; recorded?: RecordedMusicResult }> {
   const { style, layout, seed } = resolveMusicRequest(req);
   const rec = req.instruments === 'recorded' ? await recordedFor(opts, style.id) : null;
   const r = await queue.render(style.id, layout.bars, seed, 'add', undefined, exactEnding(layout), rec ? recordedJob(rec, style.id, layout, seed, opts.load) : undefined);
+  // the check, the hash and the write of a long track each take tens of ms: a turn of the event loop between them (bytes unchanged)
   validateMusic(r);
+  await nextTurn();
   const bytes = r.wav;
   const contentHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  await nextTurn();
   // a track that is not stored yet needs room under the ceiling; one that is already stored needs none
   if (!fs.existsSync(store.blobPath(contentHash))) assertStorageRoom(store, bytes.length, 'store this music');
   const tmp = path.join(store.tmpDir, `music_${randomBytes(6).toString('hex')}.wav`);
   try {
-    fs.writeFileSync(tmp, bytes);
+    await fs.promises.writeFile(tmp, bytes);
     const meta = await describeMedia(tmp);
     const duration = T.rt(layout.totalFrames, MUSIC_SAMPLE_RATE);
     if (meta.kind !== 'audio' || !meta.audio || Math.abs(T.toSeconds(meta.duration) - T.toSeconds(duration)) > 1e-6) throw invalid('the file as read back does not have the length that was made', { probed: T.toSeconds(meta.duration), made: T.toSeconds(duration) });

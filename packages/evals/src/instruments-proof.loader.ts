@@ -6,12 +6,9 @@
  * the contract tests do). Every library folder is a temporary one holding the LABELLED synthetic test kit written by code
  * (packages/fixtures/src/instruments.ts; never a real sample set; nothing downloaded), deleted when the process exits.
  * NO STAND-IN is used here: every check goes through the production path (checkKit, loadBank with builder W1's planZones, the
- * production renderer behind INSTRUMENTS_BUILT). So, honestly:
- * - I10, I11, I12, I19 and L-D3 do not need W1 and pass on this tree;
- * - I13, I15, I16 (its level match), L-D1 and L-D2 need a recorded render: they fail with "needs the sampler (W1) …" until W1 is merged
- *   and the lead flips INSTRUMENTS_BUILT;
- * - I18 also needs the lead's wiring of the server Config into the REST and MCP calls of addMusic / the preview (http.ts, mcp.ts:
- *   MusicMakeOptions.cfg) and the preview headers from musicPreviewAnswer: it fails with that reason until then.
+ * production renderer, the routes and MCP with the app's kit list set to the synthetic kit). Integrated (wave 7): I15 also renders the
+ * same samples decoded WHOLE from the files and held in memory and requires equal bytes, and twice-equal bytes; I13 also measures what
+ * is kept after the render once garbage is collected (nothing decoded may stay between renders).
  * A check returns true or the sentence that says why it failed. Timing figures (I13) are one sample each, printed.
  */
 import { createHash } from 'node:crypto';
@@ -20,6 +17,8 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import * as T from '@pulseframe/time';
 import { collectCredits, MUSIC_GENERATOR, MUSIC_RECORDED_GENERATOR, type MusicKit } from '@pulseframe/core';
 import { Auth } from '@pulseframe/server/auth.ts';
@@ -30,7 +29,9 @@ import { Exporter, libraryExportWarnings } from '@pulseframe/server/export.ts';
 import { planArchive } from '@pulseframe/server/archive.ts';
 import { Governance, type Principal } from '@pulseframe/server/governance.ts';
 import { createApp } from '@pulseframe/server/http.ts';
-import { checkKit, kitBank } from '@pulseframe/server/instruments/bank.ts';
+import { checkKit, kitBank, kitNotes, loadBank } from '@pulseframe/server/instruments/bank.ts';
+import { renderMusic } from '@pulseframe/server/music/render.ts';
+import type { ResolvedBank, ResolvedInstrument } from '@pulseframe/server/music/sampler.ts';
 import { InstrumentError } from '@pulseframe/server/instruments/contract.ts';
 import { markKitHeard } from '@pulseframe/server/instruments/heard.ts';
 import { closeLibraryService, libraryServiceFor } from '@pulseframe/server/library/index.ts';
@@ -136,6 +137,11 @@ async function I12(): Promise<true | string> {
   } finally { (fsp as { open: typeof fsp.open }).open = orig; }
   return rows.length ? fail(rows.join('; ')) : true;
 }
+/** A full garbage collection (the flag set at run time; the proof is not started with --expose-gc). */
+function collector(): () => void {
+  v8.setFlagsFromString('--expose-gc');
+  return vm.runInNewContext('gc') as () => void;
+}
 async function I13(): Promise<true | string> {
   // a 55 MB synthetic kit: 6 strings zones of 44.1 kHz mono 16-bit and 6 piano zones of 48 kHz stereo 24-bit
   const w = world({ stringsSeconds: 60, pianoSeconds: 26 });
@@ -145,36 +151,80 @@ async function I13(): Promise<true | string> {
     const m0 = process.memoryUsage();
     const t0 = performance.now();
     h.enable();
+    // the peak, sampled while the render yields (the bound is on the extra memory of one render at a time, decisions §4.6)
+    let peak = 0;
+    const sampler = setInterval(() => { const m = process.memoryUsage(); peak = Math.max(peak, m.heapUsed + m.arrayBuffers - m0.heapUsed - m0.arrayBuffers); }, 5);
     const bars = 64; // 128 s at the calm tempo
     const c = await code(makeMusic(w.store, { ...recorded, bars }, 'proof', createMusicQueue(), { cfg: w.cfg, kits: [w.lib!.kit] }));
     h.disable();
+    clearInterval(sampler);
     const ms = performance.now() - t0, m1 = process.memoryUsage();
+    const peakMb = peak / 1048576;
     if (needsW1(c)) return fail(needsW1(c)!);
     if (c !== 'ok') return fail(`the 128 s recorded render answered ${c}`);
     const factor = 128_000 / ms, lag = h.max / 1e6, growth = (m1.heapUsed + m1.arrayBuffers - m0.heapUsed - m0.arrayBuffers) / 1048576;
-    console.log(`I13 one sample: kit ${(bytes / 1048576).toFixed(1)} MB, ${factor.toFixed(1)}× real time, event-loop max ${lag.toFixed(1)} ms, heap+arrayBuffers growth ${growth.toFixed(1)} MB`);
-    if (factor < 5 || lag >= 100 || growth >= 160) return fail(`${factor.toFixed(1)}× real time, ${lag.toFixed(1)} ms, ${growth.toFixed(1)} MB`);
+    // nothing decoded is kept between renders: after a full garbage collection the growth over the start is far below the kit
+    const gc = collector();
+    gc(); gc();
+    const m2 = process.memoryUsage();
+    const kept = (m2.heapUsed + m2.arrayBuffers - m0.heapUsed - m0.arrayBuffers) / 1048576;
+    console.log(`I13 one sample: kit ${(bytes / 1048576).toFixed(1)} MB, ${factor.toFixed(1)}× real time, event-loop max ${lag.toFixed(1)} ms, heap+arrayBuffers growth ${growth.toFixed(1)} MB at the end, peak ${peakMb.toFixed(1)} MB, kept after GC ${kept.toFixed(1)} MB`);
+    if (factor < 5 || lag >= 100 || growth >= 160 || peakMb >= 160) return fail(`${factor.toFixed(1)}× real time, event-loop max ${lag.toFixed(1)} ms, growth ${growth.toFixed(1)} MB, peak ${peakMb.toFixed(1)} MB`);
+    if (kept >= 32) return fail(`${kept.toFixed(1)} MB were still held after the render and a full garbage collection (the decoded samples must not be kept)`);
     return true;
   } finally { w.close(); }
 }
 async function I15(): Promise<true | string> {
-  const w = world();
+  // zones long enough that the plan really cuts them, so the partial decode is tested against the whole one
+  const w = world({ pianoSeconds: 3, stringsSeconds: 2 });
   try {
+    const kit = w.lib!.kit;
     const gov = new Governance(w.store);
     const pid = w.store.createProject({ name: 'proof' }).doc.id;
     const rev0 = w.store.getProject(pid).revision;
     let r;
-    try { r = await addMusic(w.store, gov, OWNER, pid, { ...recorded, start: T.ZERO }, createMusicQueue(), { cfg: w.cfg, kits: [w.lib!.kit] }); } catch (e) { const c = e instanceof ApiError ? `${e.status}:${e.code}` : String(e); return fail(needsW1(c) ?? c); }
+    try { r = await addMusic(w.store, gov, OWNER, pid, { ...recorded, start: T.ZERO }, createMusicQueue(), { cfg: w.cfg, kits: [kit] }); } catch (e) { const c = e instanceof ApiError ? `${e.status}:${e.code}` : String(e); return fail(needsW1(c) ?? c); }
     const p = w.store.getProject(pid);
     const a = p.doc.assets[r.assetId]!;
     if (p.revision !== rev0 + 1) return fail('not one commit');
-    if (a.provenance.procedural?.generator !== MUSIC_RECORDED_GENERATOR || a.provenance.instruments?.bank !== kitBank(w.lib!.kit)) return fail('the generator or the bank is not the recorded one');
+    if (a.provenance.procedural?.generator !== MUSIC_RECORDED_GENERATOR || a.provenance.instruments?.bank !== kitBank(kit)) return fail('the generator or the bank is not the recorded one');
+    if (!a.name.endsWith(' · recorded instruments.wav')) return fail(`the name is ${a.name}`);
+    const check = await checkKit(w.cfg, kit);
+    if (check.state !== 'ready') return fail(`the kit check answered ${check.state}`);
+    if (JSON.stringify(a.provenance.instruments?.records) !== JSON.stringify(check.records)) return fail('provenance.instruments.records are not exactly the kit\'s library records');
+    // the stored bytes = the render of the planned, partly decoded bank = the render of the same samples decoded whole from the files
+    const stored = fs.readFileSync(w.store.blobPath(a.contentHash));
+    const notes = kitNotes(kit, 'music.calm', recorded.bars, recorded.seed);
+    const partial = await loadBank(check, kit, notes);
+    const whole = wholeBank(partial, w.lib!);
+    const cut = Object.values(partial.parts).flatMap((x) => x!.instrument.zones).some((z, i) => z.frames > 0 && z.frames < Object.values(whole.parts).flatMap((x) => x!.instrument.zones)[i]!.frames);
+    if (!cut) return fail('the plan decoded every file whole: the partial decode was not tested');
+    const viaWhole = (await renderMusic('music.calm', recorded.bars, recorded.seed, { bank: whole, kit })).wav;
+    if (!stored.equals(viaWhole)) return fail('the made bytes differ from the render of the same samples decoded whole');
+    const second = await makeMusic(w.store, recorded, 'proof', createMusicQueue(), { cfg: w.cfg, kits: [kit] });
+    if (second.asset.contentHash !== a.contentHash) return fail('a second run gave other bytes');
+    console.log(`I15 one sample: ${sha(stored).slice(0, 16)}… equal to the whole-decode render and to a second run; records ${check.records.length}`);
     w.store.undo(pid, 'owner', 'undo');
     if (Object.keys(w.store.getProject(pid).doc.assets).length) return fail('one undo did not remove it');
-    const s = await makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1 }, 'proof', createMusicQueue(), { cfg: w.cfg, kits: [w.lib!.kit] });
+    const s = await makeMusic(w.store, { styleId: 'music.calm', bars: 4, seed: 1 }, 'proof', createMusicQueue(), { cfg: w.cfg, kits: [kit] });
     if (s.asset.provenance.instruments || s.asset.provenance.procedural?.generator !== MUSIC_GENERATOR) return fail('a synth asset carries the recorded marks');
     return true;
   } finally { w.close(); }
+}
+/** The same bank with every zone decoded WHOLE straight from its file (no plan). */
+function wholeBank(bank: ResolvedBank, lib: SyntheticKit): ResolvedBank {
+  const memo = new Map<string, ResolvedInstrument>();
+  const parts: ResolvedBank['parts'] = {};
+  for (const [role, part] of Object.entries(bank.parts) as [keyof ResolvedBank['parts'], NonNullable<ResolvedBank['parts']['pad']>][]) {
+    let ins = memo.get(part.instrument.id);
+    if (!ins) {
+      const dir = lib.items[part.instrument.id as 'strings' | 'piano'].dir;
+      ins = { ...part.instrument, zones: part.instrument.zones.map((z) => { const b = fs.readFileSync(path.join(dir, ...z.path.split('/'))); const info = readWavInfo(b); return { ...z, frames: info.frames, samples: decodePcm(b.subarray(info.dataOffset, wavDataEnd(info)), info, 0, info.frames) }; }) };
+      memo.set(part.instrument.id, ins);
+    }
+    parts[role] = { ...part, instrument: ins };
+  }
+  return { ...bank, parts };
 }
 async function I16(): Promise<true | string> {
   // the heard route: agents, an observer and the phone drop are refused; the owner's mark is kept
@@ -209,7 +259,7 @@ async function I18(): Promise<true | string> {
   const exporter = new Exporter(w.store, null as never, () => '', path.join(cfg.dataDir, 'no-web-dist'));
   const capabilities = new Capabilities(w.store, cfg), derivatives = new Derivatives(w.store), speech = new Speech(w.store, cfg);
   const mcp = createMcp(w.store, auth, exporter, capabilities, new Presence(), gov, speech, derivatives);
-  const app = createApp(cfg, w.store, auth, exporter, capabilities, derivatives, new Presence(), mcp, gov, undefined, speech);
+  const app = createApp(cfg, w.store, auth, exporter, capabilities, derivatives, new Presence(), mcp, gov, undefined, speech, { musicKits: [w.lib!.kit] });
   try {
     const token = gov.createGrant({ name: 'proof', mode: 'edit' }, { actor: 'user:owner', kind: 'user', scopes: ['observe', 'edit'] }).token;
     const h = { host: '127.0.0.1:9', authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' };

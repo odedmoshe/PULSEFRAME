@@ -5,12 +5,11 @@
  * - GET /api/v1/music/kits (observe; no project, no people): every kit with its state, the reason a recorded request would get now,
  *   the parts it plays, its sources' duties once checked, its label, and the owner's mark. No absolute path. The state is the kit
  *   check's own (bank.ts checkKit: library, calibration, ledger, licences, every file against the kit table); a kit whose check passes
- *   is 'not_built' until the sampler is built and the flag flipped (INSTRUMENTS_BUILT), then 'ready'.
+ *   is 'ready' (it would be 'not_built' only in a build with INSTRUMENTS_BUILT off).
  * - POST /api/v1/music/kits/:kitId/heard {heard} (the owner's own session only; heard.ts). No MCP tool.
  */
-import { kitCalibrated, kitForStyle, kitKey, MUSIC_KITS, MUSIC_RECORDED_HEARD_LABEL, MUSIC_RECORDED_UNHEARD_LABEL, type KitState, type MusicKit, type MusicKitStatus } from '@pulseframe/core';
+import { kitForStyle, kitKey, MUSIC_KITS, MUSIC_RECORDED_HEARD_LABEL, MUSIC_RECORDED_UNHEARD_LABEL, type KitState, type MusicKit, type MusicKitStatus } from '@pulseframe/core';
 import type { Config } from '../config.ts';
-import { libraryServiceFor } from '../library/index.ts';
 import { checkKit, type ReadyKit } from './bank.ts';
 import { INSTRUMENTS_BUILT, INSTRUMENTS_SERVER_REFUSALS, instrumentsError } from './contract.ts';
 import { readKitsHeard } from './heard.ts';
@@ -27,13 +26,6 @@ export function kitLabel(heard: { at: string } | null): { he: string; en: string
   if (!heard) return MUSIC_RECORDED_UNHEARD_LABEL;
   const date = heard.at.slice(0, 10);
   return { he: MUSIC_RECORDED_HEARD_LABEL.he.replace('{date}', date), en: MUSIC_RECORDED_HEARD_LABEL.en.replace('{date}', date) };
-}
-/** The state a kit is in before any file is read: library set? kit calibrated? recorded path built? (W2 continues with checkKit.) */
-export function kitStateBeforeCheck(cfg: Config, kit: MusicKit): Exclude<KitState, 'ready' | 'checking'> | 'check' {
-  if (!libraryServiceFor(cfg).configuredRoot()) return 'library_not_set';
-  if (!kitCalibrated(kit)) return 'not_calibrated';
-  if (!INSTRUMENTS_BUILT) return 'not_built';
-  return 'check';
 }
 /** GET /api/v1/music/kits. `built` is the build flag (a test of the check itself may pass true). */
 export async function listMusicKits(cfg: Config, kits: readonly MusicKit[] = MUSIC_KITS, built: boolean = INSTRUMENTS_BUILT): Promise<{ kits: MusicKitStatus[] }> {

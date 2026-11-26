@@ -22,7 +22,7 @@ import { BEAT_MAX_SECONDS, BEAT_TOTAL_MAX_SECONDS, detectBeatsOfFile, detectScen
 import { makeSfx, SFX, sfxPreview } from './sfx.ts';
 import { canRasteriseSvg, makeElement } from './elements.ts';
 import { applyTransaction, beatNumbers, ownSceneCuts, birthdayHints, findClip, isBuiltinMusic, isKnownGrid, isRealWallDate, listMusicStyles, OpError, PACKS, suggestPacks, summarizePack, WALL_DATE, type Asset, type OpCall, TemplateBodySchema, TemplateRegenerateBodySchema, FindShortsBodySchema, SHORTS_MEASUREMENT_KIND, sequenceList, shortsRefusal, MulticamSyncBody, multicamGroupOf, MULTICAM_REFUSALS, MULTICAM_SYNC_KIND, TakeRequestSchema } from '@pulseframe/core';
-import { addMusic, MusicBody, musicPreview } from './music.ts';
+import { addMusic, MusicBody, musicPreviewAnswer, musicQueue, registerMusicOptions } from './music.ts';
 import { instrumentsError } from './instruments/contract.ts';
 import { markKitHeard } from './instruments/heard.ts';
 import { listMusicKits } from './instruments/routes.ts';
@@ -44,6 +44,7 @@ import { pearlsView } from './pearls.ts';
 import { applyMusicFitFor, markJoinHeardFor, musicJoinPreviewFor, planMusicFitFor, refuseHeardByAgent } from './musicfit/routes.ts';
 import { MusicFitApplyRequestSchema, MusicFitPlanRequestSchema } from '@pulseframe/core';
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
+import type { MusicKit } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
 import type { Presence } from './presence.ts';
 import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
@@ -140,7 +141,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime }
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[] }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -758,33 +759,37 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = need(c, 'observe');
     return c.json(packSuggestions(store, gov, p, c.req.query('date') ?? '', c.req.query('projectId')));
   });
+  // the recorded path reads the library through this Config (MCP add_builtin_music too, through registerMusicOptions); the kit list is
+  // MUSIC_KITS unless a TEST passes a labelled synthetic one (extras.musicKits, never from the environment)
+  const musicOpts = { cfg, ...(extras.musicKits ? { kits: extras.musicKits } : {}) };
+  registerMusicOptions(store, musicOpts);
   app.get('/api/v1/music', (c) => { need(c, 'observe'); return c.json({ styles: listMusicStyles() }); });
   // Listening before adding: the same bytes adding it would store (at most 32 bars); cancelled when the request goes away.
   app.get('/api/v1/music/:styleId/audio', async (c) => {
     need(c, 'observe');
     const int = (v: string | undefined, d: number) => (v === undefined || v === '' ? d : /^\d{1,7}$/.test(v) ? Number(v) : Number.NaN);
-    // wave 7 instruments: ?instruments=synth|recorded (recorded refused until built, never silently synthesised) and ?match=1 (the level
-    // scale header; builder W2). Headers carry ASCII codes only.
+    // wave 7 instruments: ?instruments=synth|recorded (recorded: the kit checked first, refused with its reason, never silently
+    // synthesised) and ?match=1 (x-pf-level-scale for the blind pair). Headers carry ASCII codes only.
     const instruments = c.req.query('instruments');
     if (instruments !== undefined && instruments !== 'synth' && instruments !== 'recorded') throw new ApiError(400, 'invalid_option', 'instruments is synth or recorded', { instruments: instruments.slice(0, 16) });
     const match = c.req.query('match');
     if (match !== undefined && match !== '0' && match !== '1') throw new ApiError(400, 'invalid_option', 'match is 0 or 1', { match: match.slice(0, 8) });
-    const bytes = await musicPreview(c.req.param('styleId'), int(c.req.query('bars'), 16), int(c.req.query('seed'), 1), { signal: c.req.raw.signal, ...(instruments ? { instruments } : {}) });
-    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600', 'x-pf-instruments': 'synth' });
+    const { bytes, headers } = await musicPreviewAnswer(c.req.param('styleId'), int(c.req.query('bars'), 16), int(c.req.query('seed'), 1), { ...musicOpts, signal: c.req.raw.signal, ...(instruments ? { instruments } : {}), ...(match === '1' ? { match: true } : {}) });
+    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'audio/wav', 'content-length': String(bytes.length), 'cache-control': 'private, max-age=3600', ...headers });
   });
   // recorded instruments «כלים מוקלטים» (wave 7 instruments track; instruments/routes.ts): the kits and their honest states; the owner's mark
-  app.get('/api/v1/music/kits', async (c) => { need(c, 'observe'); return c.json(await listMusicKits(cfg)); });
+  app.get('/api/v1/music/kits', async (c) => { need(c, 'observe'); return c.json(await listMusicKits(cfg, musicOpts.kits)); });
   app.post('/api/v1/music/kits/:kitId/heard', async (c) => {
     const p = need(c, 'observe');
     if (!isOwnerSession(p)) throw instrumentsError('ownerOnly', {}); // before the body is read: an agent learns nothing else
-    return c.json(markKitHeard(cfg.dataDir, p, c.req.param('kitId'), (await body(c, z.object({ heard: z.boolean() }).strict())).heard, new Date().toISOString()));
+    return c.json(markKitHeard(cfg.dataDir, p, c.req.param('kitId'), (await body(c, z.object({ heard: z.boolean() }).strict())).heard, new Date().toISOString(), musicOpts.kits));
   });
   // As for templates: the credential's own mode decides (addMusic refuses observe and propose modes with the reason).
   app.post('/api/v1/projects/:id/music', async (c) => {
     const p = need(c, 'observe');
     const projectId = c.req.param('id');
     store.getProject(projectId);
-    return c.json(await addMusic(store, gov, p, projectId, await body(c, MusicBody)), 201);
+    return c.json(await addMusic(store, gov, p, projectId, await body(c, MusicBody), musicQueue, musicOpts), 201);
   });
   // ----- music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit; musicfit/routes.ts): 501 musicfit_not_built until built -----
   app.post('/api/v1/projects/:id/music-fit/plan', async (c) => { const p = need(c, 'observe'); return c.json(await planMusicFitFor(store, gov, p, c.req.param('id'), await body(c, MusicFitPlanRequestSchema))); });

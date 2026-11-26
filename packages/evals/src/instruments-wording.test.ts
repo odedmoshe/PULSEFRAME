@@ -21,6 +21,7 @@ import { addMusic, createMusicQueue, makeMusic } from '../../../apps/server/src/
 import { renderMusic } from '../../../apps/server/src/music/render.ts';
 import { prepareMusicFit } from '../../../apps/server/src/musicfit/plan.ts';
 import { ApiError, Store } from '../../../apps/server/src/store.ts';
+import { INSTRUMENTS_UI_STRINGS } from '../../../apps/web/src/editor/instruments/instruments.strings.ts';
 import { refreshKitTable, standInPlanZones, SYNTHETIC_SOURCES, writeLedger, writeSyntheticKit } from '../../fixtures/src/instruments.ts';
 import { dictionaries, INSTRUMENTS_EN, INSTRUMENTS_HE, INSTRUMENTS_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
 
@@ -136,8 +137,8 @@ describe('instruments strings', () => {
     expect(INSTRUMENTS_HE['instruments.heardOn']).toBe(MUSIC_RECORDED_HEARD_LABEL.he);
     expect(INSTRUMENTS_EN['instruments.heardOn']).toBe(MUSIC_RECORDED_HEARD_LABEL.en);
   });
-  it('nothing says a recorded kit sounds better, real, warm or natural', () => {
-    const texts = [...Object.values(INSTRUMENTS_HE), ...Object.values(INSTRUMENTS_EN), ...samples, ...samples.map((s) => translateRefusal('he', s) ?? ''),
+  it('nothing says a recorded kit sounds better, real, warm or natural (the shared words, the editor\'s own words, the refusals)', () => {
+    const texts = [...Object.values(INSTRUMENTS_HE), ...Object.values(INSTRUMENTS_EN), ...Object.values(INSTRUMENTS_UI_STRINGS.he), ...Object.values(INSTRUMENTS_UI_STRINGS.en), ...samples, ...samples.map((s) => translateRefusal('he', s) ?? ''),
       ...Object.values(INSTRUMENTS_SERVER_REFUSALS).map((r) => r.hint), MUSIC_RECORDED_UNHEARD_LABEL.he, MUSIC_RECORDED_UNHEARD_LABEL.en, MUSIC_RECORDED_HEARD_LABEL.he, MUSIC_RECORDED_HEARD_LABEL.en];
     for (const s of texts) {
       for (const w of INSTRUMENTS_FORBIDDEN_WORDS) expect({ s, w, hit: enWord(w).test(s) }).toEqual({ s, w, hit: false });

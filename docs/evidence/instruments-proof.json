@@ -1,0 +1,326 @@
+{
+  "proof": "instruments",
+  "ranAt": "2026-11-26T00:14:37.420Z",
+  "seconds": 45,
+  "note": "SYNTHETIC test kit and test bank only, written by code; never a real sample set. Nobody here can listen: every check is a measurement. Timing figures are one sample each.",
+  "passed": 22,
+  "failed": 0,
+  "partial": 0,
+  "blocked": 0,
+  "pending": 0,
+  "total": 22,
+  "rows": [
+    {
+      "id": "I1",
+      "part": "sampler",
+      "status": "pass",
+      "measured": {
+        "comparedFrames": 23968,
+        "mismatches": 0
+      },
+      "check": "renderSampled at r = 1 with amp_veltrack 0 and 0 dB equals the source zone sample for sample from sample 32 to the start of release"
+    },
+    {
+      "id": "I2",
+      "part": "sampler",
+      "status": "pass",
+      "measured": [
+        {
+          "semitones": 0,
+          "hz": 439.999994,
+          "cents": -0.00002
+        },
+        {
+          "semitones": 1,
+          "hz": 466.163752,
+          "cents": -0.00004
+        },
+        {
+          "semitones": -1,
+          "hz": 415.304696,
+          "cents": -0.00001
+        },
+        {
+          "semitones": 3,
+          "hz": 523.251119,
+          "cents": -0.00004
+        },
+        {
+          "semitones": -3,
+          "hz": 369.994427,
+          "cents": 0.00002
+        }
+      ],
+      "check": "a 440 Hz zone recorded at 44.1 kHz sounds at 440 Hz ± 0.05 cent at its root key and within ± 0.1 cent of equal temperament at ±1 and ±3 semitones"
+    },
+    {
+      "id": "I3",
+      "part": "sampler",
+      "status": "pass",
+      "measured": {
+        "fundamentalHz": 1059.46,
+        "largestOtherDb": -92.1,
+        "atHz": 218
+      },
+      "check": "a 1 kHz sine played one semitone up: everything but the fundamental is below −60 dB"
+    },
+    {
+      "id": "I3b",
+      "part": "sampler",
+      "status": "pass",
+      "measured": {
+        "label": "8-tap kernel aliasing, measured (one sample)",
+        "ratio": 1.3766,
+        "outputToneHz": 22475,
+        "largestAliasBelow20kHzDb": -77.6,
+        "atHz": 4399
+      },
+      "check": "a 15 kHz sine at 44.1 kHz played +7 semitones: the largest alias below 20 kHz is below −40 dB (printed as one sample, \"8-tap kernel aliasing, measured\")"
+    },
+    {
+      "id": "I4",
+      "part": "sampler",
+      "status": "pass",
+      "measured": {
+        "markerDbAtVel03": -141.3,
+        "markerDbAtVel09": -10,
+        "gains": [
+          {
+            "veltrack": 100,
+            "midiVel": 39,
+            "measuredDb": -20.5096,
+            "formulaDb": -20.5096,
+            "diffDb": 7.105427357601002e-14
+          },
+          {
+            "veltrack": 50,
+            "midiVel": 39,
+            "measuredDb": -5.2379,
+            "formulaDb": -5.2379,
+            "diffDb": 4.4853010194856324e-13
+          },
+          {
+            "veltrack": 0,
+            "midiVel": 39,
+            "measuredDb": 0,
+            "formulaDb": 0,
+            "diffDb": 0
+          }
+        ]
+      },
+      "check": "velocity 0.3 plays the soft layer and 0.9 the loud one (the marker harmonic absent, then present); the amp_veltrack gain matches its formula within 0.01 dB"
+    },
+    {
+      "id": "I5",
+      "part": "sampler",
+      "status": "pass",
+      "measured": {
+        "releaseMs": 300,
+        "fell60dbAfterMs": 298.688,
+        "noteFrames": 38400,
+        "lastSample": 0,
+        "firstSample": 0
+      },
+      "check": "after the gate the level falls 60 dB within the release time ± 2 ms; the note's last sample and the track's first and last frames are 0"
+    },
+    {
+      "id": "I6",
+      "part": "sampler",
+      "status": "pass",
+      "measured": [
+        {
+          "semitones": 0,
+          "rmsChangeDb": 0.0033,
+          "seamStep": 0.028782,
+          "largestStepAwayFromSeams": 0.028794,
+          "largestStepInSource": 0.028794
+        },
+        {
+          "semitones": 3,
+          "rmsChangeDb": 0.0065,
+          "seamStep": 0.034249,
+          "largestStepAwayFromSeams": 0.034251,
+          "largestStepInSource": 0.028794
+        }
+      ],
+      "check": "a 0.25 s looped zone held 3 s: the RMS of the last 0.5 s is within 0.5 dB of the first; no step at a loop seam is larger than the largest step inside the source"
+    },
+    {
+      "id": "I8",
+      "part": "sampler",
+      "status": "pass",
+      "measured": {
+        "bank": "synthetic-test-1",
+        "rows": [
+          {
+            "render": "music.calm 8 bars seed 1",
+            "twiceEqual": true,
+            "sha256": "8391ff2eedc8696841e69d1904382fbc80ca7c98509886280620e4afabc642f6",
+            "golden": "8391ff2eedc8696841e69d1904382fbc80ca7c98509886280620e4afabc642f6"
+          },
+          {
+            "render": "music.calm 16 bars seed 3",
+            "twiceEqual": true,
+            "sha256": "9909fd090ca19e682a5d15ef090af1bcc7520a8e1600dd27f50f1b839fc64bf2",
+            "golden": "9909fd090ca19e682a5d15ef090af1bcc7520a8e1600dd27f50f1b839fc64bf2"
+          }
+        ]
+      },
+      "check": "the synthetic test kit renders twice with equal bytes, equal to instruments.golden.json"
+    },
+    {
+      "id": "I9",
+      "part": "sampler",
+      "status": "pass",
+      "measured": [
+        {
+          "styleId": "music.festive",
+          "equal": true
+        },
+        {
+          "styleId": "music.birthday",
+          "equal": true
+        },
+        {
+          "styleId": "music.calm",
+          "equal": true
+        },
+        {
+          "styleId": "music.pop",
+          "equal": true
+        },
+        {
+          "styleId": "music.lofi",
+          "equal": true
+        },
+        {
+          "styleId": "music.cinematic",
+          "equal": true
+        }
+      ],
+      "check": "music.golden.json still matches: a request without instruments gives the bytes, name and params it gave before this track"
+    },
+    {
+      "id": "I10",
+      "part": "loader",
+      "status": "pass",
+      "check": "with no library folder set a recorded request answers 409 instruments_library_not_set and stores nothing; the same request without instruments gives the golden bytes and MUSIC_GENERATOR"
+    },
+    {
+      "id": "I11",
+      "part": "loader",
+      "status": "pass",
+      "check": "one kit file removed, one changed by a single byte, the ledger at another commit: 409 instruments_file_missing, instruments_file_changed, instruments_item_version; nothing stored"
+    },
+    {
+      "id": "I12",
+      "part": "loader",
+      "status": "pass",
+      "check": "a truncated WAV, a FLAC, sample=../../x, ..\\..\\x and a link out of the folder each give their named refusal, and an fs spy shows no file outside the item was opened; a backslash path that resolves inside the item works"
+    },
+    {
+      "id": "I13",
+      "part": "loader",
+      "status": "pass",
+      "check": "128 s of the style with a 55 MB synthetic kit (page-cache warm, parser cold): at least 5× real time, event-loop delay below 100 ms, heapUsed + arrayBuffers growth below 160 MB (one sample)"
+    },
+    {
+      "id": "I14",
+      "part": "sampler",
+      "status": "pass",
+      "measured": {
+        "label": "SYNTHETIC TEST BANK (written by code: sines, decays, constants, impulses; not any instrument)",
+        "rows": [
+          {
+            "bars": 4,
+            "rmsDb": -18.32,
+            "peak": 0.6667,
+            "clamped": 94,
+            "failures": []
+          },
+          {
+            "bars": 7,
+            "rmsDb": -18.48,
+            "peak": 0.6667,
+            "clamped": 244,
+            "failures": []
+          },
+          {
+            "bars": 16,
+            "rmsDb": -18.62,
+            "peak": 0.6667,
+            "clamped": 467,
+            "failures": []
+          },
+          {
+            "bars": 33,
+            "rmsDb": -19.15,
+            "peak": 0.6667,
+            "clamped": 366,
+            "failures": []
+          },
+          {
+            "bars": 64,
+            "rmsDb": -19.15,
+            "peak": 0.6667,
+            "clamped": 597,
+            "failures": []
+          }
+        ]
+      },
+      "check": "M1, M6, M7 and M8 of music.test.ts hold for recorded renders of the synthetic test kit"
+    },
+    {
+      "id": "I15",
+      "part": "loader",
+      "status": "pass",
+      "check": "an added recorded track carries MUSIC_RECORDED_GENERATOR and provenance.instruments with the bank, in one commit undone by one undo; no synth track carries either"
+    },
+    {
+      "id": "I16",
+      "part": "loader",
+      "status": "pass",
+      "measured": {
+        "server": "pass",
+        "page": "pass"
+      },
+      "check": "match=1: scale × RMS of both versions equal within 0.1 dB and the bytes equal the un-matched preview; the heard route answers 403 to agent, observer and phone credentials and keeps the owner's mark"
+    },
+    {
+      "id": "I17",
+      "part": "ui",
+      "status": "pass",
+      "check": "in the editor «צליל» works by keyboard with its state in words, the blind pair plays and reveals, «שמעתי» shows the owner's mark, in Hebrew and English, right to left at 1280 and 1440 px"
+    },
+    {
+      "id": "I18",
+      "part": "loader",
+      "status": "pass",
+      "check": "MCP add_builtin_music with instruments recorded reports the kit and the label; no answer of any route or tool holds an absolute path; every header value is ASCII"
+    },
+    {
+      "id": "I19",
+      "part": "loader",
+      "status": "pass",
+      "check": "5,000 mutated .sfz texts and 5,000 mutated WAV byte strings throw only InstrumentError, read nothing out of bounds, and take less than 60 s"
+    },
+    {
+      "id": "L-D1",
+      "part": "loader",
+      "status": "pass",
+      "check": "a synthetic CC-BY source in the kit: the made track's credit line is in the description text, verbatim"
+    },
+    {
+      "id": "L-D2",
+      "part": "loader",
+      "status": "pass",
+      "check": "a synthetic CC-BY-NC source: the made track is non-commercial, the export warns «לשימוש לא מסחרי בלבד», and the shared archive omits its bytes"
+    },
+    {
+      "id": "L-D3",
+      "part": "loader",
+      "status": "pass",
+      "check": "a synthetic CC-BY-SA, CC-BY-ND or unknown-licence source: 409 instruments_licence, nothing made"
+    }
+  ]
+}

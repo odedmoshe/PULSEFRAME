@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T21:55:10.763Z",
+  "ranAt": "2026-11-25T23:26:22.888Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 135,
-  "total": 135,
+  "passed": 145,
+  "total": 145,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -276,7 +276,7 @@
         "vl5": true,
         "tcBefore": "00:00:03:00",
         "tcAfter": "00:00:03:00",
-        "namedKey": "נקודת עוצמה 00:00:02:19 · 140%",
+        "namedKey": "נקודת עוצמה 00:00:02:20 · 140%",
         "keys": [
           [
             40,
@@ -344,9 +344,9 @@
       "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
       "ok": true,
       "detail": {
-        "pictureEnd": 290,
-        "wantEnd": 284,
-        "gotEnd": 284,
+        "pictureEnd": 245,
+        "wantEnd": 239,
+        "gotEnd": 239,
         "fadeOutFrames": 30,
         "fitUndone": true
       }
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 1.96,
+        "fwd2": 2.02,
         "sh2": "◀◀ ×1",
-        "back1": -0.91,
+        "back1": -0.93,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1.07,
+        "playSpeed": 1,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.51,
+        "shuttleSpeed": 1.98,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_d31671321e0",
-          "clp_d31671321e1"
+          "clp_3d606440c70",
+          "clp_3d606440c71"
         ],
         "afterAB": [
-          "clp_d31671321e0",
-          "clp_d31671321e1"
+          "clp_3d606440c70",
+          "clp_3d606440c71"
         ],
         "afterAdd": [
-          "clp_d31671321e0",
-          "clp_d31671321e1",
-          "clp_d31671321e2"
+          "clp_3d606440c70",
+          "clp_3d606440c71",
+          "clp_3d606440c72"
         ],
         "midEscape": [
-          "clp_d31671321e1"
+          "clp_3d606440c71"
         ],
         "afterEscape": [
-          "clp_d31671321e0",
-          "clp_d31671321e1",
-          "clp_d31671321e2"
+          "clp_3d606440c70",
+          "clp_3d606440c71",
+          "clp_3d606440c72"
         ],
         "afterEscapeUp": [
-          "clp_d31671321e0",
-          "clp_d31671321e1",
-          "clp_d31671321e2"
+          "clp_3d606440c70",
+          "clp_3d606440c71",
+          "clp_3d606440c72"
         ]
       }
     },
@@ -615,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 13/1799",
+        "valueText": "עוקב קדימה 18/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -900,18 +900,18 @@
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_b205f37d3e0",
-          "ast_eb267264140",
-          "ast_82535346ab0",
-          "ast_9821bc910d0",
-          "ast_9015f76cc40"
+          "ast_d4454debff0",
+          "ast_d0fc8bc6db0",
+          "ast_229d767c860",
+          "ast_75975819080",
+          "ast_32fbd267770"
         ],
         "order1": [
-          "ast_b205f37d3e0",
-          "ast_9821bc910d0",
-          "ast_eb267264140",
-          "ast_82535346ab0",
-          "ast_9015f76cc40"
+          "ast_d4454debff0",
+          "ast_75975819080",
+          "ast_d0fc8bc6db0",
+          "ast_229d767c860",
+          "ast_32fbd267770"
         ],
         "videoOut": true,
         "musicChosen": true,
@@ -935,7 +935,7 @@
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T21:40:01.729Z",
+          "createdAt": "2026-11-25T23:21:49.103Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1130,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_fa72fadd170",
+        "victim": "clp_790224d9420",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1255,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_538304b6770",
-          "seq_538304b6777"
+          "seq_428accbd9e0",
+          "seq_428accbd9e7"
         ],
         "revisions": 1,
         "transactions": [
@@ -1266,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_538304b6770",
+          "seq": "seq_428accbd9e0",
           "selected": "true"
         }
       }
@@ -1297,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_538304b6770"
+          "seq": "seq_428accbd9e0"
         },
-        "secondTab": "seq_538304b6770",
+        "secondTab": "seq_428accbd9e0",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1604,7 +1604,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_yPcvSetBOI0",
+          "id": "prj_qUAt2IRnh5U",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1614,7 +1614,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_1w13NjA3ZTk",
+          "id": "prj_mWmJudxHm10",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1801,11 +1801,11 @@
       "detail": {
         "planRows": [
           {
-            "id": "clp_7688a8709f0",
+            "id": "clp_e45c4120fc0",
             "text": "send-quiet.wav · +9.1 dB"
           },
           {
-            "id": "clp_3366069f0d0",
+            "id": "clp_a9c03f4f1a0",
             "text": "send-loud.wav · −9.1 dB"
           }
         ],
@@ -1818,11 +1818,11 @@
       "detail": {
         "resRows": [
           {
-            "id": "clp_7688a8709f0",
+            "id": "clp_e45c4120fc0",
             "by": ""
           },
           {
-            "id": "clp_3366069f0d0",
+            "id": "clp_a9c03f4f1a0",
             "by": ""
           }
         ],
@@ -1948,7 +1948,7 @@
       "ok": true,
       "detail": {
         "empty": 1,
-        "row": "גרסה לבדיקה 25.11.2026, 21:54 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
+        "row": "גרסה לבדיקה 25.11.2026, 23:25 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
       }
     },
     {
@@ -2037,14 +2037,14 @@
       "ok": true,
       "detail": {
         "first": [
-          "ast_8632d00dff0",
-          "ast_b03433774b0",
-          "ast_6a032740930"
+          "ast_e12b676dda0",
+          "ast_bf44bf60560",
+          "ast_2d28207c0e0"
         ],
         "moved": [
-          "ast_b03433774b0",
-          "ast_8632d00dff0",
-          "ast_6a032740930"
+          "ast_bf44bf60560",
+          "ast_e12b676dda0",
+          "ast_2d28207c0e0"
         ]
       }
     },
@@ -2125,6 +2125,65 @@
       }
     },
     {
+      "name": "search: «שלום» in the media drawer's box finds exactly the word said in the typed transcript, its span [1/2, 1/1) s, without a model",
+      "ok": true,
+      "detail": {
+        "n": 1,
+        "asset": "ast_6ba62d8e5e0",
+        "start": "1/2",
+        "end": "1/1",
+        "sources": "transcript"
+      }
+    },
+    {
+      "name": "search: ArrowDown from the box reaches the row and Escape returns to the box",
+      "ok": true,
+      "detail": {
+        "inList": "footage-row",
+        "back": "media-search"
+      }
+    },
+    {
+      "name": "search: Enter asks the pictures; the status line says «החיפוש בתמונה לא מותקן» (no Python configured here) and no picture row appears",
+      "ok": true,
+      "detail": {
+        "state": "not_installed",
+        "text": "החיפוש בתמונה לא מותקן. לא הוגדרה סביבת Python לחיפוש בתמונה (PF_TOOLS_PYTHON). השלבים הבאים: ההוראות ב־docs/INTEGRATIONS.mdההוראות להתקנה: docs/INTEGRATIONS.md",
+        "pictureRows": 0
+      }
+    },
+    {
+      "name": "search: Shift+Enter on the row places exactly the word span (frames 15–30 of the file) in ONE commit",
+      "ok": true,
+      "detail": {
+        "commits": 1,
+        "clips": [
+          [
+            0.5,
+            0.5
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "search: one Ctrl+Z returns the exact document from before the placement",
+      "ok": true,
+      "detail": {
+        "undone": true
+      }
+    },
+    {
+      "name": "search rows: the page logged no script error",
+      "ok": true,
+      "detail": {
+        "errors": []
+      }
+    },
+    {
       "name": "local assistant: Tab from the bar's input reaches «לשאול את העוזר המקומי», Enter asks, and the stand-in's answer shows as the assistant's suggestion (nothing changed yet)",
       "ok": true,
       "detail": {
@@ -2174,6 +2233,44 @@
     },
     {
       "name": "local assistant rows: the page logged no script error",
+      "ok": true,
+      "detail": {
+        "errors": []
+      }
+    },
+    {
+      "name": "instruments: «צליל» is a radiogroup; Tab from the length chips lands on «מסונתז» (chosen), ArrowLeft chooses «כלים מוקלטים» and moves the focus",
+      "ok": true,
+      "detail": {
+        "role": "radiogroup",
+        "landed": "instruments-choice-option/synth/true",
+        "moved": true
+      }
+    },
+    {
+      "name": "instruments: with the kit unavailable (library_not_set) the recorded add is disabled with its reason; Enter and a click send no request and add nothing",
+      "ok": true,
+      "detail": {
+        "kitState": "library_not_set",
+        "disabled": "true",
+        "posts": 0
+      }
+    },
+    {
+      "name": "instruments: back on «מסונתז» the ordinary add sends exactly the request it always sent and makes the synthesised track (MUSIC_GENERATOR, the old name)",
+      "ok": true,
+      "detail": {
+        "back": true,
+        "posts": [
+          "{\"styleId\":\"music.calm\",\"bars\":16,\"seed\":1,\"start\":{\"value\":\"0\",\"timescale\":1}}"
+        ],
+        "names": [
+          "Calm and warm · 16 bars.wav"
+        ]
+      }
+    },
+    {
+      "name": "instruments rows: the page logged no script error",
       "ok": true,
       "detail": {
         "errors": []

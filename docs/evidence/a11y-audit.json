@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-25T21:14:26.932Z",
+  "ranAt": "2026-11-26T00:00:47.227Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "browser": "153.0.8010.12"
@@ -145,7 +145,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_51178340140]",
+          "focusAfterClose": "button[data-testid=more-ast_d3ed7396b20]",
           "focusReturned": true
         },
         {
@@ -713,7 +713,7 @@
         },
         {
           "state": "music-browser",
-          "controls": 527,
+          "controls": 539,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -1038,23 +1038,25 @@
           "rows": 0
         },
         {
-          "state": "not_installed",
+          "state": "search-picture-not-installed",
           "controls": 360,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
+          "pictureState": "not_installed",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
-          "state": "busy",
+          "state": "search-picture-scanning",
           "controls": 361,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
+          "pictureState": "busy",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
@@ -1222,6 +1224,61 @@
           "noFocusRing": [],
           "shown": true,
           "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "instruments-not-set",
+          "controls": 509,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "library_not_set",
+          "answer": "the audit server's own state (no library folder)"
+        },
+        {
+          "state": "instruments-not-calibrated",
+          "controls": 509,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "not_calibrated",
+          "answer": "STAND-IN: the kits route answered in the browser with the contract's shape"
+        },
+        {
+          "state": "instruments-ready-duties",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "ready",
+          "duties": 3,
+          "answer": "STAND-IN: a ready kit with two SYNTHETIC sources (CC BY, CC BY-NC), the contract's shape"
+        },
+        {
+          "state": "instruments-blind-pair",
+          "controls": 511,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "answer": "STAND-IN: the two previews are a one-second synthetic tone with x-pf-level-scale 1 and 0.5"
+        },
+        {
+          "state": "instruments-add-refused",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "יצירת המוזיקה נכשלה: ספריית התוכן לא הוגדרה, ולכן אי אפשר להשתמש בכלים מוקלטים. בעל הפרויקט מגדיר אותה בהגדרות; עד אז אפשר לבחור «מסונתז»",
+          "answer": "the REAL server's refusal of the recorded add (409 instruments_library_not_set; the kit list shown is a stand-in «ready»): nothing added"
         },
         {
           "state": "cache-storage-row",
@@ -1649,7 +1706,7 @@
           "tabStepsThatLeftTheDialog": 0,
           "openUntilEscape": true,
           "closed": true,
-          "focusAfterClose": "button[data-testid=more-ast_51178340140]",
+          "focusAfterClose": "button[data-testid=more-ast_d3ed7396b20]",
           "focusReturned": true
         },
         {
@@ -2126,7 +2183,7 @@
         },
         {
           "state": "film-bar",
-          "controls": 371,
+          "controls": 362,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2217,7 +2274,7 @@
         },
         {
           "state": "music-browser",
-          "controls": 527,
+          "controls": 539,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2508,7 +2565,7 @@
         },
         {
           "state": "story-bar",
-          "controls": 365,
+          "controls": 364,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -2542,23 +2599,25 @@
           "rows": 0
         },
         {
-          "state": "not_installed",
+          "state": "search-picture-not-installed",
           "controls": 360,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
+          "pictureState": "not_installed",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
-          "state": "busy",
+          "state": "search-picture-scanning",
           "controls": 361,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
+          "pictureState": "busy",
           "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
         },
         {
@@ -2726,6 +2785,61 @@
           "noFocusRing": [],
           "shown": true,
           "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "instruments-not-set",
+          "controls": 509,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "library_not_set",
+          "answer": "the audit server's own state (no library folder)"
+        },
+        {
+          "state": "instruments-not-calibrated",
+          "controls": 509,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "not_calibrated",
+          "answer": "STAND-IN: the kits route answered in the browser with the contract's shape"
+        },
+        {
+          "state": "instruments-ready-duties",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "ready",
+          "duties": 3,
+          "answer": "STAND-IN: a ready kit with two SYNTHETIC sources (CC BY, CC BY-NC), the contract's shape"
+        },
+        {
+          "state": "instruments-blind-pair",
+          "controls": 511,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "answer": "STAND-IN: the two previews are a one-second synthetic tone with x-pf-level-scale 1 and 0.5"
+        },
+        {
+          "state": "instruments-add-refused",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Making the music failed: no library folder is set, so no recorded instrument can be used",
+          "answer": "the REAL server's refusal of the recorded add (409 instruments_library_not_set; the kit list shown is a stand-in «ready»): nothing added"
         },
         {
           "state": "cache-storage-row",
@@ -3347,7 +3461,7 @@
         },
         {
           "state": "story-bar",
-          "controls": 206,
+          "controls": 367,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3431,8 +3545,65 @@
           "clip": "a video clip (its Beat tab)"
         },
         {
+          "state": "search-results",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 1,
+          "sections": [
+            1,
+            1
+          ],
+          "pictureLine": "not_installed"
+        },
+        {
+          "state": "search-nothing-found",
+          "controls": 352,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 0
+        },
+        {
+          "state": "search-picture-not-installed",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "not_installed",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-picture-scanning",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "busy",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-forget-confirm",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
           "state": "running",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3442,7 +3613,7 @@
         },
         {
           "state": "stopped",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3452,7 +3623,7 @@
         },
         {
           "state": "not_llama",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3462,7 +3633,7 @@
         },
         {
           "state": "assistant-local-row-offer",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3472,7 +3643,7 @@
         },
         {
           "state": "assistant-local-row-thinking",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3482,7 +3653,7 @@
         },
         {
           "state": "assistant-local-row-suggested",
-          "controls": 470,
+          "controls": 467,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3492,7 +3663,7 @@
         },
         {
           "state": "assistant-local-row-inserted",
-          "controls": 468,
+          "controls": 465,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3502,7 +3673,7 @@
         },
         {
           "state": "assistant-local-row-none",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3512,13 +3683,68 @@
         },
         {
           "state": "assistant-local-row-not-running",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
           "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "instruments-not-set",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "library_not_set",
+          "answer": "the audit server's own state (no library folder)"
+        },
+        {
+          "state": "instruments-not-calibrated",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "not_calibrated",
+          "answer": "STAND-IN: the kits route answered in the browser with the contract's shape"
+        },
+        {
+          "state": "instruments-ready-duties",
+          "controls": 507,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "ready",
+          "duties": 3,
+          "answer": "STAND-IN: a ready kit with two SYNTHETIC sources (CC BY, CC BY-NC), the contract's shape"
+        },
+        {
+          "state": "instruments-blind-pair",
+          "controls": 510,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "answer": "STAND-IN: the two previews are a one-second synthetic tone with x-pf-level-scale 1 and 0.5"
+        },
+        {
+          "state": "instruments-add-refused",
+          "controls": 507,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "יצירת המוזיקה נכשלה: ספריית התוכן לא הוגדרה, ולכן אי אפשר להשתמש בכלים מוקלטים. בעל הפרויקט מגדיר אותה בהגדרות; עד אז אפשר לבחור «מסונתז»",
+          "answer": "the REAL server's refusal of the recorded add (409 instruments_library_not_set; the kit list shown is a stand-in «ready»): nothing added"
         }
       ]
     },
@@ -3557,7 +3783,7 @@
         },
         {
           "state": "export-sheet",
-          "controls": 481,
+          "controls": 482,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3939,8 +4165,65 @@
           "clip": "a video clip (its Beat tab)"
         },
         {
+          "state": "search-results",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 1,
+          "sections": [
+            1,
+            1
+          ],
+          "pictureLine": "not_installed"
+        },
+        {
+          "state": "search-nothing-found",
+          "controls": 352,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "rows": 0
+        },
+        {
+          "state": "search-picture-not-installed",
+          "controls": 359,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "not_installed",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-picture-scanning",
+          "controls": 360,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "pictureState": "busy",
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
+          "state": "search-forget-confirm",
+          "controls": 364,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "fixture": "AUDIT FIXTURE: the index route answered by the audit, not by a server runtime"
+        },
+        {
           "state": "running",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3950,7 +4233,7 @@
         },
         {
           "state": "stopped",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3960,7 +4243,7 @@
         },
         {
           "state": "not_llama",
-          "controls": 476,
+          "controls": 473,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3970,7 +4253,7 @@
         },
         {
           "state": "assistant-local-row-offer",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3980,7 +4263,7 @@
         },
         {
           "state": "assistant-local-row-thinking",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -3990,7 +4273,7 @@
         },
         {
           "state": "assistant-local-row-suggested",
-          "controls": 470,
+          "controls": 467,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -4000,7 +4283,7 @@
         },
         {
           "state": "assistant-local-row-inserted",
-          "controls": 468,
+          "controls": 465,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -4010,7 +4293,7 @@
         },
         {
           "state": "assistant-local-row-none",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
@@ -4020,13 +4303,68 @@
         },
         {
           "state": "assistant-local-row-not-running",
-          "controls": 469,
+          "controls": 466,
           "unnamed": [],
           "lowContrast": [],
           "tabIssues": [],
           "noFocusRing": [],
           "shown": true,
           "fixture": "contract-shaped fixtures answered by page.route (no model, no server answer); audits the rendering only"
+        },
+        {
+          "state": "instruments-not-set",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "library_not_set",
+          "answer": "the audit server's own state (no library folder)"
+        },
+        {
+          "state": "instruments-not-calibrated",
+          "controls": 508,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "not_calibrated",
+          "answer": "STAND-IN: the kits route answered in the browser with the contract's shape"
+        },
+        {
+          "state": "instruments-ready-duties",
+          "controls": 507,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "kitState": "ready",
+          "duties": 3,
+          "answer": "STAND-IN: a ready kit with two SYNTHETIC sources (CC BY, CC BY-NC), the contract's shape"
+        },
+        {
+          "state": "instruments-blind-pair",
+          "controls": 510,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "answer": "STAND-IN: the two previews are a one-second synthetic tone with x-pf-level-scale 1 and 0.5"
+        },
+        {
+          "state": "instruments-add-refused",
+          "controls": 507,
+          "unnamed": [],
+          "lowContrast": [],
+          "tabIssues": [],
+          "noFocusRing": [],
+          "shown": true,
+          "text": "Making the music failed: no library folder is set, so no recorded instrument can be used",
+          "answer": "the REAL server's refusal of the recorded add (409 instruments_library_not_set; the kit list shown is a stand-in «ready»): nothing added"
         }
       ]
     }
@@ -4036,25 +4374,25 @@
     {
       "theme": "dark",
       "uiLanguage": "he",
-      "states": 130,
+      "states": 135,
       "findings": 0
     },
     {
       "theme": "dark",
       "uiLanguage": "en",
-      "states": 130,
+      "states": 135,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "he",
-      "states": 41,
+      "states": 51,
       "findings": 0
     },
     {
       "theme": "light",
       "uiLanguage": "en",
-      "states": 41,
+      "states": 51,
       "findings": 0
     }
   ],
