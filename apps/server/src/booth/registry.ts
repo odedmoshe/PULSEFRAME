@@ -97,6 +97,8 @@ export const sfxSource: BoothSourceDef = {
 export const BOOTH_CONTENT_DEPENDENT_EFFECTS: Readonly<Record<string, string>> = {
   'key.chroma': 'keys out a green screen; the test pictures have none, so it shows nothing to judge',
   'color.lut': 'needs a colour table imported into a project; with none chosen the picture is unchanged',
+  // «תמונה חיה» (wave 8 living; added by the lead at the merge): needs a depth the owner drew for one photo, and its pass is not built yet
+  'depth.living': 'needs a depth drawn by hand for one photo; the test pictures have none, so there is nothing to judge',
 };
 const transitionRow = (id: string) => JSON.parse(JSON.stringify(transitionDef(id))) as Record<string, unknown>;
 export const gpuTransitionSource: BoothSourceDef = {

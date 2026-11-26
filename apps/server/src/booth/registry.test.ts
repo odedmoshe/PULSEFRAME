@@ -37,13 +37,13 @@ describe('coverage (plan check 1)', () => {
     expect(items.filter((i) => !memberIds.has(i.id)).map((i) => i.id)).toEqual(['task:mic']);
     expect(Object.keys(BOOTH_LATER).filter((k) => !memberIds.has(k))).toEqual([]);
   });
-  it('the counts: 6 music, 80 SFX, 46 GPU transitions, 29 GPU effects shown; later: 23 Canvas2D transitions, 22 Canvas2D effects, 2 content-dependent GPU effects, the voice effects', () => {
+  it('the counts: 6 music, 80 SFX, 46 GPU transitions, 29 GPU effects shown; later: 23 Canvas2D transitions, 22 Canvas2D effects, 3 content-dependent GPU effects, the voice effects', () => {
     const n = (src: string) => items.filter((i) => i.source === src).length;
     expect({ music: n('music'), sfx: n('sfx'), tr: n('gpu-transition'), fx: n('gpu-effect'), task: n('task') }).toEqual({ music: 6, sfx: 80, tr: 46, fx: 29, task: 1 });
     const later = Object.keys(BOOTH_LATER);
     expect(later.filter((k) => k.startsWith('transition:')).length).toBe(23);
     expect(later.filter((k) => k.startsWith('effect:') && !BOOTH_LATER[k]!.startsWith('content')).length).toBe(22);
-    expect(Object.keys(BOOTH_CONTENT_DEPENDENT_EFFECTS).sort()).toEqual(['color.lut', 'key.chroma']);
+    expect(Object.keys(BOOTH_CONTENT_DEPENDENT_EFFECTS).sort()).toEqual(['color.lut', 'depth.living', 'key.chroma']); // depth.living joined with «תמונה חיה» (wave 8)
     expect(later.filter((k) => k.startsWith('voice-effect:')).length).toBe(AUDIO_EFFECTS.length);
     for (const why of Object.values(BOOTH_LATER)) expect(why.length).toBeGreaterThan(20);
   });

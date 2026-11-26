@@ -3,7 +3,7 @@
  * (Exporter.plan accepting it is a server test: apps/server/src/booth/media.test.ts.)
  */
 import { describe, expect, it } from 'vitest';
-import { BOOTH_FIRST_TRANSITIONS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, validateProject } from '../index.ts';
+import { BOOTH_FIRST_TRANSITIONS, GPU_EFFECT_IDS, GPU_TRANSITION_IDS, OP_ONLY_EFFECTS, validateProject } from '../index.ts';
 import { BOOTH_SCENE_H, BOOTH_SCENE_W, boothScene } from './scene.ts';
 
 const pics = { a: { contentHash: `sha256:${'1'.repeat(64)}`, byteSize: 1234 }, b: { contentHash: `sha256:${'2'.repeat(64)}`, byteSize: 2345 } };
@@ -25,7 +25,8 @@ describe('boothScene', () => {
   });
   it('every GPU transition and effect builds; an unknown id or a fake hash throws', () => {
     for (const id of GPU_TRANSITION_IDS) boothScene({ route: 'scene', scene: 'transition', id }, pics);
-    for (const id of GPU_EFFECT_IDS) expect(boothScene({ route: 'scene', scene: 'effect', id }, pics).still).toBe(id === 'light.strobe' ? 1 : 12);
+    // an effect only its own op adds (livingContract OP_ONLY_EFFECTS: «תמונה חיה») is never a booth scene: the booth lists it as content-dependent
+    for (const id of GPU_EFFECT_IDS.filter((x) => !Object.hasOwn(OP_ONLY_EFFECTS, x))) expect(boothScene({ route: 'scene', scene: 'effect', id }, pics).still).toBe(id === 'light.strobe' ? 1 : 12);
     expect(boothScene({ route: 'scene', scene: 'transition', id: 'flash' }, pics).still).toBe(64);
     expect(() => boothScene({ route: 'scene', scene: 'transition', id: 'nope' }, pics)).toThrow();
     expect(() => boothScene({ route: 'scene', scene: 'effect', id: 'film-burn' }, pics)).toThrow();
