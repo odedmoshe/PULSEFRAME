@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { evaluate } from '../../engine/src/evaluate.ts';
-import { DEFAULT_TRANSFORM, ProjectSchema, sourceTimeOfFrame, stillDocument, StillsRefusal, STILL_MAX_SIDE, validateProject, type Asset } from './index.ts';
+import { DEFAULT_TRANSFORM, ProjectSchema, sourceTimeOfFrame, stillDocument, StillsRefusal, STILL_MAX_SIDE, STILL_MIN_SIDE, validateProject, type Asset } from './index.ts';
 
 const prov = { origin: 'fixture' as const, importedAt: '2026-11-26T00:00:00Z', importedBy: 'test' };
 const hash = `sha256:${'a'.repeat(64)}`;
@@ -97,5 +97,17 @@ describe('stillDocument', () => {
     const none = refusal(() => stillDocument(audio, 0));
     expect([none.code, none.message]).toEqual(['still_no_picture', 'file ast_v has no picture to save']);
     expect(refusal(() => stillDocument({ ...video(), video: undefined }, 0)).code).toBe('still_no_picture');
+  });
+  it('a picture under 16 px on a side is refused still_too_small (its document would be below the schema\'s minimum frame); 16 is kept and valid', () => {
+    expect(STILL_MIN_SIDE).toBe(16);
+    const small = refusal(() => stillDocument(picture(15, 100), 0));
+    expect([small.code, small.status, small.message]).toEqual(['still_too_small', 422, 'the picture is 15x100, smaller than 16 pixels on a side; it cannot be saved as a picture on its own']);
+    expect(small.hint).toMatch(/export a frame of the film/);
+    expect(refusal(() => stillDocument(video({ width: 64, height: 8 }), 0)).code).toBe('still_too_small');
+    const d = stillDocument(picture(16, 16), 0);
+    expect(ProjectSchema.safeParse(d).success).toBe(true);
+    expect(validateProject(d)).toEqual([]);
+    // the reason for the row: a 15-px document is not a valid document
+    expect(ProjectSchema.safeParse({ ...d, settings: { ...d.settings, width: 15 } }).success).toBe(false);
   });
 });

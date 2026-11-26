@@ -26,8 +26,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  isMovingPicture, rangeOfClip, rankStills, setStillsRankBuiltForTests, startOffsetFrames, stillsCacheState, stillsRefusal, stillsSeekSeconds, stillsStage, videoFrames,
-  STILLS_ALGO, STILLS_DERIVATIVE_KIND, STILLS_JOB_TYPE, STILLS_LABEL, STILLS_LONG_SIDE, STILLS_MAX_OPEN_JOBS, STILLS_MAX_RANGE_FRAMES, STILLS_MEASURE_BUILT, STILLS_METHOD,
+  isMovingPicture, rangeOfClip, rankStills, startOffsetFrames, stillsCacheState, stillsRefusal, stillsSeekSeconds, stillsStage, videoFrames,
+  STILLS_ALGO, STILLS_DERIVATIVE_KIND, STILLS_JOB_TYPE, STILLS_LABEL, STILLS_LONG_SIDE, STILLS_MAX_OPEN_JOBS, STILLS_MAX_RANGE_FRAMES, STILLS_METHOD,
   STILLS_REFUSALS, StillsRefusal,
   type Asset, type FindSharpBody, type FindSharpResult, type ReadSharpQuery, type SharpAnswer, type StillMeasure, type StillsData, type StillsDerivativeMeta, type StillsJobInput, type StillsJobOutput,
 } from '@pulseframe/core';
@@ -59,12 +59,6 @@ export function stillsApiError(e: StillsRefusal): ApiError {
 export function withStillsErrors<R>(fn: () => R): R {
   try { return fn(); } catch (e) { if (e instanceof StillsRefusal) throw stillsApiError(e); throw e; }
 }
-/** The honest state of a build without the measurement (501 stills_not_built). */
-export const stillsNotBuilt = () => new ApiError(STILLS_REFUSALS.notBuilt.status, STILLS_REFUSALS.notBuilt.code, STILLS_REFUSALS.notBuilt.message(), {}, STILLS_REFUSALS.notBuilt.hint);
-/** The build flag, readable at run time (the integrator flips the core constant; tests of this file set it on). */
-let measureBuilt: boolean = STILLS_MEASURE_BUILT;
-/** TEST ONLY: run the bodies before the core flag is flipped at integration. */
-export const setStillsMeasureBuiltForTests = (on: boolean) => { measureBuilt = on; setStillsRankBuiltForTests(on); };
 
 // ---------- the reader ----------
 /** When a seek delivers other frames than asked, the one retry starts this much earlier and drops frames by timestamp. */
@@ -214,7 +208,18 @@ export function stillsGreyCheck(): Promise<void> {
 // ---------- the data file and the answer ----------
 let knownFfmpeg: string | null = null;
 const ffmpegLine = async () => (knownFfmpeg = await ffmpegVersionLine());
-void ffmpegLine(); // warm: the synchronous read and the cache check of a POST need the build line
+const warming = ffmpegLine(); // warm: the synchronous read and the cache check of a POST need the build line
+/**
+ * Resolves once the ffmpeg build line is known (it never rejects: an ffmpeg that cannot run gives 'unknown'). The routes and the
+ * MCP tools await it before startStillsJob / readSharpFrames, so a first read right after start answers what is stored instead of
+ * "nothing measured" (W1 note 5).
+ */
+export const stillsReady = (): Promise<string> => warming;
+/** The build line, or the honest 503 stills_warming («עוד רגע») when a caller did not await stillsReady and it is not known yet. */
+function ffmpegKnown(): string {
+  if (knownFfmpeg === null) throw stillsApiError(stillsRefusal('warming', []));
+  return knownFfmpeg;
+}
 const own = <V>(o: Record<string, V>, k: string): V | undefined => (Object.hasOwn(o, k) ? o[k] : undefined);
 
 /** The stored data file of an asset when it can be merged into (same algo, long side, ffmpeg build and file), else null. */
@@ -267,7 +272,7 @@ const yieldNow = () => new Promise<void>((r) => setImmediate(r));
 export function startStillsJob(store: Store, gov: Governance, p: Principal, projectId: string, body: FindSharpBody, deps: StillsDeps): FindSharpResult {
   gov.assertMayAct(p, projectId, 'edit');
   const proj = store.getProject(projectId); // 404 before anything else
-  if (!measureBuilt) throw stillsNotBuilt();
+  const line = ffmpegKnown();
   const asset = assetOf(store, projectId, body.assetId);
   if (!isMovingPicture(asset)) throw stillsRefusal('noVideo', [asset.id], { assetId: asset.id });
   let from: number, to: number;
@@ -280,7 +285,7 @@ export function startStillsJob(store: Store, gov: Governance, p: Principal, proj
     checkStretch(asset, from, to);
     if (to - from > STILLS_MAX_RANGE_FRAMES) throw stillsRefusal('rangeTooLong', [to - from, STILLS_MAX_RANGE_FRAMES], { from, to, max: STILLS_MAX_RANGE_FRAMES });
   }
-  const answer = answerOf(asset.id, asset, from, to, storedData(store, deps.derivatives, asset, knownFfmpeg));
+  const answer = answerOf(asset.id, asset, from, to, storedData(store, deps.derivatives, asset, line));
   if (answer.complete) return { cached: true, answer };
   const open = store.openJobs(STILLS_JOB_TYPE);
   const same = open.find((j) => j.projectId === projectId);
@@ -295,10 +300,10 @@ export function startStillsJob(store: Store, gov: Governance, p: Principal, proj
 /** GET …/stills and MCP read_sharp_frames: what is stored for [from, to), complete or not (never starts a job). */
 export function readSharpFrames(store: Store, projectId: string, q: ReadSharpQuery, deps: Pick<StillsDeps, 'derivatives'>): SharpAnswer {
   store.getProject(projectId); // 404 before anything else
-  if (!measureBuilt) throw stillsNotBuilt();
+  const line = ffmpegKnown();
   const asset = assetOf(store, projectId, q.assetId);
   checkStretch(asset, q.from, q.to);
-  return answerOf(asset.id, asset, q.from, q.to, storedData(store, deps.derivatives, asset, knownFfmpeg));
+  return answerOf(asset.id, asset, q.from, q.to, storedData(store, deps.derivatives, asset, line));
 }
 /** Cancel a stills job: a queued one is removed; a running one stops (ffmpeg is killed) and writes nothing. */
 export function cancelStillsJob(store: Store, jobId: string, actor: string): { jobId: string; status: string; outcome: string } {
@@ -319,11 +324,6 @@ export function cancelStillsJob(store: Store, jobId: string, actor: string): { j
 export function recoverStillsJobs(store: Store, deps: StillsDeps): number {
   for (const j of store.openJobs(STILLS_JOB_TYPE)) if (j.status === 'cancel-requested') store.updateJob(j.id, { status: 'canceled', stage: null, error: { code: 'canceled', message: 'canceled; nothing saved' } });
   const jobs = store.recoverJobs(STILLS_JOB_TYPE);
-  if (!measureBuilt) {
-    const nb = STILLS_REFUSALS.notBuilt;
-    for (const j of jobs) store.updateJob(j.id, { status: 'failed', stage: null, error: { code: nb.code, message: nb.message(), retryable: false } });
-    return jobs.length;
-  }
   for (const j of jobs) void runStillsJob(store, j.id, deps);
   return jobs.length;
 }
@@ -456,8 +456,7 @@ async function work(store: Store, jobId: string, deps: StillsDeps, signal: Abort
         const got = Number(e2.details.got ?? 0), details = { first: e.details, second: e2.details };
         if (got !== count) throw stillsApiError(stillsRefusal('decodeFailed', [got, count], details));
         // the count was right but the timestamps say the frames are not the asked ones: same code and way forward, its own sentence
-        const dr = STILLS_REFUSALS.decodeFailed;
-        throw new ApiError(422, dr.code, `the file delivered ${count} frames, but not the ${count} frames asked for (their times differ by more than a quarter of a frame, also after reading from ${STILLS_SEEK_PREROLL_US / 1_000_000} s earlier); nothing was saved`, details, dr.hint);
+        throw stillsApiError(stillsRefusal('decodeTimes', [count, STILLS_SEEK_PREROLL_US / 1_000_000], details));
       }
     }
     readCount = r.frames;

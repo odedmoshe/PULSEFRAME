@@ -1,14 +1,14 @@
 /**
  * pnpm proof:stills — «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover, version 1; .artifacts/wave8/cover-verify.md "Proof additions",
- * cover-plan §5 as cut). LEAD: the entry point and the list of checks. Parts, each owned by one builder: stills-proof.measure.ts (W1:
+ * cover-plan §5 as cut). The entry point and the list of checks. Parts, each owned by one builder: stills-proof.measure.ts (W1:
  * M1–M12, Node and server only), stills-proof.still.ts (W2: P1–P9, server only), stills-proof.ui.ts (W3: U1–U5, the editor in
- * Chromium) — W3 also wires them together here and sets STILLS_PROOF_BUILT at integration. Until then it runs nothing and exits 2
- * (blocked), the code the proofs use for "cannot run here", never a pass.
+ * Chromium), run one after the other (never two at once on this machine). Exit 0 = every check passed; 1 = a check failed (its
+ * numbers are in the evidence, never relaxed); 2 = blocked (a part could not run here), never a pass.
  * Fixtures are SYNTHETIC only, made by the proof (ffmpeg and Node), in a temp dir, deleted after. Frames and ranks are asserted on
  * lossless fixtures, never absolute numbers against a committed value (C12). Writes docs/evidence/stills-proof.json when built; one
  * timing sample, labelled "one sample, this container", never gated.
  */
-export const STILLS_PROOF_BUILT = false;
+export const STILLS_PROOF_BUILT = true;
 export const STILLS_CHECKS: Readonly<Record<string, string>> = {
   // W1 — the measurement
   M1: 'F1 blur ramp (120 frames 1280x720, lossless, frame k box-blurred by |k−47|): every frame measured (complete), candidate 1 is frame 47; the proof\'s own decode + Sobel + Immerkær σ gives the same integers',
@@ -24,7 +24,7 @@ export const STILLS_CHECKS: Readonly<Record<string, string>> = {
   M11: 'a server export started during a measurement finishes first (the moments lane); one stills job per project (409), three per server (429)',
   M12: 'an agent credential: find_sharp_frames and read_sharp_frames answer numbers only (no image part); the observer may read and not start',
   // W2 — the saved picture
-  P1: 'F5 photo 3000x2000 PNG (one-pixel checkerboard + coordinate barcode), 10x15 landscape crop at (37, 21): the PNG output equals the source crop pixel for pixel; JPEG (mjpeg 4:4:4) within PSNR ≥ 40 dB of it',
+  P1: 'F5 photo 3000x2000 PNG (one-pixel checkerboard + coordinate barcode), 10x15 landscape crop at (37, 21): the PNG output equals the source crop pixel for pixel (PNG is the exact form); JPEG (mjpeg 4:4:4, lossy) within PSNR ≥ 40 dB of it',
   P2: 'an odd-sized PNG (3001x2001) saved whole is exactly 3001x2001 and equal pixel for pixel',
   P3: 'F6 barcode video 1920x1080 in a 1280x720 project: the still is 1920x1080 (above the project size) and its barcode reads the asked source frame',
   P4: 'a JPEG photo with EXIF orientation 6 (APP1 inserted by proof code) is saved turned, equal to the server still of the same stillDocument',
@@ -41,28 +41,57 @@ export const STILLS_CHECKS: Readonly<Record<string, string>> = {
   U5: 'one timing sample of a 600-frame 1080p stretch (stage times), labelled "one sample, this container"; new states in audit:a11y, ids in audit:testids',
 };
 
-/** One part of the proof: its checks answer true or the reason they failed. W1 (stills-proof.measure.ts) and W2 (stills-proof.still.ts) export the same shape as W3's. */
-export interface StillsProofPart { built: boolean; checks: Record<string, () => Promise<true | string>>; details?: Record<string, unknown> }
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const EVIDENCE = path.join(ROOT, 'docs/evidence/stills-proof.json');
+type Row = { id: string; status: 'pass' | 'fail' | 'blocked'; say?: string; numbers?: unknown };
 
 async function main(): Promise<void> {
   if (!STILLS_PROOF_BUILT) {
-    console.error(`stills-proof: not built yet; ${Object.keys(STILLS_CHECKS).length} checks pending (${Object.keys(STILLS_CHECKS).join(', ')}); nothing was measured`);
+    console.error(`stills-proof: not built yet; ${Object.keys(STILLS_CHECKS).length} checks pending; nothing was measured`);
     process.exit(2);
   }
-  // each part by name, found at run time so a part that is not merged yet is a blocked row, not a crash
-  const names = ['./stills-proof.measure.ts', './stills-proof.still.ts', './stills-proof.ui.ts'];
-  const rows: { id: string; status: 'pass' | 'fail' | 'pending'; say?: string }[] = [];
-  const done = new Set<string>();
-  for (const n of names) {
-    let part: StillsProofPart | undefined;
-    try { const mod = (await import(n)) as Record<string, unknown>; part = Object.values(mod).find((v): v is StillsProofPart => !!v && typeof v === 'object' && 'checks' in v && 'built' in v); } catch { part = undefined; }
-    if (!part?.built) continue;
-    for (const [id, run] of Object.entries(part.checks)) { const r = await run(); done.add(id); rows.push(r === true ? { id, status: 'pass' } : { id, status: 'fail', say: r }); }
+  const rows: Row[] = [];
+  const evidence: Record<string, unknown> = {};
+  const t0 = Date.now();
+  // W1: the measurement (server modules in this process)
+  {
+    const { runStillsMeasureChecks } = await import('./stills-proof.measure.ts');
+    const r = await runStillsMeasureChecks();
+    evidence.measure = r.evidence;
+    for (const [id, v] of Object.entries(r.results)) rows.push(v === true ? { id, status: 'pass' } : { id, status: v.startsWith('BLOCKED') ? 'blocked' : 'fail', say: v });
   }
-  for (const id of Object.keys(STILLS_CHECKS)) if (!done.has(id)) rows.push({ id, status: 'pending' });
+  // W2: the saved picture (its own server on port 0)
+  {
+    const { runStillChecks } = await import('./stills-proof.still.ts');
+    const checks = await runStillChecks();
+    for (const c of checks) rows.push({ id: c.id, status: c.pass === true ? 'pass' : c.pass === null ? 'blocked' : 'fail', ...(c.pass === true ? {} : { say: c.blocked ?? c.name }), numbers: c.numbers });
+  }
+  // W3: the editor in Chromium (one browser, stopped after)
+  {
+    const ui = await import('./stills-proof.ui.ts');
+    try {
+      for (const [id, run] of Object.entries(ui.STILLS_UI_PART.checks)) { const r = await run(); rows.push(r === true ? { id, status: 'pass' } : { id, status: 'fail', say: r }); }
+    } finally { await ui.stopUi(); }
+    evidence.ui = ui.STILLS_UI_PART.details;
+  }
+  const seen = new Set(rows.map((r) => r.id));
+  for (const id of Object.keys(STILLS_CHECKS)) if (!seen.has(id)) rows.push({ id, status: 'blocked', say: 'not run by any part' });
+  rows.sort((a, b) => Object.keys(STILLS_CHECKS).indexOf(a.id) - Object.keys(STILLS_CHECKS).indexOf(b.id));
   for (const r of rows) console.log(`${r.status.toUpperCase().padEnd(8)} ${r.id.padEnd(4)} ${STILLS_CHECKS[r.id]}${r.say ? `\n         ${r.say}` : ''}`);
-  const bad = rows.filter((r) => r.status === 'fail').length, pend = rows.filter((r) => r.status === 'pending').length;
-  console.log(`\n${rows.length - bad - pend} pass, ${bad} fail, ${pend} pending`);
-  process.exit(bad ? 1 : pend ? 2 : 0);
+  const n = (s: Row['status']) => rows.filter((r) => r.status === s).length;
+  const status = n('fail') ? 'fail' : n('blocked') ? 'blocked' : 'pass';
+  fs.mkdirSync(path.dirname(EVIDENCE), { recursive: true });
+  fs.writeFileSync(EVIDENCE, `${JSON.stringify({
+    proof: 'stills', status, at: new Date().toISOString(), wallMs: Date.now() - t0,
+    summary: { pass: n('pass'), fail: n('fail'), blocked: n('blocked') },
+    checks: rows.map((r) => ({ ...r, says: STILLS_CHECKS[r.id] })), evidence,
+    notes: ['synthetic fixtures only, made and deleted by the proof', 'timings are one sample in this container, never gated', 'nobody has looked at a tile or a saved picture'],
+  }, null, 1)}\n`);
+  console.log(`\n${n('pass')} pass, ${n('fail')} fail, ${n('blocked')} blocked · evidence ${path.relative(ROOT, EVIDENCE)}`);
+  process.exit(n('fail') ? 1 : n('blocked') ? 2 : 0);
 }
 void main();

@@ -9,13 +9,9 @@ import type { Asset, MediaClip, ProjectDocument } from './schema.ts';
 import { sourceFrameIndexAt, sourceTimeOfFrame } from './speed.ts';
 import {
   STILLS_CANDIDATES, STILLS_MANY_CLIPPED_PERMILLE, STILLS_MAX_RANGE_FRAMES, STILLS_SEPARATION_SECONDS, stillsRefusal,
-  STILLS_MEASURE_BUILT, type SharpCandidate, type StillMeasure, type StillsRanking,
+  type SharpCandidate, type StillMeasure, type StillsRanking,
 } from './stillsContract.ts';
 
-/** Whether the bodies answer (the core flag STILLS_MEASURE_BUILT; until the integrator flips it they refuse stills_not_built). */
-let rankBuilt: boolean = STILLS_MEASURE_BUILT;
-/** TEST ONLY: run the bodies before the core flag is flipped at integration (W1's own tests). */
-export const setStillsRankBuiltForTests = (on: boolean) => { rankBuilt = on; };
 
 /** The lower median of integers (the same rule as moments: sorted[floor((n − 1) / 2)]); 0 for none. */
 export function stillsMedian(xs: readonly number[]): number {
@@ -32,7 +28,6 @@ export const stillsSeparationFrames = (rate: { num: number; den: number }): numb
  * `asset` supplies the rate (separation) and each candidate's time (sourceTimeOfFrame).
  */
 export function rankStills(asset: Pick<Asset, 'video'>, measured: readonly StillMeasure[], from: number, to: number): StillsRanking {
-  if (!rankBuilt) throw stillsRefusal('notBuilt', []);
   if (!asset.video) throw stillsRefusal('noVideo', ['?']);
   if (!(Number.isSafeInteger(from) && Number.isSafeInteger(to)) || from < 0 || to <= from) return { median: null, candidates: [] };
   const byFrame = new Map<number, StillMeasure>();
@@ -75,7 +70,6 @@ export function rankStills(asset: Pick<Asset, 'video'>, measured: readonly Still
  * its frames, not every other).
  */
 export function rangeOfClip(doc: ProjectDocument, clipId: string): { assetId: string; from: number; to: number } {
-  if (!rankBuilt) throw stillsRefusal('notBuilt', []);
   const rate = doc.settings.frameRate;
   let clip: MediaClip | null = null;
   for (const seq of Object.values(doc.sequences ?? {})) {

@@ -7,8 +7,7 @@
  * Real ffmpeg and ffprobe throughout. The render page is NOT run here (no Chromium in a unit test): `standInHost` is a LABELLED
  * STAND-IN for RenderHost that answers the page's still with the stored PNG's own bytes when the session asks for exactly the
  * stored picture's size (what a 1:1 draw of the still's document must give) and records what it was asked. The real page's 1:1
- * draw is proven by pnpm proof:stills P1/P2/P4 (stills-proof.still.ts). STILL_EXPORT_BUILT is set to true for this file by vi.mock
- * (the integrator flips the real flag).
+ * draw is proven by pnpm proof:stills P1/P2/P4 (stills-proof.still.ts).
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -19,7 +18,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import * as T from '@pulseframe/time';
 import { stillDocument, STILLS_REFUSALS, type Asset } from '@pulseframe/core';
 
-vi.mock('@pulseframe/core', async (importOriginal) => ({ ...(await importOriginal<typeof import('@pulseframe/core')>()), STILL_EXPORT_BUILT: true }));
 /** TEST fault (labelled): when set, the written picture gets this PNG chunk inserted before the check runs. */
 const fault: { chunk: { type: string; data: Buffer } | null } = { chunk: null };
 vi.mock('./stillFile.ts', async (importOriginal) => {

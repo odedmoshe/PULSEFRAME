@@ -18,7 +18,7 @@ import {
   countedReader, createStillsHarness, DARK, dataOf, decodeAll, ffmpegOn, OWNER, readBarcode, remuxTs, writeBarcodeClip, writeDarkNoisy, writeMotion, writePng, writeRamp,
   type StillsHarness,
 } from '../../../packages/evals/src/stills-proof.measure.ts';
-import { readStillsFrames, recoverStillsJobs, setStillsMeasureBuiltForTests, startStillsJob, stillsGreyCheck, stillsGreySize, StillsSeekMiss, stopStillsJobs, cancelStillsJob, STILLS_SEEK_PREROLL_US } from './stills.ts';
+import { readStillsFrames, recoverStillsJobs, startStillsJob, stillsReady, stillsGreyCheck, stillsGreySize, StillsSeekMiss, stopStillsJobs, cancelStillsJob, STILLS_SEEK_PREROLL_US } from './stills.ts';
 import { frameSource, ffmpegVersionLine } from './tracking.ts';
 
 vi.setConfig({ testTimeout: 120_000 });
@@ -26,7 +26,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let h: StillsHarness, fx = '';
 const F = {} as { ramp: string; bar: string; ts: string; dark: string; motion: string; r60: string; photo: string };
 beforeAll(async () => {
-  setStillsMeasureBuiltForTests(true);
+  await stillsReady(); // direct calls below need the ffmpeg build line (the routes wait for it themselves)
   fx = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-stills-unit-fx-'));
   F.ramp = await writeRamp(path.join(fx, 'ramp.mp4'), { width: 640, height: 360, frames: 64, peak: 37 });
   F.bar = await writeBarcodeClip(path.join(fx, 'bar.mp4'), { width: 320, height: 180, frames: 1200, rate: { num: 30, den: 1 }, codec: 'x264-bframes' });
@@ -40,7 +40,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await h?.close();
   fs.rmSync(fx, { recursive: true, force: true });
-  setStillsMeasureBuiltForTests(false);
 });
 const job = async (pid: string, body: Record<string, unknown>, extra = {}) => {
   const r = startStillsJob(h.store, h.gov, OWNER, pid, body as never, h.deps(extra));

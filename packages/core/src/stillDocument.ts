@@ -7,14 +7,14 @@
  * 'contain', the default transform, no effects, no title, no sound; sourceIn = sourceTimeOfFrame(asset, sourceFrame) for a
  * video (0 for a picture). The picture is then drawn 1:1, and a crop is cut AFTER rendering (ffmpeg crop on the lossless PNG),
  * never by scaling the clip. A side over STILL_MAX_SIDE, a frame outside the file or a file without a picture is refused with
- * the STILLS_REFUSALS row (stillTooLarge, stillFrame, stillNoPicture). The asset itself is copied into the document's assets, so
+ * the STILLS_REFUSALS row (stillTooLarge, stillTooSmall, stillFrame, stillNoPicture). The asset itself is copied into the document's assets, so
  * the renderer reads the same stored bytes (the original, never the proxy).
  */
 import * as T from '@pulseframe/time';
 import { videoFrames } from './momentsContract.ts';
 import { DEFAULT_TRANSFORM, SCHEMA_VERSION, type Asset, type ProjectDocument } from './schema.ts';
 import { sourceTimeOfFrame } from './speed.ts';
-import { STILL_MAX_SIDE, stillsRefusal } from './stillsContract.ts';
+import { STILL_MAX_SIDE, STILL_MIN_SIDE, stillsRefusal } from './stillsContract.ts';
 
 /** The frame rate of a still of a picture file (one frame; the rate only sets how long the clip lasts). */
 export const STILL_PICTURE_RATE = { num: 30, den: 1 } as const;
@@ -29,6 +29,8 @@ export function stillPicture(asset: Asset, sourceFrame: number): { width: number
   const frames = picture ? 1 : videoFrames(asset)!;
   if (!Number.isSafeInteger(sourceFrame) || sourceFrame < 0 || sourceFrame >= frames) throw stillsRefusal('stillFrame', [sourceFrame, frames]);
   if (size.width > STILL_MAX_SIDE || size.height > STILL_MAX_SIDE) throw stillsRefusal('stillTooLarge', [size.width, size.height]);
+  // below the schema's minimum frame (16 px a side) the one-clip document would not be a valid document
+  if (size.width < STILL_MIN_SIDE || size.height < STILL_MIN_SIDE) throw stillsRefusal('stillTooSmall', [size.width, size.height]);
   return { width: size.width, height: size.height, rate: picture ? { ...STILL_PICTURE_RATE } : { ...asset.video!.frameRate }, picture, frames };
 }
 

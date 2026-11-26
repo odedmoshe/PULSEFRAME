@@ -4,12 +4,10 @@
  * asc), one second apart at the file's own rate, at most three, an incomplete range gives no candidates; manyClipped, the ratio,
  * time = sourceTimeOfFrame; rangeOfClip with speed, reverse and freeze, a 60 fps file in a 30 fps project, over 600 refused.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
 import { applyTransaction, createProject, findClip, sourceTimeOfFrame, StillsRefusal, type MediaClip, type OpCall, type ProjectDocument, type StillMeasure } from './index.ts';
-import { rangeOfClip, rankStills, setStillsRankBuiltForTests, stillsMedian, stillsSeparationFrames } from './stillsRank.ts';
-
-beforeAll(() => setStillsRankBuiltForTests(true));
+import { rangeOfClip, rankStills, stillsMedian, stillsSeparationFrames } from './stillsRank.ts';
 
 const R30 = { num: 30, den: 1 };
 const rec = (frame: number, sharp: number, extra: Partial<StillMeasure> = {}): StillMeasure => ({ frame, sobel: sharp + 10, sigma100: 200, sharp, motion: frame === 0 ? null : 5, hi: 0, lo: 0, ...extra });

@@ -32,7 +32,7 @@ import { FifoComputeLane } from '../../../apps/server/src/lane.ts';
 import { createMcp } from '../../../apps/server/src/mcp.ts';
 import { Presence } from '../../../apps/server/src/presence.ts';
 import { Speech } from '../../../apps/server/src/speech.ts';
-import { cancelStillsJob, readStillsFrames, recoverStillsJobs, setStillsMeasureBuiltForTests, startStillsJob, stillsGreySize, StillsSeekMiss, stopStillsJobs, type ReadStillsFrames, type StillsDeps } from '../../../apps/server/src/stills.ts';
+import { cancelStillsJob, readStillsFrames, recoverStillsJobs, startStillsJob, stillsReady, stillsGreySize, StillsSeekMiss, stopStillsJobs, type ReadStillsFrames, type StillsDeps } from '../../../apps/server/src/stills.ts';
 import { Store, type JobRow } from '../../../apps/server/src/store.ts';
 import { frameSource } from '../../../apps/server/src/tracking.ts';
 
@@ -258,14 +258,13 @@ export type CheckResult = true | string;
 export interface MeasureProofResult { results: Record<string, CheckResult>; evidence: Record<string, unknown> }
 
 /**
- * Runs M1–M12. `forceBuilt` runs the bodies before the integrator flips STILLS_MEASURE_BUILT (W1's own run); without it and with the
- * flag off every check is BLOCKED (not built), never a pass.
+ * Runs M1–M12. With STILLS_MEASURE_BUILT off every check is BLOCKED (not built), never a pass.
  */
-export async function runStillsMeasureChecks(opts: { forceBuilt?: boolean; log?: (s: string) => void } = {}): Promise<MeasureProofResult> {
+export async function runStillsMeasureChecks(opts: { log?: (s: string) => void } = {}): Promise<MeasureProofResult> {
   const log = opts.log ?? ((s: string) => console.log(s));
   const ids = Array.from({ length: 12 }, (_, i) => `M${i + 1}`);
-  if (!STILLS_MEASURE_BUILT && !opts.forceBuilt) return { results: Object.fromEntries(ids.map((id) => [id, 'BLOCKED: STILLS_MEASURE_BUILT is off'])), evidence: {} };
-  if (opts.forceBuilt) setStillsMeasureBuiltForTests(true);
+  if (!STILLS_MEASURE_BUILT) return { results: Object.fromEntries(ids.map((id) => [id, 'BLOCKED: STILLS_MEASURE_BUILT is off'])), evidence: {} };
+  await stillsReady(); // the checks call startStillsJob directly (the routes wait for the ffmpeg build line themselves)
   const results: Record<string, CheckResult> = {}, evidence: Record<string, unknown> = {};
   const fx = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-stills-fx-'));
   const h = createStillsHarness();
@@ -518,13 +517,12 @@ export async function runStillsMeasureChecks(opts: { forceBuilt?: boolean; log?:
   } finally {
     await h.close();
     fs.rmSync(fx, { recursive: true, force: true });
-    if (opts.forceBuilt) setStillsMeasureBuiltForTests(STILLS_MEASURE_BUILT);
   }
   return { results, evidence };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const r = await runStillsMeasureChecks({ forceBuilt: process.env.PF_STILLS_FORCE_BUILT === '1' });
+  const r = await runStillsMeasureChecks();
   console.log(JSON.stringify(r.evidence, null, 1));
   const fails = Object.entries(r.results).filter(([, v]) => v !== true);
   console.log(`stills-proof measure: ${Object.keys(r.results).length - fails.length}/${Object.keys(r.results).length} pass`);

@@ -13,9 +13,9 @@ import { COVER_EN, COVER_HE, COVER_REFUSAL_PATTERNS, dictionaries, HE_COVER, job
 /** One sample per refusal (numbers of at least three digits where the row has numbers, so the check that they are kept bites). */
 const ARGS: { [K in keyof typeof STILLS_REFUSALS]: Parameters<(typeof STILLS_REFUSALS)[K]['message']> } = {
   notBuilt: [], rangeTooLong: [1200, 600], emptyRange: [400, 400], outsideFile: [913, 1300, 1200], noVideo: ['ast_1'], notPictureClip: ['clp_1'],
-  otherFile: ['clp_1', 'ast_2'], inProgress: [], busy: [3], decodeFailed: [598, 600], greyCheck: [240, 12],
+  otherFile: ['clp_1', 'ast_2'], inProgress: [], busy: [3], decodeFailed: [598, 600], decodeTimes: [480, 10], warming: [], greyCheck: [240, 12],
   stillNotBuilt: [], stillOptions: ['sequenceId'], stillFormat: ['mp4-h264-aac'], jpegNeedsStill: [], stillScale: [], stillNoPicture: ['ast_3'],
-  stillFrame: [1500, 1200], stillTooLarge: [9248, 6936], stillCrop: [3001, 2001], stillPaperShape: ['a4', 'landscape'], ownerRequired: [],
+  stillFrame: [1500, 1200], stillTooLarge: [9248, 6936], stillTooSmall: [150, 12], stillCrop: [3001, 2001], stillPaperShape: ['a4', 'landscape'], ownerRequired: [],
   stillBrowserRoute: [], stillTags: ['comment'],
 };
 const sentences = () => (Object.keys(STILLS_REFUSALS) as (keyof typeof STILLS_REFUSALS)[]).map((k) => [k, (STILLS_REFUSALS[k].message as (...a: unknown[]) => string)(...(ARGS[k] as unknown[]))] as const);
