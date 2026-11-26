@@ -24,7 +24,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, chmod } from 'node:fs/promises';
+import { mkdir, chmod, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
@@ -226,6 +226,8 @@ export interface MadeHostOptions {
  */
 export class MadeHost {
   private browser?: Promise<{ browser: Browser; plan: MadeLaunchPlan }>;
+  /** the wrapper's folder this host made (removed on close) */
+  private madeDir?: string;
   constructor(private readonly opts: MadeHostOptions = {}) {}
 
   /** How the browser is (or would be) started, from facts (no launch). */
@@ -246,6 +248,7 @@ export class MadeHost {
         const dir = this.opts.workDir ?? path.join(os.tmpdir(), `pf-made-${process.pid}`);
         await mkdir(dir, { recursive: true });
         await chmod(dir, 0o711);
+        if (!this.opts.workDir) this.madeDir = dir;
         executablePath = await writeDropPrivilegeWrapper(path.join(dir, 'bin'), exe, plan.dropToUid, findSetpriv()!);
       }
       const browser = await chromium.launch({ ...(executablePath ? { executablePath } : {}), chromiumSandbox: plan.chromiumSandbox, args, timeout: 60_000 });
@@ -392,5 +395,6 @@ export class MadeHost {
     const b = await this.browser?.catch(() => undefined);
     this.browser = undefined;
     await b?.browser.close().catch(() => {});
+    if (this.madeDir) { await rm(this.madeDir, { recursive: true, force: true }).catch(() => {}); this.madeDir = undefined; }
   }
 }
