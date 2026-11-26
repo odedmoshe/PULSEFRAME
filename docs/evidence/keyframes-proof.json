@@ -1,7 +1,7 @@
 {
   "proof": "keyframes",
   "adr": "ADR-0019",
-  "ranAt": "2026-11-26T02:12:13.740Z",
+  "ranAt": "2026-11-26T07:02:36.913Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -19,13 +19,13 @@
   ],
   "measurements": {
     "sampler ns/sample (Chromium)": {
-      "value": 762,
+      "value": 779,
       "budget": "≤ 2000 ns",
       "ok": true,
       "gated": true
     },
     "sampler ns/sample (Node)": {
-      "value": 775.3,
+      "value": 679.8,
       "budget": "≤ 2000 ns",
       "ok": true,
       "gated": true
@@ -40,7 +40,7 @@
       }
     },
     "pathPoints ms for 600 points (Node, median of 15)": {
-      "value": 1.118,
+      "value": 1.378,
       "budget": "≤ 16 ms",
       "ok": true,
       "gated": true,
@@ -49,13 +49,13 @@
       }
     },
     "replace_clip_keyframes commit p95: 2000 keys minus 1 key (ms)": {
-      "value": 29.24,
+      "value": 22.87,
       "budget": "≤ +15 ms",
       "ok": false,
       "gated": false,
       "detail": {
-        "p95_1key": 6.66,
-        "p95_2000keys": 35.9,
+        "p95_1key": 10.84,
+        "p95_2000keys": 33.7,
         "documentBytes": 153647,
         "finding": "per-commit cost over the whole document (parse + migrate, applyTransaction, structuredClone, entity diff, SQLite write), growing with document size; not keyframe-specific (CPU profile of Store.commit with 2000 keys)",
         "label": "recorded, not gated"

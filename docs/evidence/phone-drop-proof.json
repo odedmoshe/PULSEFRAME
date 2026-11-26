@@ -1,16 +1,16 @@
 {
-  "ranAt": "2026-11-26T01:32:49.998Z",
+  "ranAt": "2026-11-26T06:51:22.092Z",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "cpus": 4,
     "memoryGiB": 15.7,
     "loadAtStart": [
-      0.88,
-      1.82,
-      2.05
+      1.71,
+      2.29,
+      2.37
     ]
   },
-  "freeDiskBytesAtStart": 4590628864,
+  "freeDiskBytesAtStart": 4364627968,
   "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
   "notVerifiedHere": [
     "a real phone and its pickers (iOS, Android; whether they hand over the original HEVC with its date)",
@@ -60,7 +60,7 @@
       "name": "no code: the door port refuses connections",
       "pass": true,
       "numbers": {
-        "port": 8952
+        "port": 38505
       }
     },
     {
@@ -105,7 +105,7 @@
       "pass": true,
       "numbers": {
         "qrPathEqual": true,
-        "typed": "127.0.0.1:8952",
+        "typed": "127.0.0.1:38505",
         "pinMatches": true,
         "dialogName": "dialog|ייבוא מהטלפון",
         "focusInside": true
@@ -146,7 +146,7 @@
           "waitingFor": "check"
         },
         "aSavedMs": 80,
-        "allSavedMs": 353
+        "allSavedMs": 109
       }
     },
     {
@@ -255,17 +255,17 @@
       "numbers": {
         "states": {
           "card-hevc.mp4": [
-            "ממתין",
             "ממיר 0%",
-            "ממיר 26%",
-            "ממיר 66%",
+            "ממיר 23%",
+            "ממיר 57%",
+            "ממיר 98%",
             "מוכן"
           ],
           "card2-hevc.mp4": [
             "ממתין",
             "ממיר 0%",
             "ממיר 12%",
-            "ממיר 57%",
+            "ממיר 60%",
             "מוכן"
           ]
         },
@@ -385,7 +385,7 @@
       "name": "killed with SIGKILL during a conversion and restarted: the code is gone (its port refuses), all 20 files import exactly once (20 assets whose originals are the 20 sources), the interrupted job ran again (attempt 2), and no temporary file is left once any orphan ffmpeg has exited",
       "pass": true,
       "numbers": {
-        "killedPid": 9045,
+        "killedPid": 18757,
         "convertingSeen": true,
         "doorClosed": true,
         "jobs": 20,
@@ -393,9 +393,9 @@
         "assets": 20,
         "distinctOriginals": 20,
         "interruptedAttempt": 2,
-        "orphanFfmpegAfterKill": "9094",
+        "orphanFfmpegAfterKill": "18804",
         "leftovers": [],
-        "secondsToAllImported": 8.223
+        "secondsToAllImported": 9.52
       }
     },
     {
@@ -404,26 +404,26 @@
       "pass": true,
       "numbers": {
         "idle": {
-          "p50": 3.4,
-          "p95": 8.6,
-          "max": 22
+          "p50": 3.3,
+          "p95": 8.8,
+          "max": 26.6
         },
         "convertingImports": {
-          "p50": 3.7,
-          "p95": 8.4,
-          "max": 18.3
+          "p50": 3.5,
+          "p95": 8,
+          "max": 40.8
         },
         "during300MBUpload": {
-          "p50": 4.9,
-          "p95": 11.6,
-          "max": 22.2
+          "p50": 4.7,
+          "p95": 12.5,
+          "max": 19.5
         },
         "limitMs": 120,
         "upload": 201,
         "load": [
-          2.5,
-          1.89,
-          2.03
+          2.61,
+          2.16,
+          2.29
         ]
       }
     },
@@ -496,7 +496,7 @@
     "p18Frames": "barcode frames at three positions between preview, server still and export: not run in this proof (the parity suite and proof:phase4 hold the shared compositor)",
     "pageLanguage": "the page follows navigator.language: an English-locale phone gets the English page first (review item; the owner decides whether a Hebrew household with en-US phones should get Hebrew first)"
   },
-  "seconds": 131,
+  "seconds": 143,
   "summary": {
     "passed": 31,
     "failed": [],

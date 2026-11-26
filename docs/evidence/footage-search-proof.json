@@ -1,5 +1,5 @@
 {
- "when": "2026-11-26T04:49:07.722Z",
+ "when": "2026-11-26T07:48:18.723Z",
  "exit": 0,
  "checksPassed": 19,
  "checks": 19,
@@ -8,13 +8,13 @@
    "check": "S1",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.4
+   "seconds": 0.5
   },
   {
    "check": "S1",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 2.6
+   "seconds": 2.9
   },
   {
    "check": "S2",
@@ -56,7 +56,7 @@
    "check": "S6",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.2
+   "seconds": 0.3
   },
   {
    "check": "S7",
@@ -86,19 +86,19 @@
    "check": "S9",
    "part": "integration",
    "verdict": "PASS",
-   "seconds": 0.3
+   "seconds": 0.4
   },
   {
    "check": "S10",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 4.2
+   "seconds": 4.7
   },
   {
    "check": "S11",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 1.3
+   "seconds": 1.5
   },
   {
    "check": "S12",
@@ -116,19 +116,19 @@
    "check": "S14",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 2.8
+   "seconds": 3.5
   },
   {
    "check": "S15",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.8
+   "seconds": 0.9
   },
   {
    "check": "S16",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.3
+   "seconds": 0.4
   },
   {
    "check": "S17",
@@ -146,7 +146,7 @@
    "check": "U1",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 12.9
+   "seconds": 14.3
   }
  ],
  "evidence": {
@@ -249,8 +249,8 @@
     "sample": "one sample on a shared 4-CPU machine, not gated",
     "vectors": 200000,
     "dim": 768,
-    "dotMs": 303.6,
-    "top200Ms": 56.4,
+    "dotMs": 301.8,
+    "top200Ms": 58.4,
     "best": 911833
    }
   },
@@ -365,9 +365,9 @@
    },
    "S15": {
     "scanLabels": [
-     "local.search.picture scan prj_8F4M1CEVRSU"
+     "local.search.picture scan prj_IFEqnBTwMaA"
     ],
-    "toolMs": 356,
+    "toolMs": 364,
     "queryDuringScan": "busy"
    },
    "S16": {
@@ -385,7 +385,7 @@
     },
     "found": [
      {
-      "asset": "ast_c3c2c057590",
+      "asset": "ast_2e2a07d2600",
       "start": "",
       "end": "",
       "sources": "name",
@@ -414,7 +414,7 @@
      "start": "9/10",
      "end": "13/10",
      "sources": "transcript",
-     "asset": "ast_b570186f1d0"
+     "asset": "ast_7d62adfe5a0"
     },
     "placed": {
      "commits": 1,
@@ -490,7 +490,7 @@
    },
    "S8": {
     "route": "server-software-canvas2d",
-    "exportSeconds": 0.633,
+    "exportSeconds": 0.734,
     "exportStatus": "succeeded",
     "exportBytes": 3111,
     "batches": 6,

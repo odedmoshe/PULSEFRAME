@@ -1,13 +1,13 @@
 {
-  "ranAt": "2026-11-26T01:15:56.513Z",
+  "ranAt": "2026-11-26T07:45:25.727Z",
   "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "logicalCpus": 4,
     "loadAverage": [
-      0.8,
-      1.7,
-      1.8
+      1.3,
+      1.8,
+      1.9
     ]
   },
   "scope": "Synthetic fixtures only (tones over seeded noise, solid-colour pictures); headless Chromium with a fake microphone fed from a file. Nobody listened; no real microphone or voice.",
@@ -18,31 +18,31 @@
       "id": "S1",
       "part": "server",
       "ok": true,
-      "seconds": 2.7
+      "seconds": 3.3
     },
     {
       "id": "S1b",
       "part": "server",
       "ok": true,
-      "seconds": 0.3
+      "seconds": 0.4
     },
     {
       "id": "S2",
       "part": "server",
       "ok": true,
-      "seconds": 0.5
+      "seconds": 0.7
     },
     {
       "id": "S2b",
       "part": "server",
       "ok": true,
-      "seconds": 5.1
+      "seconds": 5.2
     },
     {
       "id": "S3",
       "part": "server",
       "ok": true,
-      "seconds": 2.2
+      "seconds": 2.7
     },
     {
       "id": "S4",
@@ -54,7 +54,7 @@
       "id": "S5",
       "part": "server",
       "ok": true,
-      "seconds": 0.7
+      "seconds": 0.8
     },
     {
       "id": "S6",
@@ -66,19 +66,19 @@
       "id": "S7",
       "part": "server",
       "ok": true,
-      "seconds": 1.7
+      "seconds": 2.4
     },
     {
       "id": "S8",
       "part": "server",
       "ok": true,
-      "seconds": 9.5
+      "seconds": 10.3
     },
     {
       "id": "S9",
       "part": "server",
       "ok": true,
-      "seconds": 2.8
+      "seconds": 3.4
     },
     {
       "id": "S13",
@@ -90,7 +90,7 @@
       "id": "S11",
       "part": "server",
       "ok": true,
-      "seconds": 1.3
+      "seconds": 1.6
     },
     {
       "id": "S12",
@@ -108,115 +108,115 @@
       "id": "S15",
       "part": "server",
       "ok": true,
-      "seconds": 0.5
+      "seconds": 0.7
     },
     {
       "id": "S16",
       "part": "server",
       "ok": true,
-      "seconds": 0.4
+      "seconds": 0.5
     },
     {
       "id": "S19",
       "part": "server",
       "ok": true,
-      "seconds": 0.4
+      "seconds": 0.7
     },
     {
       "id": "S20",
       "part": "server",
       "ok": true,
-      "seconds": 0.5
+      "seconds": 0.6
     },
     {
       "id": "U1",
       "part": "ui",
       "ok": true,
-      "seconds": 3.6
+      "seconds": 3.8
     },
     {
       "id": "U2",
       "part": "ui",
       "ok": true,
-      "seconds": 5.8
+      "seconds": 6
     },
     {
       "id": "U3",
       "part": "ui",
       "ok": true,
-      "seconds": 6.7
+      "seconds": 7.1
     },
     {
       "id": "U4",
       "part": "ui",
       "ok": true,
-      "seconds": 4.4
+      "seconds": 4.6
     },
     {
       "id": "U5",
       "part": "ui",
       "ok": true,
-      "seconds": 4.6
+      "seconds": 4.9
     },
     {
       "id": "U6",
       "part": "ui",
       "ok": true,
-      "seconds": 6
+      "seconds": 7.2
     },
     {
       "id": "U7",
       "part": "ui",
       "ok": true,
-      "seconds": 10
+      "seconds": 10.6
     },
     {
       "id": "U8",
       "part": "ui",
       "ok": true,
-      "seconds": 7.6
+      "seconds": 8.3
     },
     {
       "id": "U9",
       "part": "ui",
       "ok": true,
-      "seconds": 9.4
+      "seconds": 9.7
     },
     {
       "id": "U10",
       "part": "ui",
       "ok": true,
-      "seconds": 6.3
+      "seconds": 6.5
     },
     {
       "id": "U12",
       "part": "ui",
       "ok": true,
-      "seconds": 6.9
+      "seconds": 7.5
     },
     {
       "id": "U13",
       "part": "ui",
       "ok": true,
-      "seconds": 6.4
+      "seconds": 7.1
     },
     {
       "id": "U14",
       "part": "ui",
       "ok": true,
-      "seconds": 8.8
+      "seconds": 9.6
     },
     {
       "id": "U15",
       "part": "ui",
       "ok": true,
-      "seconds": 1.8
+      "seconds": 2.3
     },
     {
       "id": "S11e",
       "part": "ui",
       "ok": true,
-      "seconds": 3
+      "seconds": 4.2
     }
   ]
 }

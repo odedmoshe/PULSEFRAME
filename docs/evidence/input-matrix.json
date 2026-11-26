@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T23:03:17.729Z",
+  "ranAt": "2026-11-26T08:15:39.155Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "gpu": "none"
   },
   "scope": "Synthetic variants of one 4-second barcode fixture, server export route, browser export route, and the editor preview (six paused frames per picture file and the sound onsets of one playback on the audio clock, within one frame; preview colour and level are not measured). The reference for each file is a direct ffmpeg rendering of that file with its raw timestamps, measured from the container start time that ffprobe reports (each decoded frame placed on the 30 fps grid by its own timestamp, square pixels; sound decoded from that start). The reference shares that definition of time zero with the product; it is independent of the product in everything after ingest (clip, audio plan, mixer, renderer, encoder). Sound is checked by beep onset times (±12 ms), by staying within about a frame of the picture, and by the peak level of each stereo channel at one beep (±1.5 dB against a direct decode of the input; a mono source is expected at full level in both channels; for more than two channels the reference uses the same down-mix rule as the product, so those coefficients are not independently verified). Picture is checked by frame identity and by the background colour of four frames (worst channel difference ≤ 12 of 255 against a direct decode of the input).",

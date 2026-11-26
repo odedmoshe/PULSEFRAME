@@ -1,15 +1,15 @@
 {
   "proof": "ai-ui",
   "adr": "ADR-0017",
-  "ranAt": "2026-11-18T01:33:25.383Z",
-  "machine": "Linux 6.18.44-fc-v595 x64",
+  "ranAt": "2026-11-26T07:50:01.814Z",
+  "machine": "Linux 6.18.44-fc-v880 x64",
   "note": "The run used the ffmpeg-only classic vocal remover; the translation is a typed fixture (no model ran). Functional evidence only, CPU profile.",
   "checks": [
     {
       "name": "with PF_DENOISE_BIN unset the AI voice-cleanup card says engine_not_configured; its setup steps (shown on request) are at least two, in Hebrew owner language, and no environment variable is named anywhere on the card (technical detail included)",
       "ok": true,
       "detail": {
-        "voiceTech": "הגדרת החיבור is not set: no engine is installed for this tool (the operator installs it; the product never does)",
+        "voiceTech": "הגדרת החיבור חסרה: לא הותקן מנוע לכלי הזה (ההתקנה היא של מי שמתקין, לא של התוכנה)",
         "voiceState": "engine_not_configured",
         "voiceSteps": [
           "הכלי הזה צריך תוכנה נלווית שעדיין לא מותקנת במחשב. העורך לא מתקין תוכנות בעצמו.",
@@ -62,7 +62,7 @@
       "name": "the clip's file was replaced by a copy made from it (derived provenance)",
       "ok": true,
       "detail": {
-        "assetId": "ast_a0f742ecfd0"
+        "assetId": "ast_de35f733240"
       }
     },
     {
@@ -80,7 +80,7 @@
       "name": "undo restores the clip's original file",
       "ok": true,
       "detail": {
-        "back": "ast_9732571c450"
+        "back": "ast_c5603a41430"
       }
     },
     {
@@ -104,7 +104,7 @@
         "code": "human_approval_required",
         "message": "only the project owner can mark a translation reviewed or not, from their own session",
         "details": {
-          "variantId": "var_8fd69a99030"
+          "variantId": "var_0cb96c3db10"
         },
         "hint": "Tell the owner which phrases to read; they mark it in the editor."
       }

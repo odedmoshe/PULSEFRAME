@@ -1,5 +1,5 @@
 {
- "when": "2026-11-26T00:54:02.027Z",
+ "when": "2026-11-26T07:22:38.128Z",
  "rasteriser": true,
  "evidence": {
   "1": {
@@ -153,9 +153,9 @@
   "18": {
    "rows": 600000,
    "problems": [],
-   "indexMs": 14666,
-   "queryMs": 99,
-   "prefixQueryMs": 600,
+   "indexMs": 15322,
+   "queryMs": 105,
+   "prefixQueryMs": 663,
    "firstPage": 50,
    "note": "one sample, recorded, not gated"
   },

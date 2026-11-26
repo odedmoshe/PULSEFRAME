@@ -1,6 +1,6 @@
 {
-  "at": "2026-11-26T01:17:29.550Z",
-  "wallSeconds": 91.21,
+  "at": "2026-11-26T07:47:22.025Z",
+  "wallSeconds": 114.454,
   "note": "partial is its own state and is never counted as a pass; nobody here listened: every value is a measurement",
   "summary": {
     "pass": [
@@ -443,8 +443,8 @@
               1
             ],
             "apply": 200,
-            "madeFrom": "ast_9e3551dc4b0",
-            "copyId": "ast_9e3551dc4b0"
+            "madeFrom": "ast_419c7643830",
+            "copyId": "ast_419c7643830"
           }
         }
       }
@@ -474,7 +474,7 @@
           "credits_for_description"
         ],
         "exportPlan": 200,
-        "strip": "{\"omit\":[\"sha256:83215cec202035e5f095a132a56f532575ae116bb35a9ab44a5b3605dc4d1c23\",\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\"],\"omitted\":[{\"hash\":\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\",\"assetId\":\"ast_b0f3d496190\",\"itemId\":\"mf-proof/so"
+        "strip": "{\"omit\":[\"sha256:83215cec202035e5f095a132a56f532575ae116bb35a9ab44a5b3605dc4d1c23\",\"sha256:cc88126215b2bdbdc8f4b4701f6a87dad79665eea76afb6fdd389a69a2a332d8\"],\"omitted\":[{\"hash\":\"sha256:83215cec202035e5f095a132a56f532575ae116bb35a9ab44a5b3605dc4d1c23\",\"assetId\":\"ast_b93b780a830\",\"itemId\":\"mf-proof/so"
       }
     },
     {
@@ -551,7 +551,7 @@
           110
         ],
         "offGrid": [
-          "clp_b11d97096d0"
+          "clp_41f5bb953d0"
         ],
         "off": []
       }
@@ -724,10 +724,10 @@
         "hosts": {
           "status": "pass",
           "measured": {
-            "copyId": "ast_c5e43fa01a0",
+            "copyId": "ast_f6f81f0f4d0",
             "sourceRangeStart": 1,
-            "viaAssetId": "ast_86f246c1e10",
-            "song": "ast_86f246c1e10",
+            "viaAssetId": "ast_3bd156db710",
+            "song": "ast_3bd156db710",
             "beatFrame": 40,
             "white": [
               40
@@ -747,7 +747,7 @@
       "status": "pass",
       "measured": {
         "listed": {
-          "clipId": "clp_d184dc80df0",
+          "clipId": "clp_40a30a20330",
           "framesFromBeatBefore": 0,
           "framesFromBeatAfter": 2
         },

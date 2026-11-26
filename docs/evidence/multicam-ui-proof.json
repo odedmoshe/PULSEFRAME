@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-26T01:37:41.611Z",
+  "ranAt": "2026-11-26T07:08:12.247Z",
   "result": "PASS",
   "checks": [
     {
@@ -60,7 +60,7 @@
       "name": "U2: the audio tap's onsets equal those of an untouched playback (no gap > 1 ms)",
       "ok": true,
       "detail": {
-        "maxDiffSeconds": 0.000009999999999843467,
+        "maxDiffSeconds": 0,
         "onsets": 28,
         "baselineOnsets": 28
       }
@@ -89,18 +89,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_55c38c6d460": "proxy",
-            "ast_6cc7681e8d0": "original",
-            "ast_fd908d1b530": "proxy"
+            "ast_476a8cab4e0": "proxy",
+            "ast_1db26967d90": "original",
+            "ast_cd636783e40": "proxy"
           },
           "sourcesUsed": {
-            "ast_55c38c6d460": [
+            "ast_476a8cab4e0": [
               "proxy"
             ],
-            "ast_6cc7681e8d0": [
+            "ast_1db26967d90": [
               "original"
             ],
-            "ast_fd908d1b530": [
+            "ast_cd636783e40": [
               "proxy"
             ]
           },
@@ -129,18 +129,18 @@
           "maxStills": 16,
           "decoderByteCacheBytes": 16777216,
           "sources": {
-            "ast_55c38c6d460": "original",
-            "ast_6cc7681e8d0": "original",
-            "ast_fd908d1b530": "original"
+            "ast_476a8cab4e0": "original",
+            "ast_1db26967d90": "original",
+            "ast_cd636783e40": "original"
           },
           "sourcesUsed": {
-            "ast_55c38c6d460": [
+            "ast_476a8cab4e0": [
               "original"
             ],
-            "ast_6cc7681e8d0": [
+            "ast_1db26967d90": [
               "original"
             ],
-            "ast_fd908d1b530": [
+            "ast_cd636783e40": [
               "original"
             ]
           },
@@ -157,18 +157,18 @@
       "detail": {
         "cutFramesMeasured": 12,
         "medianMs": 21.33,
-        "p95Ms": 34.67,
+        "p95Ms": 40,
         "medianFrames": 0.64,
-        "p95Frames": 1.04,
+        "p95Frames": 1.2,
         "allFrames": {
           "median": 13.33,
-          "p95": 21.33,
-          "max": 222.67
+          "p95": 30.67,
+          "max": 266.67
         },
         "baselineRun": {
           "median": 16,
-          "p95": 25.33,
-          "max": 30.67
+          "p95": 29.33,
+          "max": 60
         },
         "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
         "budget": "p95 <= 2 frames",
@@ -183,9 +183,9 @@
           "gaveRoom": 0
         },
         "loadAverage": [
-          1.76,
-          1.73,
-          1.94
+          2.17,
+          2.61,
+          2.57
         ]
       }
     },
@@ -275,8 +275,8 @@
       "name": "U5: a digit while paused gives +1 history entry, the segment under the playhead shows the angle, and undo restores it",
       "ok": true,
       "detail": {
-        "angleAfter": "ang_3a87278f743",
-        "expected": "ang_3a87278f743"
+        "angleAfter": "ang_a33a866b863",
+        "expected": "ang_a33a866b863"
       }
     },
     {
@@ -316,64 +316,64 @@
         "shownSegments": 7,
         "badges": [
           {
-            "angle": "ang_3a87278f742",
+            "angle": "ang_a33a866b862",
             "badge": {
-              "clipId": "clp_33f90063311",
-              "angleId": "ang_3a87278f742",
+              "clipId": "clp_bdd2302d161",
+              "angleId": "ang_a33a866b862",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_3a87278f743",
+            "angle": "ang_a33a866b863",
             "badge": {
-              "clipId": "clp_f73f4c875f0",
-              "angleId": "ang_3a87278f743",
+              "clipId": "clp_178a8facd70",
+              "angleId": "ang_a33a866b863",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_3a87278f744",
+            "angle": "ang_a33a866b864",
             "badge": {
-              "clipId": "clp_f73f4c875f1",
-              "angleId": "ang_3a87278f744",
+              "clipId": "clp_178a8facd71",
+              "angleId": "ang_a33a866b864",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_3a87278f743",
+            "angle": "ang_a33a866b863",
             "badge": {
-              "clipId": "clp_f73f4c875f2",
-              "angleId": "ang_3a87278f743",
+              "clipId": "clp_178a8facd72",
+              "angleId": "ang_a33a866b863",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_3a87278f744",
+            "angle": "ang_a33a866b864",
             "badge": {
-              "clipId": "clp_f73f4c875f3",
-              "angleId": "ang_3a87278f744",
+              "clipId": "clp_178a8facd73",
+              "angleId": "ang_a33a866b864",
               "text": "3 · Camera 3",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_3a87278f742",
+            "angle": "ang_a33a866b862",
             "badge": {
-              "clipId": "clp_f73f4c875f4",
-              "angleId": "ang_3a87278f742",
+              "clipId": "clp_178a8facd74",
+              "angleId": "ang_a33a866b862",
               "text": "1 · Camera 1",
               "w": 96.40625
             }
           },
           {
-            "angle": "ang_3a87278f743",
+            "angle": "ang_a33a866b863",
             "badge": {
-              "clipId": "clp_33f90063312",
-              "angleId": "ang_3a87278f743",
+              "clipId": "clp_bdd2302d162",
+              "angleId": "ang_a33a866b863",
               "text": "2 · Camera 2",
               "w": 96.40625
             }
@@ -446,27 +446,27 @@
   "measurements": {
     "sync": [
       {
-        "angleId": "ang_3a87278f741",
+        "angleId": "ang_a33a866b861",
         "verdict": "reference",
         "offsetSeconds": 0
       },
       {
-        "angleId": "ang_3a87278f742",
+        "angleId": "ang_a33a866b862",
         "verdict": "check",
         "offsetSeconds": -0.625
       },
       {
-        "angleId": "ang_3a87278f743",
+        "angleId": "ang_a33a866b863",
         "verdict": "confident",
         "offsetSeconds": 1.194187
       },
       {
-        "angleId": "ang_3a87278f744",
+        "angleId": "ang_a33a866b864",
         "verdict": "confident",
         "offsetSeconds": 0.499979
       },
       {
-        "angleId": "ang_3a87278f744",
+        "angleId": "ang_a33a866b864",
         "verdict": "unsynced",
         "offsetSeconds": null
       }
@@ -474,7 +474,7 @@
     "initialBoundaries": [
       {
         "frame": 1001,
-        "angleId": "ang_3a87278f743"
+        "angleId": "ang_a33a866b863"
       }
     ],
     "baseline": {
@@ -482,8 +482,8 @@
       "onsets": 28,
       "paintLatenessMs": {
         "median": 16,
-        "p95": 25.33,
-        "max": 30.67
+        "p95": 29.33,
+        "max": 60
       }
     },
     "u1": {
@@ -540,73 +540,73 @@
       "cuts": [
         {
           "frame": 60,
-          "angleId": "ang_3a87278f743"
+          "angleId": "ang_a33a866b863"
         },
         {
           "frame": 100,
-          "angleId": "ang_3a87278f744"
+          "angleId": "ang_a33a866b864"
         },
         {
           "frame": 140,
-          "angleId": "ang_3a87278f742"
+          "angleId": "ang_a33a866b862"
         },
         {
           "frame": 180,
-          "angleId": "ang_3a87278f743"
+          "angleId": "ang_a33a866b863"
         },
         {
           "frame": 220,
-          "angleId": "ang_3a87278f744"
+          "angleId": "ang_a33a866b864"
         },
         {
           "frame": 260,
-          "angleId": "ang_3a87278f742"
+          "angleId": "ang_a33a866b862"
         },
         {
           "frame": 300,
-          "angleId": "ang_3a87278f743"
+          "angleId": "ang_a33a866b863"
         },
         {
           "frame": 340,
-          "angleId": "ang_3a87278f744"
+          "angleId": "ang_a33a866b864"
         },
         {
           "frame": 380,
-          "angleId": "ang_3a87278f742"
+          "angleId": "ang_a33a866b862"
         },
         {
           "frame": 420,
-          "angleId": "ang_3a87278f743"
+          "angleId": "ang_a33a866b863"
         },
         {
           "frame": 460,
-          "angleId": "ang_3a87278f744"
+          "angleId": "ang_a33a866b864"
         },
         {
           "frame": 500,
-          "angleId": "ang_3a87278f742"
+          "angleId": "ang_a33a866b862"
         },
         {
           "frame": 1001,
-          "angleId": "ang_3a87278f743"
+          "angleId": "ang_a33a866b863"
         }
       ]
     },
     "u4": {
       "cutFramesMeasured": 12,
       "medianMs": 21.33,
-      "p95Ms": 34.67,
+      "p95Ms": 40,
       "medianFrames": 0.64,
-      "p95Frames": 1.04,
+      "p95Frames": 1.2,
       "allFrames": {
         "median": 13.33,
-        "p95": 21.33,
-        "max": 222.67
+        "p95": 30.67,
+        "max": 266.67
       },
       "baselineRun": {
         "median": 16,
-        "p95": 25.33,
-        "max": 30.67
+        "p95": 29.33,
+        "max": 60
       },
       "progressMd74": "median 5-15 ms, p95 about 21-24 ms after the clock reached the frame (one 3.5 s headless run)",
       "budget": "p95 <= 2 frames",
@@ -621,9 +621,9 @@
         "gaveRoom": 0
       },
       "loadAverage": [
-        1.76,
-        1.73,
-        1.94
+        2.17,
+        2.61,
+        2.57
       ],
       "prefetchVerdict": "budget met in this run"
     }

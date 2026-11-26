@@ -1,5 +1,5 @@
 {
- "when": "2026-11-26T04:48:25.207Z",
+ "when": "2026-11-26T07:43:08.999Z",
  "exit": 0,
  "checksPassed": 16,
  "checks": 16,
@@ -14,49 +14,49 @@
    "check": "P2",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 5
+   "seconds": 6
   },
   {
    "check": "P3",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 7.3
+   "seconds": 9.2
   },
   {
    "check": "P4",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 2.4
+   "seconds": 2.6
   },
   {
    "check": "P5",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 6.2
+   "seconds": 6.8
   },
   {
    "check": "P6",
    "part": "core",
    "verdict": "PASS",
-   "seconds": 2.3
+   "seconds": 2.2
   },
   {
    "check": "P6",
    "part": "integration",
    "verdict": "PASS",
-   "seconds": 9.5
+   "seconds": 11.8
   },
   {
    "check": "P7",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.5
+   "seconds": 0.7
   },
   {
    "check": "P7",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 2.6
+   "seconds": 3.2
   },
   {
    "check": "P8",
@@ -68,25 +68,25 @@
    "check": "P8",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.2
+   "seconds": 0.4
   },
   {
    "check": "P9",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0
+   "seconds": 0.1
   },
   {
    "check": "P9",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 2.1
+   "seconds": 2.8
   },
   {
    "check": "P10",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 0.1
+   "seconds": 0.2
   },
   {
    "check": "P11",
@@ -98,13 +98,13 @@
    "check": "P12",
    "part": "server",
    "verdict": "PASS",
-   "seconds": 1.3
+   "seconds": 1.6
   },
   {
    "check": "P13",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 4.9
+   "seconds": 5
   },
   {
    "check": "P14",
@@ -116,25 +116,25 @@
    "check": "P15",
    "part": "core",
    "verdict": "PASS",
-   "seconds": 0.7
+   "seconds": 0.8
   },
   {
    "check": "P15",
    "part": "ui",
    "verdict": "PASS",
-   "seconds": 0.5
+   "seconds": 0.6
   },
   {
    "check": "P15",
    "part": "integration",
    "verdict": "PASS",
-   "seconds": 1.1
+   "seconds": 1.4
   },
   {
    "check": "P16",
    "part": "core",
    "verdict": "PASS",
-   "seconds": 0.2
+   "seconds": 0.1
   }
  ],
  "evidence": {
@@ -218,12 +218,12 @@
    },
    "P16": {
     "sample": "one sample each (shared machine)",
-    "usageMs700x300": 33.1,
-    "screenTimeMs": 2.4,
+    "usageMs700x300": 31,
+    "screenTimeMs": 1.6,
     "uses": 517,
     "pictureFrames": 28000,
-    "commitMsAdd2000th": 30.4,
-    "commitMsOtherOpAt2000": 30.7,
+    "commitMsAdd2000th": 32,
+    "commitMsOtherOpAt2000": 27.2,
     "the2001stRefused": "out_of_bounds",
     "documentBytes": 413804
    }
@@ -288,7 +288,7 @@
      ]
     ],
     "untimedCopies": [
-     "ast_837d5b5d061"
+     "ast_5735c9045f1"
     ]
    },
    "P9": {
@@ -317,19 +317,19 @@
    "P12": {
     "picks": [
      [
-      "ast_0307ef697b0",
+      "ast_d2d7b2fcab0",
       "pearl",
       "rng_a1",
       60
      ],
      [
-      "ast_21c366d7d60",
+      "ast_012a4464c70",
       "pearl",
       "rng_b",
       44
      ],
      [
-      "ast_61923087eb0",
+      "ast_f28765b3730",
       "pearl",
       "rng_c",
       15

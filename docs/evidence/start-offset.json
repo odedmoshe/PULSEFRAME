@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-11-24T22:58:00.379Z",
+  "ranAt": "2026-11-26T08:07:14.667Z",
   "result": "PASSED",
   "machine": {
-    "platform": "Linux 6.18.44-fc-v819 x64",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "platform": "Linux 6.18.44-fc-v880 x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
     "gpu": "none"
   },
   "scope": "Synthetic fixtures remuxed with shifted video timestamps (MP4 and Matroska): server export, scene detection, and paused preview frames in the editor. Sound that starts late is measured on the server export, preview playback and browser export. Not covered: playback (proxy) picture frames, negative start times, real camera files.",
@@ -12,7 +12,7 @@
   "rows": [
     {
       "case": "zero",
-      "projectId": "prj_yM3szr4ksy4",
+      "projectId": "prj_BfvAcB3D9MI",
       "container": "mp4",
       "startTime": 0,
       "storedStart": null,
@@ -41,7 +41,7 @@
     },
     {
       "case": "off-0.010",
-      "projectId": "prj_YxLiMGm1Lls",
+      "projectId": "prj_Bhyqe0sEouo",
       "container": "mp4",
       "startTime": 0.010026,
       "storedStart": {
@@ -73,7 +73,7 @@
     },
     {
       "case": "off-0.021",
-      "projectId": "prj_x3S6SpP5L0Q",
+      "projectId": "prj_l8as11xPXMg",
       "container": "mp4",
       "startTime": 0.021029,
       "storedStart": {
@@ -105,7 +105,7 @@
     },
     {
       "case": "off-0.021-mkv",
-      "projectId": "prj_wD5RTFqsPTU",
+      "projectId": "prj_zGheifSpoGY",
       "container": "mkv",
       "startTime": 0.042,
       "storedStart": {
@@ -137,7 +137,7 @@
     },
     {
       "case": "off-0.500",
-      "projectId": "prj_sobCYUFv5vU",
+      "projectId": "prj_pWfFYwFUdxs",
       "container": "mp4",
       "startTime": 0.5,
       "storedStart": {
