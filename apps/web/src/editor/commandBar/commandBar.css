@@ -35,6 +35,10 @@
 .pf-bar-link { background: none; border: 0; padding: 0; font: inherit; font-size: var(--pf-fs-xs); color: var(--pf-frame); text-decoration: underline; cursor: pointer; }
 .pf-bar-link:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; border-radius: var(--pf-r-xs); }
 .pf-bar-asst-stage { color: var(--pf-agent); font-size: var(--pf-fs-xs); }
+/* the local assistant's suggestion: where it came from, the phrase (one dir=auto span), and the badge that stays until the first edit */
+.pf-bar-origin { display: inline-block; padding-inline: var(--pf-sp-3); border-radius: var(--pf-r-xs); background: var(--pf-surface-1); color: var(--pf-text-2); box-shadow: inset 0 0 0 1px var(--pf-line); font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-semibold); }
+.pf-bar-phrase { color: var(--pf-text); font-weight: var(--pf-fw-semibold); overflow-wrap: anywhere; }
+.pf-bar-badge { align-self: flex-start; display: inline-block; padding: var(--pf-sp-2) var(--pf-sp-4); border-radius: var(--pf-r-sm); color: var(--pf-text); background: color-mix(in srgb, var(--pf-attention) 14%, transparent); box-shadow: inset 0 0 0 1px var(--pf-attention); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); }
 /* Settings */
 .pf-asst { display: flex; flex-direction: column; gap: var(--pf-sp-4); }
 .pf-asst-field { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); align-items: center; gap: var(--pf-sp-4); }

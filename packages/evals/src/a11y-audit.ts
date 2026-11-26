@@ -44,6 +44,8 @@ import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cach
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
 import { musicfitA11yScenarios } from './a11y-musicfit.ts';
+import { instrumentsA11yScenarios } from './a11y-instruments.ts';
+import { assistantLocalA11yScenarios } from './assistant-local-proof.ui.ts';
 import { pearlsA11yScenarios } from './a11y-pearls.ts';
 import { storyA11yScenarios } from './a11y-story.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
@@ -863,6 +865,18 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // the local language assistant (wave 7 assistant): its Settings fields in three states of the check, and the row from «לשאול…» to «הכנס לשורה» (assistant-local-proof.ui.ts; contract-shaped fixtures)
+      for (const sc of assistantLocalA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «כלים מוקלטים» (wave 7 instruments): the «צליל» radiogroup not set, not calibrated, ready with its duties, the blind pair, a refused add (a11y-instruments.ts)
+      for (const sc of instrumentsA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       if (await page.getByTestId('cache-fast-switch').count() === 0) { await page.getByTestId('export').click(); await page.getByTestId('cache-fast-switch').waitFor({ timeout: 8000 }).catch(() => {}); }
       if ((await page.getByTestId('cache-fast-switch').getAttribute('aria-checked').catch(() => null)) === 'true') await page.getByTestId('cache-fast-switch').click();
       if (await page.getByTestId('export-sheet').count()) { await page.keyboard.press('Escape'); await page.getByTestId('export-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {}); }
@@ -1183,6 +1197,24 @@ async function main() {
       await auditState('start-hub', { shown: (await page.getByTestId('welcome').count()) === 1 });
       // music that fits the film (wave 7 musicfit) in the light theme: the same six scenarios as the dark pass (a11y-musicfit.ts)
       for (const sc of musicfitA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «חיפוש בצילומים» (wave 7 search) in the light theme: the same scenarios as the dark pass, each on its own scratch project (a11y-search.ts)
+      for (const sc of searchA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // the local language assistant (wave 7 assistant) in the light theme: the same nine scenarios as the dark pass (assistant-local-proof.ui.ts; contract-shaped fixtures)
+      for (const sc of assistantLocalA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «כלים מוקלטים» (wave 7 instruments) in the light theme: the same five scenarios as the dark pass; the «צליל» radiogroup not set, not calibrated, ready with its duties, the blind pair, a refused add (a11y-instruments.ts)
+      for (const sc of instrumentsA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });

@@ -29,8 +29,8 @@ import type { Governance } from '../governance.ts';
 import type { FifoComputeLane } from '../lane.ts';
 import { ApiError, type Store } from '../store.ts';
 
-/** True once builder B has built the runtime, the routes and the tool. */
-export const SEARCH_SERVER_BUILT = false;
+/** True once builder B has built the runtime, the routes and the tool (set at integration, wave 7). */
+export const SEARCH_SERVER_BUILT = true;
 /** The durable job of a scan. */
 export const SEARCH_INDEX_JOB_TYPE = 'search-index';
 /** The folder under the data directory that holds index.sqlite (never in a backup: backup.ts copies named files and folders only). */
@@ -64,8 +64,11 @@ export const SEARCH_PICTURE = {
   totalBytes: 1539637736,
   worker: 'apps/server/tools/pf_search.py',
 } as const;
-/** SHA-256 of the reviewed pf_search.py, set at integration (a different file is engine_unverified). null = not built. */
-export const SEARCH_WORKER_SHA256: string | null = null;
+/**
+ * SHA-256 of the reviewed pf_search.py (a different file is engine_unverified). The lead read all of the script on 2026-11-25 and
+ * approved exactly this content; changing one byte of the script needs a new review before this value changes.
+ */
+export const SEARCH_WORKER_SHA256: string | null = '3b7d40990385b166b5f42b0a99eab60a717e4741e569c6f4762cf15b3e5141c1';
 
 /** One model behind picture search. The production one speaks to pf_search.py (workers.ts); the TEST double is testEmbedder.ts. */
 export interface Embedder {

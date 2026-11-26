@@ -3,11 +3,18 @@
  * (wave 7 assistant track; .artifacts/wave7/assistant-decisions.md §4). No model runs here: every check is about the editor's own
  * behaviour (loopback only, grammar first, grounding, no money, privacy at rest, honest states), never about the quality of a model.
  * LEAD: the entry point and the checks. Parts: assistant-local-proof.server.ts (builder B: L1–L12, L14, L15) and
- * assistant-local-proof.ui.ts (builder C: L13). The integration step imports them here and sets ASSISTANT_LOCAL_PROOF_BUILT; until
- * then it runs nothing and exits 2 (blocked), never a pass. The stand-in runs in this process on an ephemeral 127.0.0.1 port; the
- * server under test on its own ephemeral port. Writes docs/evidence/assistant-local-proof.json when built.
+ * assistant-local-proof.ui.ts (builder C: L13), imported here (integration, wave 7). The stand-in runs in this process on an ephemeral
+ * 127.0.0.1 port; the server under test on its own ephemeral port. Writes docs/evidence/assistant-local-proof.json.
+ * Order: the server part's checks first (its first check installs L14's process-wide socket hook), then L13 (the browser part, its own
+ * server, adapter and stand-in in this same process), then L14 last, so L14's "whole proof" counts L13's sockets too. Chromium's own
+ * traffic is another process and is not counted by the hook. Exit 0 every check passed; 1 a check failed.
  */
-export const ASSISTANT_LOCAL_PROOF_BUILT = false;
+import fs from 'node:fs';
+import path from 'node:path';
+import { ASSISTANT_LOCAL_PROOF_SERVER, stopAssistantLocalProofServer } from './assistant-local-proof.server.ts';
+import { ASSISTANT_LOCAL_PROOF_UI, stopAssistantLocalProofUi } from './assistant-local-proof.ui.ts';
+
+export const ASSISTANT_LOCAL_PROOF_BUILT = ASSISTANT_LOCAL_PROOF_SERVER.built && ASSISTANT_LOCAL_PROOF_UI.built;
 export const ASSISTANT_LOCAL_CHECKS: Readonly<Record<string, string>> = {
   L1: 'with the local adapter chosen and no port saved the owner\'s status is provider_not_configured; with a port it is ready; seven non-owner credentials read only connected, setup and detail (no port, no model name, no last check)',
   L2: 'PUT /assistant/config refuses a local block holding a host, a URL or a path with 400 and stores nothing; every URL the adapter dialled during the whole proof starts with http://127.0.0.1:',
@@ -30,3 +37,35 @@ if (!ASSISTANT_LOCAL_PROOF_BUILT) {
   console.error(`assistant-local-proof: not built yet; ${Object.keys(ASSISTANT_LOCAL_CHECKS).length} checks pending (${Object.keys(ASSISTANT_LOCAL_CHECKS).join(', ')}); nothing was measured`);
   process.exit(2);
 }
+
+const root = path.resolve(import.meta.dirname, '../../..');
+const OUT = path.join(root, 'docs/evidence/assistant-local-proof.json');
+type Status = 'pass' | 'fail';
+const order = [...Object.keys(ASSISTANT_LOCAL_CHECKS).filter((id) => id !== 'L13' && id !== 'L14'), 'L13', 'L14'];
+const results: { id: string; name: string; status: Status; ms: number; why?: string }[] = [];
+try {
+  for (const id of order) {
+    const run = ASSISTANT_LOCAL_PROOF_UI.checks[id] ?? ASSISTANT_LOCAL_PROOF_SERVER.checks[id];
+    const t0 = Date.now();
+    let r: true | string;
+    try { r = run ? await run() : 'no part implements this check'; } catch (e) { r = `error: ${(e as Error)?.message ?? String(e)}`; }
+    const status: Status = r === true ? 'pass' : 'fail';
+    results.push({ id, name: ASSISTANT_LOCAL_CHECKS[id]!, status, ms: Date.now() - t0, ...(r === true ? {} : { why: r }) });
+    console.log(`${status === 'pass' ? '  ok  ' : ' FAIL '} ${id} ${r === true ? '' : r.slice(0, 600)}`);
+  }
+} finally {
+  await stopAssistantLocalProofUi().catch(() => {});
+  await stopAssistantLocalProofServer().catch(() => {});
+}
+results.sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
+const counts = { pass: results.filter((r) => r.status === 'pass').length, fail: results.filter((r) => r.status === 'fail').length };
+const result = counts.fail ? 'FAIL' : 'PASS';
+fs.writeFileSync(OUT, JSON.stringify({
+  ranAt: new Date().toISOString(),
+  result,
+  counts,
+  scope: 'In-process servers on 127.0.0.1 and a labelled STAND-IN of llama.cpp\'s server (apps/server/src/assistant/local/standIn.ts) answering scripted JSON; headless Chromium for L13. NO MODEL RAN: every check is about the editor\'s own behaviour (loopback only, grammar first, grounding, no money, privacy at rest, honest states). Not proven here: a real llama-server, the quality of any model\'s Hebrew, its speed, a screen reader. Timings are one sample on a shared machine.',
+  checks: results,
+}, null, 2) + '\n');
+console.log(`\nassistant-local proof ${result}: pass ${counts.pass}, fail ${counts.fail}. Evidence: docs/evidence/assistant-local-proof.json`);
+process.exit(counts.fail ? 1 : 0);

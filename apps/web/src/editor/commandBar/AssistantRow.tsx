@@ -9,14 +9,15 @@
  * The status is whole only for the owner's session; any other session reads connected or not, and the row shows no amount.
  * Nothing here pretends a model answered: a failed or missing status reads as not connected.
  */
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { Bot } from 'lucide-react';
-import { ASSISTANT_STAGES, isOwnerStatus, type AssistantStatus, type AssistantStatusAnswer, type OpCall } from '@pulseframe/core';
+import { ASSISTANT_STAGES, isLocalOutput, isOwnerStatus, type AssistantStatus, type AssistantStatusAnswer, type BarResultKind, type OpCall } from '@pulseframe/core';
 import type { Lang } from '@pulseframe/i18n';
 import { api, ApiFailure } from '../../api.ts';
 import { CHROME_STRINGS } from '../chrome.strings.ts';
 import { setSettingsOpen } from '../chromeState.ts';
-import { useBarEditor } from './useBarResult.ts';
+import { getBarBridge, putInBar, subscribeBarBridge, useBarEditor } from './useBarResult.ts';
+import { isLocalAdapter, localRowState, localText, type LocalRowState } from './localAssistant.logic.ts';
 import { COMMAND_BAR_TESTIDS as TID } from './commandBar.testids.ts';
 import { auto, barText, dict, ltr } from './commandBar.strings.ts';
 import type { AssistantRowProps } from './contract.ts';
@@ -60,6 +61,138 @@ export const releasedLine = (lang: Lang, r: { cents: number; gone: boolean }): s
 
 type Job = { phase: 'idle' } | { phase: 'running'; jobId: string; stage: string | null; canceling: boolean } | { phase: 'canceled'; sent: boolean; jobId?: string } | { phase: 'failed'; words: RefusalWords; jobId?: string }
   | { phase: 'released'; cents: number; gone: boolean } | { phase: 'proposal'; proposalId: string; ops: OpCall[] | null; explanation: string | null; count: number };
+
+type LocalJob = { id: string; status: string; stage: string | null; output: unknown; error: unknown; attempt?: number | null };
+const POLL_MS = 700;
+
+/**
+ * The LOCAL assistant's part of the row (wave 7; decisions §4/§5): «לשאול את העוזר המקומי» under an unknown result only; while it works
+ * the stage in words and «ביטול הבקשה»; then the suggested phrase (one dir=auto span) with «הכנס לשורה» (the palette's input gets the
+ * phrase; the bar's grammar reads it and shows its preview; Enter commits one transaction, one undo; this row never commits) and
+ * «התעלם»; both call `taken`, so the typed text is erased on the server. Every failure is a sentence with its next step; «not
+ * understood» shows no phrase and no button. No money word anywhere: a local request costs nothing and holds nothing.
+ */
+function LocalPart({ q, lang, owner, rowRef }: { q: string; lang: Lang; owner: boolean; rowRef: React.RefObject<HTMLDivElement | null> }): ReactElement {
+  const { editor, state } = useBarEditor();
+  const bar = useSyncExternalStore(subscribeBarBridge, getBarBridge, getBarBridge);
+  const [job, setJob] = useState<LocalJob | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [failure, setFailure] = useState<RefusalWords | null>(null);
+  const [canceling, setCanceling] = useState(false);
+  const [note, setNote] = useState<'ignored' | 'takenFailed' | null>(null);
+  const [inserted, setInserted] = useState<string | null>(null);
+  const alive = useRef(true);
+  const asked = useRef<string | null>(null); // the text the request was made for
+  const untaken = useRef<string | null>(null); // a succeeded job whose phrase the server still holds
+  const running = useRef<string | null>(null);
+  const canceled = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; const id = untaken.current; if (id) void api.assistantTaken(id).catch(() => {}); }; }, []);
+  const take = async (jobId: string): Promise<boolean> => { if (untaken.current === jobId) untaken.current = null; try { await api.assistantTaken(jobId); return true; } catch { return false; } };
+
+  const kind = bar.query.trim() === q ? bar.kind : null; // the grammar's answer for THIS text (it lags a large project by its debounce)
+  const base = localRowState(kind, job);
+  const rs = asking && !job ? ({ kind: 'pending', stage: 'sending' } as const) : failure ? ({ kind: 'failed', code: '', message: '' } as const) : base;
+
+  // the owner edited the text after the answer arrived: that answer was for other words; erase it and offer again
+  useEffect(() => {
+    if (job && rs.kind === 'suggested' && asked.current !== null && asked.current !== q) { void take(job.id); setJob(null); }
+    if (inserted !== null && q !== inserted) setInserted(null);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // keyboard: the button that went away hands the focus to the next one, unless the owner moved it elsewhere
+  const focusIn = (id: string) => { const el = rowRef.current?.querySelector<HTMLElement>(`[data-testid="${id}"]`); el?.focus(); };
+  useEffect(() => {
+    const a = document.activeElement;
+    if (a && a !== document.body && !rowRef.current?.contains(a)) return;
+    if (rs.kind === 'pending') focusIn(TID.assistantCancel);
+    else if (rs.kind === 'suggested') focusIn(TID.assistantLocalInsert);
+    else if (rs.kind === 'failed' || rs.kind === 'none' || rs.kind === 'canceled') focusIn(TID.assistantLocalAsk);
+  }, [rs.kind]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ask = async () => {
+    const doc = state.doc;
+    if (!doc || !q || !owner) return;
+    setFailure(null); setNote(null); setInserted(null); setJob(null); setCanceling(false); canceled.current = false;
+    asked.current = q; setAsking(true);
+    try {
+      const { jobId } = await api.askAssistant(doc.id, { text: q, selection: [...state.selection], playheadFrame: editor.frame, lang, ...(state.activeSequenceId ? { sequenceId: state.activeSequenceId } : {}) });
+      running.current = jobId;
+      for (;;) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        if (!alive.current) return;
+        const j = await api.job(jobId) as LocalJob;
+        if (!alive.current) return;
+        if (j.status === 'succeeded') { if (isLocalOutput(j.output) && j.output.phrase) untaken.current = j.id; setAsking(false); setJob(j); running.current = null; return; }
+        if (['canceled', 'failed', 'submission-unknown'].includes(j.status)) { setAsking(false); setJob(j); running.current = null; return; }
+        setAsking(false); setJob(j);
+      }
+    } catch (e) {
+      running.current = null;
+      if (alive.current) { setAsking(false); setFailure(refusalWords(lang, e instanceof ApiFailure ? { code: e.code, message: e.message, hint: e.hint ?? null } : { message: e instanceof Error ? e.message : String(e) })); }
+    }
+  };
+  const cancel = async (from: HTMLElement) => {
+    const id = running.current ?? job?.id;
+    if (!id) return;
+    canceled.current = true; setCanceling(true);
+    (from.closest('[role=dialog]')?.querySelector('.pf-pal-input') as HTMLElement | null)?.focus(); // the button leaves with the request: the keyboard returns to the input
+    try { await api.cancelJob(id); } catch (e) { canceled.current = false; if (alive.current) setCanceling(false); editor.fail(e); }
+  };
+  const insert = async (s: Extract<typeof rs, { kind: 'suggested' }>) => {
+    // the bar's own scopes: the preview lives in «הכול»; from «עוזר» the owner is taken there
+    (rowRef.current?.closest('[role=dialog]')?.querySelector('[data-testid=palette-scope-assistant][aria-pressed=true]') ? rowRef.current.closest('[role=dialog]')!.querySelector<HTMLElement>('[data-testid=palette-scope-all]') : null)?.click();
+    if (!putInBar(s.phrase)) { editor.fail(new Error('the palette is not open')); return; }
+    setInserted(s.phrase); setJob(null); setNote(null);
+    if (!(await take(s.jobId)) && alive.current) setNote('takenFailed');
+  };
+  const ignore = async (s: Extract<typeof rs, { kind: 'suggested' | 'none' }>) => {
+    setJob(null); setNote('ignored');
+    (rowRef.current?.closest('[role=dialog]')?.querySelector('.pf-pal-input') as HTMLElement | null)?.focus();
+    if (!(await take(s.jobId)) && alive.current) setNote('takenFailed');
+  };
+  const failedWords = failure ?? (rs.kind === 'failed' ? refusalWords(lang, { code: rs.code, message: rs.message }) : null);
+  return <LocalRowView lang={lang} owner={owner} q={q} rs={rs} kind={kind} asking={asking} canceling={canceling} inserted={inserted} note={note} failedWords={failedWords} on={{ ask: () => void ask(), cancel: (el) => void cancel(el), insert: (x) => void insert(x), ignore: (x) => void ignore(x) }} />;
+}
+
+export interface LocalRowViewProps {
+  lang: Lang; owner: boolean; q: string; rs: LocalRowState; kind: BarResultKind | null; asking: boolean; canceling: boolean; inserted: string | null;
+  note: 'ignored' | 'takenFailed' | null; failedWords: RefusalWords | null;
+  on: { ask(): void; cancel(el: HTMLElement): void; insert(s: Extract<LocalRowState, { kind: 'suggested' }>): void; ignore(s: Extract<LocalRowState, { kind: 'suggested' | 'none' }>): void };
+}
+/** What the local row shows for a state (pure: rendered to markup in tests). */
+export function LocalRowView({ lang, owner, q, rs, kind, asking, canceling, inserted, note, failedWords, on }: LocalRowViewProps): ReactElement {
+  const askButton = owner && (rs.kind === 'offer' || (kind === 'unknown' && (rs.kind === 'failed' || rs.kind === 'none' || rs.kind === 'canceled')));
+  return (
+    <>
+      {rs.kind === 'offer' && <span className="pf-bar-asst-line">{dict(lang, 'assistant.local.nothingLeaves')}</span>}
+      {rs.kind === 'hidden' && inserted === null && kind !== null && <span className="pf-bar-asst-line">{localText(lang, 'row.local.understoodByBar')}</span>}
+      {rs.kind === 'pending' && <span className="pf-bar-asst-stage" role="status" data-testid={TID.assistantStage} data-stage={rs.stage ?? undefined} data-canceling={canceling || undefined}>{canceling ? localText(lang, 'row.local.canceling') : barText(lang, 'assistant.row.stage', { stage: stageWords(lang, rs.stage) })}</span>}
+      {rs.kind === 'pending' && owner && !canceling && <span className="pf-bar-asst-actions"><button type="button" className="pf-bar-link" data-testid={TID.assistantCancel} onClick={(e) => on.cancel(e.currentTarget)}>{barText(lang, 'assistant.row.cancel')}</button></span>}
+      {rs.kind === 'suggested' && (
+        <span className="pf-bar-asst-proposal">
+          <span className="pf-bar-asst-line" role="status" data-testid={TID.assistantLocalSuggestion} data-intent={rs.intent}>
+            <span className="pf-bar-origin">{dict(lang, 'assistant.local.title')}</span> {dict(lang, 'assistant.local.suggested')} <span dir="auto" className="pf-bar-phrase">{rs.phrase}</span>
+          </span>
+          {rs.dropped && <span className="pf-bar-asst-line">{dict(lang, 'assistant.local.dropped')}</span>}
+          {owner && (
+            <span className="pf-bar-asst-actions">
+              <button type="button" className="pf-pal-btn" data-testid={TID.assistantLocalInsert} onClick={() => on.insert(rs)}>{dict(lang, 'assistant.local.insert')}</button>
+              <button type="button" className="pf-pal-btn" data-testid={TID.assistantLocalIgnore} onClick={() => on.ignore(rs)}>{dict(lang, 'assistant.local.ignore')}</button>
+            </span>
+          )}
+        </span>
+      )}
+      {rs.kind === 'none' && <span className="pf-bar-asst-line" role="status" data-local-state="none">{dict(lang, 'assistant.local.none')}</span>}
+      {rs.kind === 'canceled' && <span className="pf-bar-asst-stage" role="status" data-testid={TID.assistantCanceled} data-sent={rs.sent ? 'true' : 'false'}>{localText(lang, rs.sent ? 'row.local.canceledSent' : 'row.local.canceledUnsent')}</span>}
+      {failedWords && <span className="pf-asst-bad" role="status" data-local-state="failed"><WithReason lang={lang} k="assistant.row.failed" words={failedWords} /></span>}
+      {inserted !== null && q === inserted && <span className="pf-bar-badge" role="status" data-testid={TID.assistantLocalBadge}>{dict(lang, 'assistant.local.badge')}</span>}
+      {inserted !== null && q === inserted && <span className="pf-bar-asst-line">{localText(lang, 'row.local.inserted')}</span>}
+      {note === 'ignored' && <span className="pf-bar-asst-line" role="status">{localText(lang, 'row.local.ignored')}</span>}
+      {note === 'takenFailed' && <span className="pf-asst-bad" role="status">{localText(lang, 'row.local.takenFailed')}</span>}
+      {askButton && <span className="pf-bar-asst-actions"><button type="button" className="pf-pal-btn" data-testid={TID.assistantLocalAsk} disabled={!q || asking} onClick={() => on.ask()}>{dict(lang, 'assistant.local.ask')}</button></span>}
+    </>
+  );
+}
 
 export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): ReactElement {
   const { editor, state } = useBarEditor();
@@ -136,7 +269,8 @@ export function AssistantRow({ query, lang, optionDomId }: AssistantRowProps): R
         </span>
       )}
       {ready && status && !isOwnerStatus(status) && <span className="pf-bar-asst-line">{barText(lang, 'assistant.row.ownerUses')}</span>}
-      {ready && isOwnerStatus(status) && (
+      {ready && isOwnerStatus(status) && isLocalAdapter(status.adapter) && <LocalPart q={q} lang={lang} owner={owner} rowRef={rowRef} />}
+      {ready && isOwnerStatus(status) && !isLocalAdapter(status.adapter) && (
         <>
           <span className="pf-bar-asst-line"><Rich text={sendLine(lang, status)} /> · {dict(lang, 'assistant.proposeOnly')}</span>
           {job.phase === 'idle' && owner && <span className="pf-bar-asst-actions"><button type="button" className="pf-bar-link" disabled={!q} onClick={() => void ask()}>{barText(lang, 'assistant.row.send')}</button></span>}

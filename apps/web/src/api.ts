@@ -3,7 +3,7 @@ import type { Asset, BuildShortsBody, ExportMode, FindShortsBody, ReframePlanBod
 import type { MulticamSyncReport, MulticamSyncRequest, MulticamView } from '@pulseframe/core';
 import type { TakePlanView, TakeRequest, TakeResult } from '@pulseframe/core';
 import type { DiffSummary, FindQuery, FindResult, VersionInfo } from '@pulseframe/core';
-import type { AssistantConfigBody, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
+import type { AssistantConfigBody, AssistantLocalCheck, AssistantKeyState, AssistantRequestBody, AssistantStatus, AssistantStatusAnswer, AssistantSummary, BudgetReleaseAnswer } from '@pulseframe/core';
 import type { ArchiveLibraryMode, CreditsView, LibraryFacets, LibraryItemsPage, LibraryItemsQuery, LibraryKind, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUseResult } from '@pulseframe/core';
 import type { CameraMotionView, StabiliseRunBody } from '@pulseframe/core';
 import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pulseframe/engine';
@@ -11,6 +11,7 @@ import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
+import type { MusicKitStatus } from '@pulseframe/core';
 
 export class ApiFailure extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown, public hint?: string) {
@@ -138,6 +139,10 @@ export const api = {
   setAssistantKey: (key: string) => call<AssistantKeyState>('/assistant/key', { ...json({ key }), method: 'PUT' }),
   deleteAssistantKey: () => call<AssistantKeyState>('/assistant/key', { method: 'DELETE' }),
   askAssistant: (id: string, body: AssistantRequestBody) => call<{ jobId: string }>(`/projects/${id}/assistant/requests`, json(body)),
+  /** The local assistant (wave 7; the owner's session only): what answers on 127.0.0.1 at the saved port. The body is empty: no address is ever sent. */
+  assistantLocalCheck: () => call<AssistantLocalCheck>('/assistant/local/check', json({})),
+  /** The owner's tab took («הכנס לשורה») or ignored («התעלם») a local phrase: the server erases the phrase and any text slot (204). */
+  assistantTaken: (jobId: string) => call<void>(`/assistant/jobs/${encodeURIComponent(jobId)}/taken`, json({})),
   /** Without `transactionId` the server reverses the caller's own newest edit; with it, exactly that transaction (the owner may name an agent's). */
   undo: (id: string, mode: 'undo' | 'redo', transactionId?: string) => call<CommitResult>(`/projects/${id}/${mode}`, json(transactionId ? { transactionId } : {})),
   upload: (id: string, file: File) =>
@@ -274,6 +279,10 @@ export const api = {
   musicFitApply: (projectId: string, req: MusicFitApplyRequest) => call<MusicFitApplyResult>(`/projects/${projectId}/music-fit/apply`, json(req)),
   /** The owner's own session only (agents get 403 human_approval_required). */
   markJoinHeard: (projectId: string, assetId: string, heard: boolean) => call<unknown>(`/projects/${projectId}/assets/${encodeURIComponent(assetId)}/music-join/heard`, json({ heard })),
+  // ----- «כלים מוקלטים» (wave 7 instruments; apps/server/src/instruments/routes.ts) -----
+  musicKits: () => call<{ kits: MusicKitStatus[] }>('/music/kits'),
+  /** The owner's own session only (everyone else gets 403 owner_required). */
+  markKitHeard: (kitId: string, heard: boolean) => call<{ kitId: string; version: number; heard: { at: string } | null }>(`/music/kits/${encodeURIComponent(kitId)}/heard`, json({ heard })),
 };
 
 export interface BackupStatus { enabled: boolean; everyHours: number; keep: number; lastAt: number | null; lastOk: boolean | null; lastError: string | null; nextAt: number | null; snapshots: number; running: boolean }

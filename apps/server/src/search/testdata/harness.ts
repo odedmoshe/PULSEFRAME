@@ -23,7 +23,7 @@ import { Speech } from '../../speech.ts';
 import { Store } from '../../store.ts';
 import { createSearchRuntime, type SearchRuntimeOptions } from '../runtime.ts';
 import { createTestEmbedder, type TestEmbedder, type TestEmbedderOptions } from '../testEmbedder.ts';
-import { testCore } from './coreDoubles.ts';
+import { CORE } from '../answer.ts';
 
 export const OWNER: Principal = { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] };
 export type Who = () => Record<string, string>;
@@ -57,7 +57,7 @@ export function createHarness(opts: { embedder?: TestEmbedderOptions | null; run
   auth.resolveGrant = (token) => gov.principalForToken(token);
   const lane = new FifoComputeLane();
   const embedder = createTestEmbedder(opts.embedder ?? {});
-  const make = (o: Partial<SearchRuntimeOptions> = {}) => createSearchRuntime({ cfg, store, lane, core: testCore(), ...(opts.embedder === null ? {} : { embedder }), ...opts.runtime, ...o });
+  const make = (o: Partial<SearchRuntimeOptions> = {}) => createSearchRuntime({ cfg, store, lane, core: CORE, ...(opts.embedder === null ? {} : { embedder }), ...opts.runtime, ...o });
   const runtime = make();
   const exporter = new Exporter(store, null as never, () => '', path.join(dir, 'no-web-dist'));
   const capabilities = new Capabilities(store, cfg);

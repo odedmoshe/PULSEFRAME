@@ -1,0 +1,9 @@
+{
+ "note": "SHA-256 of the WAV of built-in music rendered with the SYNTHETIC TEST BANK of packages/evals/src/instruments-proof.sampler.ts (samplerTestBank: zones written by code from sines, decays and constants; not any instrument) through the sampler voice (apps/server/src/music/sampler.ts). Checks I8 and the sampler unit test. Rewrite only together with a raise of MUSIC_SAMPLER_VERSION or a deliberate change of the test bank.",
+ "sampler": 1,
+ "bank": "synthetic-test-1",
+ "renders": {
+  "music.calm 8 bars seed 1": "8391ff2eedc8696841e69d1904382fbc80ca7c98509886280620e4afabc642f6",
+  "music.calm 16 bars seed 3": "9909fd090ca19e682a5d15ef090af1bcc7520a8e1600dd27f50f1b839fc64bf2"
+ }
+}

@@ -1,0 +1,125 @@
+{
+ "when": "2026-11-25T20:43:03.132Z",
+ "aBuilt": true,
+ "evidence": {
+  "core": "builder A (real)",
+  "embedder": "TEST-DOUBLE-embedder/1",
+  "S1": {
+   "status": 200,
+   "pictureState": "not_installed",
+   "setup": "engine_not_configured",
+   "exact": 1
+  },
+  "S4": {
+   "agents": 3,
+   "queries": 4
+  },
+  "S5": {
+   "ownerRoutesRefused": 12,
+   "mcpSearchTools": [
+    "find_in_footage"
+   ]
+  },
+  "S6": {
+   "files": [
+    {
+     "file": "colours2.mp4",
+     "samples": 4
+    },
+    {
+     "file": "colours.mp4",
+     "samples": 12
+    },
+    {
+     "file": "VID_20241226_183000.mp4",
+     "samples": 4
+    }
+   ],
+   "barcodesRead": 20,
+   "job": {
+    "status": "succeeded",
+    "progress": {
+     "unit": "frames",
+     "done": 20,
+     "total": 20
+    }
+   }
+  },
+  "S7": {
+   "framesBeforeStop": 12,
+   "framesAfterRestart": 44,
+   "files": {
+    "scanned": 2,
+    "alreadyScanned": 1,
+    "skipped": {
+     "removed": 0,
+     "decode_failed": 0,
+     "no_picture": 0
+    }
+   }
+  },
+  "S8": {
+   "canceledAfterBatches": 1,
+   "exportMs": 1500,
+   "batchesAfterExport": 1
+  },
+  "S11": {
+   "removeAsset": "rows and bytes gone",
+   "undo": {
+    "scanned": 0,
+    "stale": 0,
+    "of": 1
+   },
+   "projectDelete": "gone",
+   "storageCleanUp": "gone",
+   "removalDuringScan": {
+    "removed": 1,
+    "decode_failed": 0,
+    "no_picture": 0
+   }
+  },
+  "S12": {
+   "backup": "no search/ and no index bytes",
+   "archiveBytes": 14848
+  },
+  "S13": {
+   "filesSearched": 8,
+   "logLinesSearched": 0
+  },
+  "S14": {
+   "shipped": "engine_not_configured",
+   "unset": "engine_not_configured",
+   "noTransformers": {
+    "code": "engine_not_working",
+    "detail": "the tools environment cannot import transformers: install the picture search requirements (apps/server/tools/requirements-search-win-cpu.txt) into PF_TOOLS_PYTHON"
+   },
+   "thisMachinesPython": {
+    "code": "engine_not_working",
+    "detail": "the tools environment cannot import torch: install the picture search requirements (apps/server/tools/requirements-search-win-cpu.txt) into PF_TOOLS_PYTHON"
+   },
+   "absent": {
+    "code": "model_missing",
+    "detail": "the picture model files are not all present and verified: 1539637736 bytes to fetch with the library fetcher (google/siglip2-base-patch16-256); the editor never downloads them",
+    "missingBytes": 1539637736
+   },
+   "changedBytes": {
+    "code": "model_missing",
+    "detail": "the picture model files are not all present and verified: 1539637736 bytes to fetch with the library fetcher (google/siglip2-base-patch16-256); the editor never downloads them",
+    "missingBytes": 1539637736
+   },
+   "reviewedDigest": "3b7d40990385b166b5f42b0a99eab60a717e4741e569c6f4762cf15b3e5141c1",
+   "note": "reviewed digest set and equal to the shipped pf_search.py; the model states used the labelled fake worker, whose probe passes (no torch here)"
+  },
+  "S15": {
+   "scanLabels": [
+    "local.search.picture scan prj_cSpyoSOvfng"
+   ],
+   "toolMs": 358,
+   "queryDuringScan": "busy"
+  },
+  "S16": {
+   "faults": 6,
+   "all": "refused, nothing shown"
+  }
+ }
+}

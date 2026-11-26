@@ -130,7 +130,7 @@ Hebrew: the voice model garbles unpointed Hebrew (a second model recovered 8 of 
 ## Picture search «חיפוש בתמונה» (optional, owner only — wave 7 search track)
 Search by file name, date, event and spoken words needs none of this and works as it is. The picture part finds moments by typed words such as "a cake with candles": a scan looks at one whole frame per second of each video (256×256, no face, person or region is cut out, detected or named) and a text query is compared with those frames. It is off until you set it up, never starts by itself, and its answers are a model's ranking aid that can be wrong: the order is shown, never a number. The model was not tested in Hebrew; Hebrew words go to it as typed, and typing English may find more. What the scan keeps is vectors in `<data dir>/search/index.sqlite` on this computer only: not in the project, a backup or an archive, and erased with the video, by «מחק את מפתח החיפוש בתמונה», or when no project holds the file. The status line in the media drawer says which step is missing.
 
-**Honest state.** Until the server part of this track is merged the routes answer 501 `footage_search_not_built` and the drawer says the picture search is not built yet. After that, without the steps below it says «החיפוש בתמונה לא מותקן» with the first missing step.
+**Honest state.** The server part is built and the worker script `apps/server/tools/pf_search.py` is pinned by its reviewed SHA-256 (a changed byte is «engine_unverified» until it is reviewed again). Without the steps below the drawer says «החיפוש בתמונה לא מותקן» with the first missing step. `PF_TOOLS_PYTHON` must be the full path of the environment's Python (a bare `python` is read as a file in the folder the server starts in).
 
 **1. Python environment (Windows x64, Python 3.13, CPU torch).**
 ```bat
@@ -163,3 +163,37 @@ Official TypeScript SDK client 2.4.0: tested (modern pinned and legacy default).
 ## Not integrated (no adapter, no credentials requested)
 Forced alignment (WhisperX), hosted voice providers (ElevenLabs), fal, Runway, Black Forest Labs, stock media, YouTube, TikTok, C2PA signing, LLM for the Director.
 These remain exactly as described in SPEC §18/§25: candidates to verify when their phase starts.
+
+## Local language assistant (optional — wave 7, ADR-0027 note 2026-11-25)
+The owner starts llama.cpp's `llama-server` by hand (guide: `docs/guides/assistant-local.he.md`); the editor never starts a process. It calls only `http://127.0.0.1:<port>` (the port is the only address setting) with `GET /health`, `GET /v1/models` and `POST /v1/chat/completions`. No key, no account, no project data: the request holds the system prompt, the schema and the typed sentence. Without the server running the editor says so in words; nothing is faked.
+
+**Run-time row** (`tools/library/manifests/assistant-01.json`): llama.cpp release tag **b12720**; assets `llama-b12720-bin-win-vulkan-x64.zip` (Vulkan) and `llama-b12720-bin-win-cpu-x64.zip` (CPU), no NVIDIA file and no `cudart-*`; licence MIT, quoted from `LICENSE` at that tag (read 2026-11-25 on raw.githubusercontent.com). **Not read:** the release page, the asset sizes and GitHub's digests (github.com and api.github.com answered 403 from the session that wrote the row), so no size or sha256 is pinned; the fetcher records the hash it first sees, and the helper compares it with the digest on the release page before the first run. The asset names come from `release-publish.yml` at that tag (release-notes links and the "Merge artifacts" renaming), not from the release's own asset list. Nothing was downloaded.
+
+**Documentation check** against `tools/server/README.md` at tag b12720 (read on raw.githubusercontent.com, 2026-11-25). The request body is `packages/providers/src/localChat.ts` `llamaChatBody`.
+
+| Assumption | Result at b12720 |
+|---|---|
+| `--jinja` | documented: "`--jinja, --no-jinja` \| whether to use jinja template engine for chat (default: enabled)". Enabled by default, so the guide's command does not pass it |
+| `--no-slots` | documented: "`--slots, --no-slots` \| expose slots monitoring endpoint (default: enabled)" |
+| `--host 127.0.0.1` | documented: "`--host HOST` \| IP addresses to listen on ... (default: 127.0.0.1)" |
+| `--port` | documented: "`--port PORT` \| port to listen (default: 9931)". The guide always passes `--port 8791` |
+| `-c 4096` | documented: "`-c, --ctx-size N` \| size of the prompt context (default: 0, 0 = loaded from model)" |
+| `-ngl 99` | documented: "`-ngl, --gpu-layers, --n-gpu-layers N` \| max. number of layers to store in VRAM, either an exact number, 'auto', or 'all' (default: auto)" |
+| `-m` | documented: "`-m, --model FNAME` \| model path to load" |
+| `response_format` with `json_schema` | documented: "The OpenAI wrapper form `{"type": "json_schema", "json_schema": {"name": ..., "strict": ..., "schema": {...}}}` is also accepted." (the section's own examples use `{"type":"json_schema","schema":{...}}`); schema features: "See tests ... for supported features" (`json_schema` of `/completion`) |
+| `chat_template_kwargs.enable_thinking` | documented: "`chat_template_kwargs`: Allows sending additional parameters to the json templating system. For example: `{"enable_thinking": false}`" |
+| `top_k` | documented under `/completion` ("`top_k`: Limit the next token selection to the K most probable tokens. Default: `40`"); the chat section says "llama.cpp `/completion`-specific features such as `mirostat` are also supported", it does not list `top_k` itself |
+| `temperature` | documented under `/completion` ("`temperature`: Adjust the randomness ... Default: `0.8`"); same remark |
+| `cache_prompt` | documented under `/completion` ("`cache_prompt`: Re-use KV cache from a previous request if possible ... Default: `true`"). The editor sends `false`; same remark |
+| `max_tokens` (chat) | not found in the documentation at this tag for `/v1/chat/completions` (the section defers to OpenAI's documentation); `max_tokens` appears only for `/v1/messages` ("Maximum tokens to generate (default: 4096)") and in an example for `/v1/completions`; `/completion` documents `n_predict` |
+| `stream: false` | documented for `/completion` only as "`stream`: ... To enable this, set to `true`" (so the default is not streaming); not stated for the chat route |
+| `model: "local"` | not found as a described field of `/v1/chat/completions`; the section's examples send an arbitrary name ("gpt-3.5-turbo"); "Required in router mode / Ignored in single model mode" is written for `/v1/chat/completions/control` only |
+| `messages` with `system` and `user` roles | documented by the section's example (`{"role": "system", ...}, {"role": "user", ...}`) |
+| reply `choices[0].message.content` | not found as a described field; the example prints `completion.choices[0].message` |
+| reply `finish_reason` | not found in the documentation at this tag |
+| `GET /health` | documented: 503 `{"error": {"code": 503, "message": "Loading model", "type": "unavailable_error"}}` while loading; 200 `{"status": "ok"}` when ready; "public (no API key check)" |
+| `GET /v1/models` | documented: one element in `data`; "By default, model `id` field is the path to model file, specified via `-m`" (so the editor shows the basename; `--alias` replaces it); `meta` can be null while loading |
+
+No contradiction with the request the editor builds was found. What the documentation does not state (chat `max_tokens`, `model`, `stream`, `choices[0].message.content`, `finish_reason`, and that `top_k`, `temperature` and `cache_prompt` act on the chat route) stays unverified until a run on the owner's laptop (`pnpm proof:assistant-local-model`); the adapter already treats a reply of another shape as an error, never as an answer. Quality of the model's Hebrew and its speed on the laptop are not measured.
+
+**Runbook.** Start: double-click the owner's `.bat` (guide). Stop: close its window, before transcribing or exporting (graphics-card memory). Check: Settings › «עוזר השפה» › «בדיקת חיבור» (running with the model's name / still loading / not running / another program answers on this port). Proof: `pnpm proof:assistant-local` (labelled stand-in, no model; L13 is the browser part, `assistant-local-proof.ui.ts`).

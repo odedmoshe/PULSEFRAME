@@ -12,7 +12,7 @@ const PI = 3.141592653589793;
 const LN1000 = 6.907755278982137;
 
 /** sin(x) for x in [0, π/2]: the odd Taylor polynomial of degree 17 in Horner form (error below 1e-13 there). */
-function sinQuarter(x: number): number {
+export function sinQuarter(x: number): number {
   const x2 = x * x;
   return x * (1 - (x2 / 6) * (1 - (x2 / 20) * (1 - (x2 / 42) * (1 - (x2 / 72) * (1 - (x2 / 110) * (1 - (x2 / 156) * (1 - (x2 / 210) * (1 - x2 / 272))))))));
 }
@@ -159,4 +159,35 @@ export function sqrtOf(x: number): number {
   while (g * g * 4 <= x) g *= 2;
   for (let i = 0; i < 8; i++) g = 0.5 * (g + x / g);
   return g;
+}
+
+// ---- wave 7 instruments «כלים מוקלטים»: helpers of the sampler voice (sampler.ts). New exports only: nothing above uses them. ----
+/** sin(2π·t) for any t, by quarter-wave reduction onto sinQuarter (no table, no interpolation: error below 1e-13). */
+export function sinTurns(t: number): number {
+  const u = t - Math.floor(t);
+  const q4 = u * 4;
+  const q = Math.floor(q4);
+  const f = q4 - q;
+  const half = PI / 2;
+  if (q === 0) return sinQuarter(f * half);
+  if (q === 1) return sinQuarter((1 - f) * half);
+  if (q === 2) return -sinQuarter(f * half);
+  return -sinQuarter((1 - f) * half);
+}
+/** 2^(cents/1200) for any cents: whole semitones from SEMITONE and exact doubling, the rest (|rest| ≤ 50 cents) by a degree-7 series. */
+export function pow2Cents(cents: number): number {
+  const semis = Math.round(cents / 100);
+  const rest = cents - 100 * semis;
+  const oct = Math.floor(semis / 12);
+  let f = SEMITONE[semis - 12 * oct]!;
+  if (oct > 0) for (let j = 0; j < oct; j++) f *= 2;
+  else for (let j = 0; j < -oct; j++) f /= 2;
+  const x = (rest * 0.6931471805599453) / 1200;
+  const e = 1 + x * (1 + (x / 2) * (1 + (x / 3) * (1 + (x / 4) * (1 + (x / 5) * (1 + (x / 6) * (1 + x / 7))))));
+  return f * e;
+}
+/** 10^(dB/20) for any dB, through expNeg (0 dB is exactly 1). */
+export function dbGain(db: number): number {
+  const x = (db * 2.302585092994046) / 20;
+  return x <= 0 ? expNeg(-x) : 1 / expNeg(x);
 }

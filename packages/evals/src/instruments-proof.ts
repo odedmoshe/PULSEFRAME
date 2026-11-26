@@ -1,0 +1,91 @@
+/**
+ * pnpm proof:instruments — «כלים מוקלטים», recorded instruments for the built-in music (wave 7 instruments track;
+ * .artifacts/wave7/instruments-decisions.md §4.10). LEAD: the entry point and the list of checks. The checks are built in three parts,
+ * each owned by one builder: instruments-proof.sampler.ts (W1: I1–I6, I3b, I8, I9, I14), instruments-proof.loader.ts (W2: I10–I13,
+ * I15, I16 server, I18, I19, L-D1–L-D3), instruments-proof.ui.ts (W3: I16 page, I17). Integration imports the three parts here.
+ * States, each counted on its own: pass; partial (a part could not be measured here: never a pass); blocked (could not run here, with
+ * the reason); fail; pending (not built yet). Exit 0 only when every check passes, 1 on any failure, 2 otherwise.
+ * Fixtures are SYNTHETIC only, written by code (packages/fixtures/src/instruments.ts, labelled SYNTHETIC TEST KIT): sine and marker
+ * zones at 44.1 and 48 kHz, 16 and 24 bit, mono and stereo, a looped zone, a .sfz, a temporary library folder with a ledger the proof
+ * writes (CC0, CC-BY, CC-BY-NC, CC-BY-SA rows of synthetic sources). Never a real sample set; nothing downloaded. Nobody here can
+ * listen: every check is a measurement (levels, lengths, frequencies, hashes, the absence of clipping), none says how anything sounds.
+ * Timing figures (I13) are one sample each. Writes docs/evidence/instruments-proof.json.
+ * Integration (wave 7): the three parts are imported here; I16 is ONE row that passes only when both halves pass (the loader's server
+ * side and the UI part's page side 'I16-page'). The browser part drives the REAL server with the synthetic kit injected as its kit list
+ * (startServer's TEST-only musicKits); a stand-in remains only where the real server cannot produce the state, and its check says so.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { INSTRUMENTS_LOADER_PART } from './instruments-proof.loader.ts';
+import { samplerChecks } from './instruments-proof.sampler.ts';
+import { INSTRUMENTS_PROOF_UI, stopInstrumentsProofUi } from './instruments-proof.ui.ts';
+
+export const INSTRUMENTS_PROOF_BUILT = true;
+export const INSTRUMENTS_CHECKS: Readonly<Record<string, string>> = {
+  I1: 'renderSampled at r = 1 with amp_veltrack 0 and 0 dB equals the source zone sample for sample from sample 32 to the start of release',
+  I2: 'a 440 Hz zone recorded at 44.1 kHz sounds at 440 Hz ± 0.05 cent at its root key and within ± 0.1 cent of equal temperament at ±1 and ±3 semitones',
+  I3: 'a 1 kHz sine played one semitone up: everything but the fundamental is below −60 dB',
+  I3b: 'a 15 kHz sine at 44.1 kHz played +7 semitones: the largest alias below 20 kHz is below −40 dB (printed as one sample, "8-tap kernel aliasing, measured")',
+  I4: 'velocity 0.3 plays the soft layer and 0.9 the loud one (the marker harmonic absent, then present); the amp_veltrack gain matches its formula within 0.01 dB',
+  I5: 'after the gate the level falls 60 dB within the release time ± 2 ms; the note\'s last sample and the track\'s first and last frames are 0',
+  I6: 'a 0.25 s looped zone held 3 s: the RMS of the last 0.5 s is within 0.5 dB of the first; no step at a loop seam is larger than the largest step inside the source',
+  I8: 'the synthetic test kit renders twice with equal bytes, equal to instruments.golden.json',
+  I9: 'music.golden.json still matches: a request without instruments gives the bytes, name and params it gave before this track',
+  I10: 'with no library folder set a recorded request answers 409 instruments_library_not_set and stores nothing; the same request without instruments gives the golden bytes and MUSIC_GENERATOR',
+  I11: 'one kit file removed, one changed by a single byte, the ledger at another commit: 409 instruments_file_missing, instruments_file_changed, instruments_item_version; nothing stored',
+  I12: 'a truncated WAV, a FLAC, sample=../../x, ..\\..\\x and a link out of the folder each give their named refusal, and an fs spy shows no file outside the item was opened; a backslash path that resolves inside the item works',
+  I13: '128 s of the style with a 55 MB synthetic kit (page-cache warm, parser cold): at least 5× real time, event-loop delay below 100 ms, heapUsed + arrayBuffers growth below 160 MB (one sample)',
+  I14: 'M1, M6, M7 and M8 of music.test.ts hold for recorded renders of the synthetic test kit',
+  I15: 'an added recorded track carries MUSIC_RECORDED_GENERATOR and provenance.instruments with the bank, in one commit undone by one undo; no synth track carries either',
+  I16: 'match=1: scale × RMS of both versions equal within 0.1 dB and the bytes equal the un-matched preview; the heard route answers 403 to agent, observer and phone credentials and keeps the owner\'s mark',
+  I17: 'in the editor «צליל» works by keyboard with its state in words, the blind pair plays and reveals, «שמעתי» shows the owner\'s mark, in Hebrew and English, right to left at 1280 and 1440 px',
+  I18: 'MCP add_builtin_music with instruments recorded reports the kit and the label; no answer of any route or tool holds an absolute path; every header value is ASCII',
+  I19: '5,000 mutated .sfz texts and 5,000 mutated WAV byte strings throw only InstrumentError, read nothing out of bounds, and take less than 60 s',
+  'L-D1': 'a synthetic CC-BY source in the kit: the made track\'s credit line is in the description text, verbatim',
+  'L-D2': 'a synthetic CC-BY-NC source: the made track is non-commercial, the export warns «לשימוש לא מסחרי בלבד», and the shared archive omits its bytes',
+  'L-D3': 'a synthetic CC-BY-SA, CC-BY-ND or unknown-licence source: 409 instruments_licence, nothing made',
+};
+
+export type InstrumentsStatus = 'pass' | 'partial' | 'blocked' | 'fail' | 'pending';
+export interface InstrumentsRow { id: string; part: 'sampler' | 'loader' | 'ui'; status: InstrumentsStatus; measured?: unknown; reason?: string }
+const PART: Readonly<Record<string, InstrumentsRow['part']>> = {
+  I1: 'sampler', I2: 'sampler', I3: 'sampler', I3b: 'sampler', I4: 'sampler', I5: 'sampler', I6: 'sampler', I8: 'sampler', I9: 'sampler', I14: 'sampler',
+  I10: 'loader', I11: 'loader', I12: 'loader', I13: 'loader', I15: 'loader', I16: 'loader', I18: 'loader', I19: 'loader', 'L-D1': 'loader', 'L-D2': 'loader', 'L-D3': 'loader',
+  I17: 'ui',
+};
+
+const run = async (f: () => Promise<true | string>): Promise<{ status: InstrumentsStatus; reason?: string }> => {
+  try { const r = await f(); return r === true ? { status: 'pass' } : { status: 'fail', reason: r }; } catch (e) { return { status: 'fail', reason: e instanceof Error ? `${e.message}`.slice(0, 600) : String(e) }; }
+};
+async function main(): Promise<void> {
+  const t0 = Date.now();
+  const got = new Map<string, InstrumentsRow>();
+  for (const r of await samplerChecks()) got.set(r.id, r);
+  const loader = new Map<string, { status: InstrumentsStatus; reason?: string }>();
+  for (const [id, f] of Object.entries(INSTRUMENTS_LOADER_PART.checks)) { const r = await run(f); loader.set(id, r); console.log(`  … ${id} ${r.status}`); }
+  const ui = new Map<string, { status: InstrumentsStatus; reason?: string }>();
+  try {
+    for (const [id, f] of Object.entries(INSTRUMENTS_PROOF_UI.checks)) { const r = await run(f); ui.set(id, r); console.log(`  … ${id} ${r.status}`); }
+  } finally { await stopInstrumentsProofUi(); }
+  for (const [id, r] of loader) if (id !== 'I16') got.set(id, { id, part: 'loader', ...r });
+  // I16: one row, both halves
+  const server = loader.get('I16')!, page = ui.get('I16-page')!;
+  const halves = [server.status === 'pass' ? null : `server: ${server.reason}`, page.status === 'pass' ? null : `page: ${page.reason}`].filter(Boolean);
+  got.set('I16', { id: 'I16', part: 'loader', status: halves.length ? 'fail' : 'pass', measured: { server: server.status, page: page.status }, ...(halves.length ? { reason: halves.join(' | ') } : {}) });
+  got.set('I17', { id: 'I17', part: 'ui', ...ui.get('I17')! });
+  const rows: InstrumentsRow[] = Object.keys(INSTRUMENTS_CHECKS).map((id) => got.get(id) ?? { id, part: PART[id]!, status: 'fail', reason: 'no part reported this check' });
+  for (const r of rows) console.log(`${r.status.toUpperCase().padEnd(8)} ${r.id.padEnd(5)} [${r.part}] ${INSTRUMENTS_CHECKS[r.id]}${r.reason ? `\n         ${r.reason}` : ''}`);
+  const count = (s: InstrumentsStatus) => rows.filter((r) => r.status === s).length;
+  const root = path.resolve(import.meta.dirname, '../../..');
+  const file = path.join(root, 'docs/evidence/instruments-proof.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({
+    proof: 'instruments', ranAt: new Date().toISOString(), seconds: Math.round((Date.now() - t0) / 1000),
+    note: 'SYNTHETIC test kit and test bank only, written by code; never a real sample set. Nobody here can listen: every check is a measurement. Timing figures are one sample each.',
+    passed: count('pass'), failed: count('fail'), partial: count('partial'), blocked: count('blocked'), pending: count('pending'), total: rows.length,
+    rows: rows.map((r) => ({ ...r, check: INSTRUMENTS_CHECKS[r.id] })),
+  }, null, 2) + '\n');
+  console.log(`\n${count('pass')}/${rows.length} passed, ${count('fail')} failed, ${count('partial')} partial, ${count('blocked')} blocked, ${count('pending')} pending. Evidence: docs/evidence/instruments-proof.json`);
+  process.exitCode = count('fail') ? 1 : count('pass') === rows.length ? 0 : 2;
+}
+if (import.meta.url === `file://${process.argv[1]}`) await main().then(() => process.exit(process.exitCode ?? 0), (e) => { console.error(e); process.exit(1); });

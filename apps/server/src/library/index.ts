@@ -157,6 +157,17 @@ export class LibraryService {
     return { state: 'ok', rootReal, ledger: { sha256, entries: parsed.data.entries, licenceTexts: parsed.data.licenceTexts.map((t) => ({ source: t.source, ...(typeof t.path === 'string' ? { path: t.path } : {}) })) } };
   }
 
+  /**
+   * Wave 7 instruments «כלים מוקלטים»: the root's realpath and the current ledger entries that parse (currentEntries: the last appended
+   * per item), read by the catalogue's own rootState — so recorded instruments have no second ledger reader. state 'ok' or why not.
+   */
+  async ledgerEntries(): Promise<{ state: Exclude<LibraryState, 'indexing' | 'ready'> | 'ok'; rootReal: string | null; entries: LedgerEntry[] }> {
+    const s = await this.rootState();
+    if (s.state !== 'ok' || !s.ledger) return { state: s.state === 'ok' ? 'ledger_invalid' : s.state, rootReal: s.rootReal ?? null, entries: [] };
+    const parsed = s.ledger.entries.flatMap((e) => { const r = LedgerEntrySchema.safeParse(e); return r.success ? [r.data] : []; });
+    return { state: 'ok', rootReal: s.rootReal ?? null, entries: currentEntries(parsed) };
+  }
+
   // ---------- the index file ----------
   private openIndex() {
     this.db?.close();

@@ -13,13 +13,14 @@
  * Files beside it: dsp.ts (arithmetic building blocks), voices.ts (instruments), styles.ts (recipes), compose.ts (chords and
  * the lead), arrange.ts (notes by level and the ending), wav.ts (the file).
  */
-import { MUSIC_MAX_SEED, musicLayout, type MusicLayout } from '@pulseframe/core';
-import { arrange, clicks } from './arrange.ts';
+import { KIT_PART_ROLES, kitForStyle, MUSIC_MAX_SEED, musicLayout, type KitPartRole, type MusicKit, type MusicLayout } from '@pulseframe/core';
+import { arrange, clicks, endingT60, type Note } from './arrange.ts';
 import { compose, hashId } from './compose.ts';
-import { flush, Noise, Reverb, SR, sqrtOf } from './dsp.ts';
+import { decay60, flush, Noise, Reverb, SR, sqrtOf } from './dsp.ts';
 import { styleSpec } from './styles.ts';
 import { renderNote } from './voices.ts';
 import { allocWav, wavSampleWriter } from './wav.ts';
+import { planZones, renderSampled, SamplerBankError, SamplerRangeError, type ResolvedBank, type SampledNote } from './sampler.ts';
 
 export interface RenderedMusic {
   /** The whole WAV file: 44-byte header + 4 · layout.totalFrames bytes. */
@@ -39,6 +40,18 @@ export interface RenderOptions {
    * track (and the bytes) made before it existed.
    */
   endFrames?: number;
+  /**
+   * Wave 7 instruments «כלים מוקלטים»: the recorded kit of a recorded request, loaded and checked by apps/server/src/instruments/bank.ts.
+   * Absent gives exactly the synthesiser's bytes. Present: every note of every part of the style's kit is rendered by the sampler
+   * (stereo), the rest of the style by the synthesiser; the bank must hold exactly the kit's parts (else SamplerBankError) and every
+   * sampled note must be in range (else SamplerRangeError), both before any sample is made. All-or-nothing: never a synth stand-in.
+   */
+  bank?: ResolvedBank;
+  /**
+   * The kit the bank was loaded from: the request path passes the kit it checked (music.ts RecordedJob.kit; a test's labelled synthetic
+   * kit). Absent: the style's kit in MUSIC_KITS. Either way the bank must be that kit, of this style, part for part.
+   */
+  kit?: MusicKit;
 }
 /** Thrown when a render is stopped through RenderOptions.cancel. */
 export class MusicCancelled extends Error {
@@ -50,6 +63,30 @@ export class MusicNotBuilt extends Error {
 }
 /** Rendering work (samples of notes) between two yields when no beat boundary comes first. */
 const WORK_PER_YIELD = 120_000;
+/** A sampled frame counts this much work (8 taps a channel, stereo, layered regions), so recorded renders yield as often (bytes untouched). */
+const SAMPLED_WORK = 8;
+const isKitPart = (p: string): p is KitPartRole => (KIT_PART_ROLES as readonly string[]).includes(p);
+/** The arranger's notes of the parts a kit samples, as the sampler sees them (the loader plans and decodes from these). */
+export function sampledNotesOf(styleId: string, bars: number, seed: number, parts: readonly KitPartRole[], endFrames?: number): SampledNote[] {
+  const layout = musicLayout(styleId, bars, endFrames);
+  const spec = styleSpec(layout.styleId);
+  return toSampled(arrange(spec, layout, compose(spec, layout, seed), seed), new Set(parts));
+}
+function toSampled(notes: readonly Note[], parts: ReadonlySet<string>): SampledNote[] {
+  const out: SampledNote[] = [];
+  for (const n of notes) if (isKitPart(n.part) && parts.has(n.part)) out.push({ part: n.part, midi: n.midi, vel: n.vel, gate: n.gate });
+  return out;
+}
+/** All-or-nothing: the bank is the style's kit at its version, with exactly the kit's parts and instruments. */
+function checkBank(bank: ResolvedBank, styleId: string, given?: MusicKit): void {
+  const kit = given ?? kitForStyle(styleId);
+  if (!kit || kit.styleId !== styleId || kit.id !== bank.kitId || kit.version !== bank.version) throw new SamplerBankError('kit', `${bank.kitId}@${bank.version} is not the kit of ${styleId}`);
+  for (const role of KIT_PART_ROLES) {
+    const want = kit.parts[role], got = bank.parts[role];
+    if (!want !== !got) throw new SamplerBankError('parts', `the part ${role} is ${want ? 'missing from the bank' : 'not a part of the kit'}`);
+    if (want && got && got.instrument.id !== want.instrument) throw new SamplerBankError('parts', `the part ${role} plays ${got.instrument.id}, the kit names ${want.instrument}`);
+  }
+}
 /** The longest a note may sound (8 s), and the ring buffers that hold every note still sounding: a power of two above it plus a block. */
 const MAX_NOTE = 8 * SR;
 const RING = 1 << 19, MASK = RING - 1;
@@ -69,6 +106,22 @@ export async function renderMusic(styleId: string, bars: number, seed: number, o
   const notes = opts.clickOnly ? clicks(layout) : arrange(spec, layout, compose(spec, layout, seed), seed);
   notes.sort((a, b) => a.at - b.at); // stable: notes that start together keep the arranger's order
   const total = layout.totalFrames, S = layout.samplesPerBeat;
+  // a recorded render: the bank is checked and every sampled note planned (range, frames) before any sample is made
+  const bank = opts.clickOnly ? undefined : opts.bank;
+  if (bank) {
+    checkBank(bank, layout.styleId, opts.kit);
+    const plan = planZones(toSampled(notes, new Set(Object.keys(bank.parts))), bank);
+    if (plan.outOfRange) throw new SamplerRangeError(plan.outOfRange);
+    // a zone must hold the frames this plan reads (the loader plans with the files' whole lengths and decodes at least that much;
+    // the renderer sees only the frames handed to it, so it can refuse a zone shorter than its own plan or than it claims, no more)
+    for (const need of plan.needs) {
+      const inst = Object.values(bank.parts).find((p) => p!.instrument.id === need.instrument)!.instrument;
+      const z = inst.zones[need.zone];
+      if (!z || z.frames < need.frames || z.samples.length < z.frames * z.channels) throw new SamplerBankError('zone_short', `${need.instrument} zone ${need.zone} holds ${z?.frames ?? 0} frames, the render reads ${need.frames}`);
+    }
+  }
+  // the held notes of the ending die away as the synthesiser's do (arrange.ts endingVoice): a sampled ending note falls by endingT60
+  const endAt = total - layout.endFrames, endDecay = bank ? decay60(endingT60(layout)) : 1;
   const noise = new Noise((Math.imul(seed ^ 0x5bd1e995, 0x27d4eb2d) ^ hashId(layout.styleId)) >>> 0);
   const reverb = new Reverb(spec.mix.room, spec.mix.feedback, spec.mix.damp);
   // Streaming in blocks of one beat or 12,000 frames, whichever is shorter, with a yield after each: every note that starts
@@ -76,6 +129,7 @@ export async function renderMusic(styleId: string, bars: number, seed: number, o
   // its reverb and master are worked out, written to the file, and its ring slots cleared. A note sounds at most MAX_NOTE.
   const step = Math.min(S, 12_000);
   const tmp = new Float64Array(Math.min(total, MAX_NOTE));
+  const tmpR = bank ? new Float64Array(tmp.length) : tmp;
   const L = new Float64Array(RING), R = new Float64Array(RING), send = new Float64Array(RING);
   const wav = allocWav(total), put = wavSampleWriter(wav);
   const gain = spec.mix.gain, fadeFrom = total - 2 * S, fadeLen = total - fadeFrom;
@@ -88,8 +142,22 @@ export async function renderMusic(styleId: string, bars: number, seed: number, o
       if (work > WORK_PER_YIELD) { await pause(opts.cancel); work = 0; }
       const room = Math.min(tmp.length, total - note.at);
       if (room <= 0) continue;
-      const n = renderNote(note.voice, note.midi, note.vel, note.gate, noise, tmp.subarray(0, room));
       const gl = Math.min(1, 1 - note.pan), gr = Math.min(1, 1 + note.pan), gs = note.send;
+      const sampled = bank && isKitPart(note.part) ? bank.parts[note.part] : undefined;
+      if (sampled) {
+        // the stereo sampled path: balance by the note's pan, the send fed by the mid (L + R)/2
+        const n = renderSampled(sampled, note.midi, note.vel, note.gate, tmp.subarray(0, room), tmpR.subarray(0, room));
+        if (note.at >= endAt) for (let i = 0, g = 1; i < n; i++) { tmp[i] = tmp[i]! * g; tmpR[i] = tmpR[i]! * g; g = flush(g * endDecay); }
+        for (let i = 0, k = note.at; i < n; i++, k++) {
+          const vl = tmp[i]!, vr = tmpR[i]!, r = k & MASK;
+          L[r] = L[r]! + vl * gl;
+          R[r] = R[r]! + vr * gr;
+          send[r] = send[r]! + (vl + vr) * 0.5 * gs;
+        }
+        work += SAMPLED_WORK * n;
+        continue;
+      }
+      const n = renderNote(note.voice, note.midi, note.vel, note.gate, noise, tmp.subarray(0, room));
       for (let i = 0, k = note.at; i < n; i++, k++) {
         const v = tmp[i]!, r = k & MASK;
         L[r] = L[r]! + v * gl;

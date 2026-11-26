@@ -180,6 +180,25 @@ export const FittedMusicSchema = z
   })
   .strict();
 export type FittedMusic = z.infer<typeof FittedMusicSchema>;
+/**
+ * Asset.provenance.instruments (wave 7 instruments track «כלים מוקלטים», .artifacts/wave7/instruments-decisions.md §4.4): built-in music
+ * made with recorded instrument samples from the owner's library. `records` holds ONE library record per library source the kit used,
+ * written from the ledger and the core licence table when the file was made, so its duties (credit, non-commercial, disk-only) travel
+ * with the file through libraryOrigins: the union of the duties of every source. `bank` is the first 16 hex characters of the sha256
+ * of the kit table's canonical text (core musicKits.ts kitBankInput): equal tables give equal bytes. origin stays 'generated' and
+ * procedural.generator is MUSIC_RECORDED_GENERATOR (validate.ts instruments_provenance, instrumentsValidate.ts).
+ */
+export const RecordedInstrumentsSchema = z
+  .object({
+    kitId: z.string().regex(/^kit\.[a-z0-9-]{1,24}\.[a-z0-9-]{1,24}$/),
+    kitVersion: z.number().int().min(1).max(1000),
+    /** musicKits.ts MUSIC_SAMPLER_VERSION of the build that made it. */
+    sampler: z.number().int().min(1).max(1000),
+    bank: z.string().regex(/^[0-9a-f]{16}$/),
+    records: z.array(LibraryRecordSchema).min(1).max(8),
+  })
+  .strict();
+export type RecordedInstruments = z.infer<typeof RecordedInstrumentsSchema>;
 /** A project holds at most this many events. */
 export const MAX_LIFE_EVENTS = 2000;
 /** An event holds at most this many files (and at least one). */
@@ -337,6 +356,8 @@ export const AssetSchema = z
           .optional(),
         /** Present for a song shortened by «התאמה לאורך» (wave 7 musicfit track): FittedMusicSchema. origin is 'derived'. */
         fitted: FittedMusicSchema.optional(),
+        /** Present for built-in music made with recorded instruments of the owner's library (wave 7 instruments track): RecordedInstrumentsSchema. origin is 'generated'. */
+        instruments: RecordedInstrumentsSchema.optional(),
       })
       .strict(),
   })

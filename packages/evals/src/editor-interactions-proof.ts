@@ -19,6 +19,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright';
@@ -28,10 +29,11 @@ import { startServer } from '@pulseframe/server';
 import { BEAT_SR } from '../../../apps/server/src/beats.ts';
 import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
-import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, MUSIC_GENERATOR, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
 import { chooseFormat, openInspectorPage, startExport } from './editor-ui.ts';
 import { MUSICFIT_TESTIDS } from '../../../apps/web/src/editor/musicfit/musicFit.testids.ts';
+import { SEARCH_TESTIDS } from '../../../apps/web/src/editor/search/search.testids.ts';
 import { libraryPanelsProbe } from './library-proof.ui.ts';
 import { toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
 import { generateShortsFixture } from '../../fixtures/src/shorts.ts';
@@ -40,6 +42,8 @@ import { PERFORM_TESTIDS } from '../../../apps/web/src/editor/perform/perform.te
 import { PEOPLE_TESTIDS } from '../../../apps/web/src/editor/lifeline/people.testids.ts';
 import { TEMPLATE_STRINGS } from '../../../apps/web/src/editor/templates.strings.ts';
 import { IMPORTED_REVIEW_CLEARED } from '../../../apps/server/src/archive.ts';
+import { startStandIn } from '../../../apps/server/src/assistant/local/standIn.ts';
+import { COMMAND_BAR_TESTIDS as BAR_TID } from '../../../apps/web/src/editor/commandBar/commandBar.testids.ts';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const art = path.join(root, '.artifacts/editor-interactions');
@@ -2427,6 +2431,189 @@ async function main() {
       check('«התאמה לאורך» plans before anything changes; «בצעו» makes the track and ends the music on the last picture frame (frame 360, no fade) in one transaction; one Ctrl+Z gives the old music back', planned && r1 === r0 + 2 && m1.assetId !== asset0 && end === 360 && !m1.fadeOut && back, { planned, revisions: r1 - r0, end, fadeOut: m1.fadeOut ?? null, back });
       check('musicfit rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
       await ctx.close();
+    }
+
+    // «חיפוש בצילומים» (wave 7 search, integration): the media drawer's box finds a typed transcript word without a model; ArrowDown goes
+    // into the results and Escape back to the box; Enter asks the pictures and the status line says honestly that picture search is not
+    // installed (no picture row); Shift+Enter on a row places exactly that word span in ONE commit and one Ctrl+Z returns the document.
+    // The whole track is proved in pnpm proof:search; these rows keep the editor's own keys honest around it.
+    console.log('\n# footage search: the box, ArrowDown and Escape, Enter for pictures, Shift+Enter, one undo');
+    {
+      const said = path.join(art, 'search-said.mp4');
+      ff(['-f', 'lavfi', '-t', '3', '-i', 'testsrc2=s=640x360:r=30', '-f', 'lavfi', '-t', '3', '-i', 'sine=frequency=440:sample_rate=48000', '-vf', 'format=yuv420p', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-c:a', 'aac', '-shortest', said]);
+      const sp = (await call('/projects', { name: 'footage search keys', width: 640, height: 360 })).body.project.id as string;
+      const sa = (await upload(sp, said)).assetId as string;
+      // a typed transcript (no model ran): «שלום» is said from 0.5 s to 1 s
+      await txs(sp, [{ op: 'set_transcript', args: { assetId: sa, language: 'he', segments: [{ start: T.rt(0, 1), duration: T.rt(3, 2), text: 'אז שלום לכולם', words: [{ text: 'אז', start: T.rt(0, 1), duration: T.rt(1, 2) }, { text: 'שלום', start: T.rt(1, 2), duration: T.rt(1, 2) }, { text: 'לכולם', start: T.rt(1, 1), duration: T.rt(1, 2) }] }] } }]);
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(`${s.ownerUrl}&project=${sp}`);
+      await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+      if (!/\bis-on\b/.test((await pg.getByTestId('rail-media').getAttribute('class')) ?? '')) await pg.getByTestId('rail-media').click();
+      const box = pg.getByTestId('media-search');
+      await box.fill('שלום');
+      const row = pg.getByTestId(SEARCH_TESTIDS.row).first();
+      const found = await row.waitFor({ timeout: 10000 }).then(() => true, () => false);
+      const attrs = found ? { n: await pg.getByTestId(SEARCH_TESTIDS.row).count(), asset: await row.getAttribute('data-asset-id'), start: await row.getAttribute('data-start'), end: await row.getAttribute('data-end'), sources: await row.getAttribute('data-sources') } : null;
+      check('search: «שלום» in the media drawer\'s box finds exactly the word said in the typed transcript, its span [1/2, 1/1) s, without a model', !!attrs && attrs.n === 1 && attrs.asset === sa && attrs.start === '1/2' && attrs.end === '1/1' && attrs.sources === 'transcript', attrs);
+      const focused = () => pg.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
+      await box.focus();
+      await pg.keyboard.press('ArrowDown');
+      const inList = await focused();
+      await pg.keyboard.press('Escape');
+      const back = await focused();
+      check('search: ArrowDown from the box reaches the row and Escape returns to the box', inList === SEARCH_TESTIDS.row && back === 'media-search', { inList, back });
+      await pg.keyboard.press('Enter');
+      const asked = await pg.waitForFunction((t) => { const st = document.querySelector(`[data-testid="${t}"]`)?.getAttribute('data-state'); return !!st && st !== 'loading'; }, SEARCH_TESTIDS.status, { timeout: 15000 }).then(() => true, () => false);
+      await sleep(500);
+      const status = { state: await pg.getByTestId(SEARCH_TESTIDS.status).getAttribute('data-state').catch(() => null), text: ((await pg.getByTestId(SEARCH_TESTIDS.status).textContent().catch(() => '')) ?? '').slice(0, 160), pictureRows: await pg.locator(`[data-testid="${SEARCH_TESTIDS.row}"][data-section="picture"]`).count() };
+      check('search: Enter asks the pictures; the status line says «החיפוש בתמונה לא מותקן» (no Python configured here) and no picture row appears', asked && status.state === 'not_installed' && status.text.includes('החיפוש בתמונה לא מותקן') && status.pictureRows === 0, status);
+      const before = JSON.stringify(await doc2(sp));
+      const rev0 = (await call(`/projects/${sp}`)).body.revision as number;
+      await box.focus();
+      await pg.keyboard.press('ArrowDown');
+      await pg.keyboard.press('Shift+Enter');
+      let rev1 = rev0;
+      for (let i = 0; i < 50 && rev1 === rev0; i++) { await sleep(100); rev1 = (await call(`/projects/${sp}`)).body.revision as number; }
+      await sleep(400);
+      const d1 = await doc2(sp);
+      const clips = Object.values(d1.sequences as Record<string, { tracks: { clips: MediaClip[] }[] }>).flatMap((q) => q.tracks.flatMap((t) => t.clips)).filter((c) => c.type === 'media' && c.assetId === sa);
+      check('search: Shift+Enter on the row places exactly the word span (frames 15–30 of the file) in ONE commit', rev1 - rev0 === 1 && clips.length >= 1 && clips.every((c) => T.eq(c.sourceIn, T.rt(15, 30)) && T.eq(c.duration, T.rt(15, 30))), { commits: (await call(`/projects/${sp}`)).body.revision - rev0, clips: clips.map((c) => [T.toSeconds(c.sourceIn), T.toSeconds(c.duration)]) });
+      await pg.keyboard.press('Control+z');
+      let undone = false;
+      for (let i = 0; i < 50 && !undone; i++) { await sleep(100); undone = JSON.stringify(await doc2(sp)) === before; }
+      check('search: one Ctrl+Z returns the exact document from before the placement', undone, { undone });
+      check('search rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      await ctx.close();
+    }
+
+    // the LOCAL language assistant (wave 7 assistant, integration): against a labelled STAND-IN of llama.cpp's server on 127.0.0.1 (no
+    // model runs). From the keyboard: an unknown request offers «לשאול את העוזר המקומי»; the suggestion; «הכנס לשורה» puts the phrase in
+    // the bar; the bar's own preview; Enter commits exactly one transaction by the owner; one Ctrl+Z gives the exact document back. Then
+    // with nothing listening on the saved port: the row says so in words, offers no phrase and speaks of no money.
+    console.log('\n# Local language assistant: ask from the keyboard, the suggestion, insert, one commit, one undo; the stopped server in words');
+    {
+      const LOUD = 'המוזיקה חזקה מדי, תורידי אותה בשש דציבל', NOISE = 'תעשה שזה יהיה מרגש';
+      const stand = await startStandIn({ answers: { [LOUD]: JSON.stringify({ intent: 'gain_change', slots: { target: 'music', dir: 'down', db: '6' } }) } });
+      const lp = (await call('/projects', { name: 'local assistant keys', width: 640, height: 360 })).body.project.id as string;
+      const lm = await upload(lp, musicFile);
+      await txs(lp, [{ op: 'add_clip', args: { assetId: lm.assetId, start: f(0) } }]);
+      await call(`/projects/${lp}/assets/${lm.assetId}/analyze`, { kind: 'beats' });
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      try {
+        await pg.goto(`${s.ownerUrl}&project=${lp}`);
+        await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+        const saveLocal = (port: number) => pg.evaluate(async (pt) => (await fetch('/api/v1/assistant/config', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ adapter: 'local-llama-server', host: null, model: null, pricesCentsPerMTok: null, monthlyLimitCents: 0, perRequestCapCents: 0, toggles: { titlesAndMarkers: false, peopleNames: false }, local: { port: pt, timeoutSeconds: 60 } }) })).status, port);
+        const focusedId = () => pg.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid ?? null);
+        const tabTo = async (id: string) => { for (let i = 0; i < 15; i++) { if ((await focusedId()) === id) return i; await pg.keyboard.press('Tab'); } return null; };
+        const typeInBar = async (text: string) => {
+          if (!(await pg.getByTestId('palette-dialog').count())) { await pg.getByTestId('open-palette').focus(); await pg.keyboard.press('Enter'); await pg.getByTestId('palette-input').waitFor({ timeout: 8000 }); }
+          await pg.getByTestId('palette-input').press('Control+a'); await pg.keyboard.press('Backspace'); await pg.keyboard.type(text);
+          await pg.getByTestId(BAR_TID.assistantLocalAsk).waitFor({ timeout: 8000 }).catch(() => {});
+        };
+        const saved = await saveLocal(stand.port);
+        await typeInBar(LOUD);
+        const tabs = await tabTo(BAR_TID.assistantLocalAsk);
+        const rev0 = (await call(`/projects/${lp}`)).body.revision as number, hash0 = sha256Hex(JSON.stringify(await doc2(lp)));
+        await pg.keyboard.press('Enter');
+        const suggested = await pg.getByTestId(BAR_TID.assistantLocalSuggestion).waitFor({ timeout: 40000 }).then(() => true, () => false);
+        const phrase = (await pg.locator(`[data-testid=${BAR_TID.assistantLocalSuggestion}] [dir=auto]`).textContent().catch(() => null))?.trim() ?? '';
+        check('local assistant: Tab from the bar\'s input reaches «לשאול את העוזר המקומי», Enter asks, and the stand-in\'s answer shows as the assistant\'s suggestion (nothing changed yet)', saved === 200 && tabs !== null && suggested && phrase.length > 0 && (await call(`/projects/${lp}`)).body.revision === rev0, { saved, tabs, suggested, phrase });
+        if ((await focusedId()) !== BAR_TID.assistantLocalInsert) await tabTo(BAR_TID.assistantLocalInsert);
+        await pg.keyboard.press('Enter');
+        const inserted = await pg.waitForFunction((ph) => document.querySelector<HTMLInputElement>('[data-testid=palette-input]')?.value === ph && document.querySelector<HTMLElement>('[data-testid=bar-result]')?.dataset.kind === 'plan', phrase, { timeout: 8000 }).then(() => true, () => false);
+        const bar = await pg.evaluate(() => { const i = document.querySelector<HTMLInputElement>('[data-testid=palette-input]'); const r = document.querySelector<HTMLElement>('[data-testid=bar-result]'); return { caretAtEnd: !!i && i.selectionStart === i.value.length && document.activeElement === i, kind: r?.dataset.kind ?? null, intent: r?.dataset.intent ?? null }; });
+        const badge = (await pg.getByTestId(BAR_TID.assistantLocalBadge).count()) === 1;
+        check('local assistant: «הכנס לשורה» puts the phrase in the bar with the caret at the end and the badge, and the bar\'s own grammar previews it (gain_change); nothing committed', inserted && bar.caretAtEnd && bar.kind === 'plan' && bar.intent === 'gain_change' && badge && (await call(`/projects/${lp}`)).body.revision === rev0, { inserted, ...bar, badge });
+        await pg.waitForFunction(() => { const r = document.querySelector<HTMLElement>('[data-testid=bar-result]'); return r?.dataset.kind === 'plan' && (window as unknown as { __pfBar?: { lastPlan?: { planHash?: string } } }).__pfBar?.lastPlan?.planHash === r.dataset.planHash; }, undefined, { timeout: 8000 }).catch(() => {});
+        await pg.keyboard.press('Enter');
+        let rev1 = rev0;
+        for (let i = 0; i < 100 && rev1 === rev0; i++) { await sleep(100); rev1 = (await call(`/projects/${lp}`)).body.revision as number; }
+        const tx = s.store.db.prepare('SELECT label, actor FROM transactions WHERE project_id = ? AND revision = ?').get(lp, rev1) as { label: string; actor: string } | undefined;
+        check('local assistant: Enter commits exactly one transaction, «Command bar: gain_change», by the owner', rev1 === rev0 + 1 && tx?.label === 'Command bar: gain_change' && tx.actor === 'user:local', { revisions: rev1 - rev0, tx });
+        await pg.getByTestId('palette-dialog').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+        await pg.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        await pg.keyboard.press('Control+KeyZ');
+        let back = false;
+        for (let i = 0; i < 60 && !back; i++) { await sleep(100); back = sha256Hex(JSON.stringify(await doc2(lp))) === hash0; }
+        const rev2 = (await call(`/projects/${lp}`)).body.revision as number;
+        check('local assistant: one Ctrl+Z gives the exact document from before the commit', back && rev2 === rev1 + 1, { back, revisions: rev2 - rev1 });
+        // nothing listens on the saved port: an honest state in words
+        const dead = await new Promise<number>((r) => { const x = net.createServer(); x.listen(0, '127.0.0.1', () => { const pt = (x.address() as net.AddressInfo).port; x.close(() => r(pt)); }); });
+        await saveLocal(dead);
+        await typeInBar(NOISE);
+        await tabTo(BAR_TID.assistantLocalAsk);
+        await pg.keyboard.press('Enter');
+        await pg.locator('[data-local-state=failed]').waitFor({ timeout: 30000 }).catch(() => {});
+        const said = (await pg.locator('[data-local-state=failed]').textContent().catch(() => null)) ?? '';
+        const noPhrase = (await pg.getByTestId(BAR_TID.assistantLocalInsert).count()) === 0 && (await pg.getByTestId(BAR_TID.assistantLocalSuggestion).count()) === 0;
+        check('local assistant: with nothing listening on the saved port the row says «העוזר המקומי לא פועל כרגע» with the guide as the next step, offers no phrase, names no money and marks nothing untranslated', said.includes('העוזר המקומי לא פועל כרגע') && said.includes('המדריך') && noPhrase && !/חויב|חיוב|שחרור הסכום|סכום שמור/.test(said) && !said.includes(dictionaries.he['refusal.untranslated']), { said: said.slice(0, 200), noPhrase });
+        await pg.keyboard.press('Escape');
+        check('local assistant rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      } finally {
+        await ctx.close();
+        await stand.close();
+      }
+    }
+
+    // recorded instruments «כלים מוקלטים» (wave 7 instruments, integration): the calm row's «צליל» radiogroup from the keyboard; with
+    // the kit unavailable (this server has no library folder: library_not_set) a recorded add sends no request and adds nothing; the
+    // ordinary add is the request it always was, byte for byte, and makes the synthesised track.
+    console.log('\n# Recorded instruments: «צליל» from the keyboard; a recorded add while the kit is unavailable sends nothing; the ordinary add unchanged');
+    {
+      const ip = (await call('/projects', { name: 'instruments keys', width: 640, height: 360 })).body.project.id as string;
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+      await ctx.addInitScript(() => { try { localStorage.setItem('pf.lang', 'he'); } catch { /* storage unavailable */ } });
+      const posts: string[] = [];
+      await ctx.route('**/api/v1/projects/*/music', (r) => { if (r.request().method() === 'POST') posts.push(r.request().postData() ?? ''); void r.continue(); });
+      const pg = await ctx.newPage();
+      const errs: string[] = [];
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      try {
+        await pg.goto(`${s.ownerUrl}&project=${ip}`);
+        await pg.getByTestId('timecode').waitFor({ timeout: 30000 });
+        if ((await pg.evaluate(() => document.documentElement.lang)) !== 'he') await pg.getByTestId('lang-toggle').click();
+        await pg.getByTestId('rail-audio').click();
+        await pg.getByTestId('music-tab').click({ timeout: 8000 });
+        const irow = pg.locator('[data-testid=music-row][data-style-id="music.calm"]');
+        await irow.getByTestId('instruments-state').waitFor({ timeout: 10000 });
+        await pg.waitForFunction(() => !document.querySelector('[data-testid=instruments-state][data-state=checking]'), undefined, { timeout: 8000 }).catch(() => undefined);
+        const radio = (c: string) => irow.locator(`[data-testid=instruments-choice-option][data-choice=${c}]`);
+        await irow.locator('[data-testid=music-bars]').last().focus();
+        await pg.keyboard.press('Tab');
+        const landed = await pg.evaluate(() => { const a = document.activeElement as HTMLElement; return `${a.dataset.testid}/${a.dataset.choice}/${a.getAttribute('aria-checked')}`; });
+        await pg.keyboard.press('ArrowLeft'); // right to left: the next radio is to the left
+        const moved = (await radio('recorded').getAttribute('aria-checked')) === 'true' && (await pg.evaluate(() => (document.activeElement as HTMLElement).dataset.choice)) === 'recorded';
+        const role = await irow.getByTestId('instruments-choice').getAttribute('role');
+        check('instruments: «צליל» is a radiogroup; Tab from the length chips lands on «מסונתז» (chosen), ArrowLeft chooses «כלים מוקלטים» and moves the focus', role === 'radiogroup' && landed === 'instruments-choice-option/synth/true' && moved, { role, landed, moved });
+        const kitState = await irow.getByTestId('instruments-state').getAttribute('data-state');
+        const before = Object.keys(s.store.getProject(ip).doc.assets).length;
+        const add = irow.getByTestId('music-add');
+        const disabled = await add.getAttribute('aria-disabled');
+        await add.focus();
+        await pg.keyboard.press('Enter');
+        await add.click({ force: true });
+        await sleep(400);
+        check('instruments: with the kit unavailable (library_not_set) the recorded add is disabled with its reason; Enter and a click send no request and add nothing', kitState === 'library_not_set' && disabled === 'true' && posts.length === 0 && Object.keys(s.store.getProject(ip).doc.assets).length === before, { kitState, disabled, posts: posts.length });
+        await radio('recorded').focus();
+        await pg.keyboard.press('ArrowRight'); // right to left: back to the first radio
+        const back = (await radio('synth').getAttribute('aria-checked')) === 'true';
+        await add.click();
+        await pg.waitForFunction(() => /./.test(document.querySelector('.pf-music-status.is-ok,.pf-music-status.is-err')?.textContent ?? ''), undefined, { timeout: 60000 }).catch(() => undefined);
+        const assets = Object.values(s.store.getProject(ip).doc.assets);
+        const body = '{"styleId":"music.calm","bars":16,"seed":1,"start":{"value":"0","timescale":1}}';
+        check('instruments: back on «מסונתז» the ordinary add sends exactly the request it always sent and makes the synthesised track (MUSIC_GENERATOR, the old name)', back && posts.length === 1 && posts[0] === body && assets.length === before + 1 && assets[0]!.provenance.procedural?.generator === MUSIC_GENERATOR && !assets[0]!.provenance.instruments && assets[0]!.name.endsWith(' · 16 bars.wav'), { back, posts, names: assets.map((a) => a.name) });
+        check('instruments rows: the page logged no script error', errs.length === 0, { errors: errs.slice(0, 4) });
+      } finally {
+        await ctx.close();
+      }
     }
 
     await page.close();

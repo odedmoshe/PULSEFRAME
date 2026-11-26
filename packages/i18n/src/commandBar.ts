@@ -72,6 +72,8 @@ export const COMMAND_BAR_HE = {
   'assistant.local.invalid.cut_off': 'התשובה של העוזר נקטעה', 'assistant.local.invalid.empty': 'העוזר לא ענה',
   'assistant.local.invalid.not_json': 'התשובה של העוזר לא הייתה בצורה הנכונה', 'assistant.local.invalid.wrong_shape': 'התשובה של העוזר לא הייתה בצורה הנכונה',
   'assistant.local.invalid.not_a_command': 'העוזר לא הצליח לנסח פקודה שהשורה מבינה',
+  'error.code.local_interrupted': 'השרת נעצר באמצע בקשה לעוזר המקומי, ושום דבר לא יצא מהמחשב',
+  'error.code.not_a_local_job': 'זו לא בקשה לעוזר המקומי',
 };
 export const COMMAND_BAR_EN: Record<keyof typeof COMMAND_BAR_HE, string> = {
   'bar.title': 'Command bar',
@@ -126,9 +128,11 @@ export const COMMAND_BAR_EN: Record<keyof typeof COMMAND_BAR_HE, string> = {
   'assistant.local.invalid.cut_off': 'The assistant\'s answer was cut off', 'assistant.local.invalid.empty': 'The assistant did not answer',
   'assistant.local.invalid.not_json': 'The assistant\'s answer was not in the right form', 'assistant.local.invalid.wrong_shape': 'The assistant\'s answer was not in the right form',
   'assistant.local.invalid.not_a_command': 'The assistant could not form a command the bar understands',
+  'error.code.local_interrupted': 'The server stopped during a request to the local assistant, and nothing left this computer',
+  'error.code.not_a_local_job': 'This is not a request to the local assistant',
 };
 /** Codes the assistant's routes and job answer with besides core ASSISTANT_ERROR_CODES (host_not_allowed's headline is index.ts's, worded for any site). */
-export const ASSISTANT_EXTRA_ERROR_CODES = ['summary_too_large', 'host_not_allowed', 'agent_paused', 'budget_error', 'nothing_to_release', 'invalid_request', 'not_found', 'internal_error'] as const;
+export const ASSISTANT_EXTRA_ERROR_CODES = ['summary_too_large', 'host_not_allowed', 'agent_paused', 'budget_error', 'nothing_to_release', 'invalid_request', 'not_found', 'internal_error', 'not_a_local_job'] as const;
 
 /**
  * The Hebrew wording of the assistant's server refusals (apps/server/src/assistant/*.ts, governance.ts reserveAssistant, the
@@ -158,6 +162,8 @@ export const HE_ASSISTANT: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^this request (?:is estimated to|could) cost more than the per-request cap$/, () => 'הבקשה עלולה לעלות יותר מהתקרה לבקשה אחת, ולכן לא נשלחה; קצרו את הבקשה, או הגדילו בהגדרות את התקרה לבקשה אחת'],
   [/^this would exceed the monthly limit of the language assistant$/, () => 'הבקשה הייתה עוברת את המגבלה החודשית של עוזר השפה, ולכן לא נשלחה; חכו לחודש הבא, או הגדילו בהגדרות את המגבלה החודשית'],
   [/^the owner has not set both the monthly limit and the per-request cap$/, () => SETUP_HE.limit_missing!],
+  // the LOCAL setup (localBlockers through job.ts start) comes before the cloud one: its next step is the port, not a network adapter
+  [/^the language assistant is not set up \(provider_not_configured\): the local language assistant is not set up: /, () => `העוזר המקומי לא מוגדר; בהגדרות, בחלק «עוזר השפה», בחרו «מודל מקומי על המחשב הזה» ושמרו את מספר היציאה (${ltr('8791')} לפי המדריך «עוזר שפה מקומי»)`],
   [/^the language assistant is not set up \((\w+)\): /, (m) => SETUP_HE[m[1]!] ?? 'עוזר השפה לא מוגדר; פתחו את ההגדרות, בחלק «עוזר השפה», והשלימו את מה שחסר'],
   [/^the selection and the tracks alone take more than (\d+) bytes to describe$/, (m) => `הקליפים הנבחרים והרצועות לבדם ארוכים מדי לתיאור (יותר מ־${ltr(m[1]!)} בתים); בחרו פחות קליפים ובקשו שוב`],
   [/a price is more than 0 cents per million tokens/, () => `מחיר חייב להיות יותר מ־${ltr('0')} סנט למיליון אסימונים; הקלידו את המחיר מרשימת המחירים של השירות (למשל ${ltr('300')} עבור ${ltr('$3')} למיליון אסימונים)`],
@@ -187,4 +193,11 @@ export const HE_ASSISTANT: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^canceled while the local assistant was answering; nothing left this computer$/, () => 'הבקשה בוטלה בזמן שהעוזר המקומי ענה, ושום דבר לא יצא מהמחשב; אפשר לבקש שוב מתי שרוצים'],
   [/^the server stopped during a local request; nothing left this computer and nothing is held$/, () => 'השרת נעצר באמצע בקשה לעוזר המקומי; שום דבר לא יצא מהמחשב ושום דבר לא נשאר תלוי, ואפשר לבקש שוב'],
   [/^the local assistant's answer was not a command of the bar \((\w+)\); nothing was changed$/, () => 'התשובה של העוזר המקומי לא הייתה פקודה של השורה, ושום דבר לא שונה; נסחו את הבקשה אחרת, או השתמשו באחת הדוגמאות של השורה'],
+  // the local assistant's refusals outside the job (integration, wave 7): routes.ts localCheck and taken, job.ts start
+  [/^no port is saved for the local assistant, so there is nothing to check$/, () => `לא נשמר מספר יציאה לעוזר המקומי, ולכן אין מה לבדוק; בהגדרות, בחלק «עוזר השפה», בחרו «מודל מקומי על המחשב הזה» ושמרו את מספר היציאה (${ltr('8791')} לפי המדריך «עוזר שפה מקומי»)`],
+  [/^this build has no local adapter installed$/, () => 'בגרסה הזו של העורך אין חיבור לעוזר מקומי; שורת הפקודות עובדת גם בלעדיו'],
+  [/^a request to the local assistant is at most (\d+) characters \(this one has (\d+)\)$/, (m) => `בקשה לעוזר המקומי היא לכל היותר ${ltr(m[1]!)} תווים, ובבקשה הזו יש ${ltr(m[2]!)}; קצרו את הבקשה, או אמרו אותה כאחת מהפקודות של השורה`],
+  [/^job \S+ is not a request to the local assistant$/, () => 'הבקשה הזו לא נשלחה לעוזר המקומי; רק הצעה של העוזר המקומי נכנסת לשורה או מוסרת כך'],
+  [/^the check of a local assistant's answer is not built in this server yet, so nothing is sent$/, () => 'הבדיקה של תשובות העוזר המקומי עוד לא בנויה בשרת הזה, ולכן שום דבר לא נשלח; שורת הפקודות עובדת גם בלעדיו, והעוזר יגיע בגרסה מאוחרת יותר'],
+  [/^the local adapter went away before the request was sent; nothing was sent$/, () => 'החיבור לעוזר המקומי הוסר לפני שהבקשה נשלחה, ושום דבר לא נשלח; בדקו את ההגדרות של עוזר השפה ובקשו שוב'],
 ];
