@@ -15,7 +15,7 @@
  */
 import type { Hono } from 'hono';
 import { z } from 'zod';
-import { BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema, SEND_API_REFUSALS, STILLS_REFUSALS } from '@pulseframe/core';
+import { assembleChecks, BROWSER_EXPORT_SIDECAR_REFUSED, RationalTimeSchema, SEND_API_REFUSALS, STILLS_REFUSALS } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { exportLicence, GENERIC_BLOCKER_HINT, renderDocFor, type Exporter, type Manifest } from './export.ts';
 import { PHOTOSENSITIVITY_METHOD } from './flashCheck.ts';
@@ -217,6 +217,11 @@ export function registerBrowserExportRoutes(app: Hono<any>, store: Store, export
         ...(ps ? { photosensitivity: { method: PHOTOSENSITIVITY_METHOD, measuredBy: 'browser', ...ps } } : {}),
         manifest: { engine: manifest.engine, assets: manifest.assets, fonts: manifest.fonts, output: { width, height, firstFrame, frames, frameRate, sampleRate } },
         ...(licence ? { licence } : {}),
+        // wave 8 qc (Q12): the tab feeds no picture or sound checks in this version; stored as not measured, with the reason
+        checks: assembleChecks(
+          { method: 'browser route: the picture checks are not run on this route in this version (use the server export to have them)', status: 'not_measured', findings: [] },
+          { method: 'browser route: the tab mixes the sound itself and it is not measured on this route in this version (use the server export to have it)', status: 'not_measured', findings: [] },
+        ),
       },
     });
     return c.json({ ok: true, jobId: job.id, status: 'succeeded' });

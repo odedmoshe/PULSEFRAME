@@ -15,7 +15,7 @@ import { z } from 'zod';
 import * as T from '@pulseframe/time';
 import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulseframe/core';
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
-import { assembleChecks, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type ExportFinding, type PictureChecks, type SizeFitFault, type SizeFitManifest, type SizeFitOutput, type SoundChecks } from '@pulseframe/core';
+import { assembleChecks, explainFindings, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type ExportFinding, type PictureChecks, type SizeFitFault, type SizeFitManifest, type SizeFitOutput, type SoundChecks } from '@pulseframe/core';
 import { cropFitsPaper, printFit, STILL_EXCLUSIVE_OPTIONS, STILL_EXPORT_BUILT, STILL_TRIED_MAX_PIXELS, stillDocument, STILLS_REFUSALS, StillExportSchema, StillsRefusal, sourceTimeOfFrame, type Asset, type StillCrop, type StillOutput } from '@pulseframe/core';
 import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, OUTPUT_WARNINGS, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
@@ -829,7 +829,9 @@ export class Exporter {
         fitOut = r.fit;
         if (r.validation) validation = { ...r.validation, intermediate: validation };
       }
-      const checks = picture ? assembleChecks(picture.result(output.firstFrame), soundChecksOf(audioMix)) : null;
+      // wave 8 qc (C6): the one explanation pass after assembleChecks, on both routes; a WAV has its sound checked and no picture (Q12)
+      const checks = picture ? explainFindings(doc, output.firstFrame, assembleChecks(picture.result(output.firstFrame), soundChecksOf(audioMix)))
+        : options.format === 'wav' && audioMix ? explainFindings(doc, output.firstFrame, assembleChecks(WAV_NO_PICTURE, soundChecksOf(audioMix))) : null;
       if (canceled()) throw new Error('canceled');
       fs.renameSync(publish, final);
       let captionsOut: { file: string; format: string; cues: number } | null = null;
@@ -894,6 +896,8 @@ export function pictureCheckFor(doc: ProjectDocument, format: ExportOptions['for
     },
   };
 }
+/** The picture half of a WAV export's report (wave 8 qc, Q12): there is no picture, so nothing was looked at. */
+export const WAV_NO_PICTURE: PictureChecks = { method: 'audio-only export: no picture', status: 'not_measured', findings: [] };
 /** The sound half of the report: what the mix measured on its written 16-bit WAV (worker A), or an honest not-measured state. */
 export function soundChecksOf(mix: MixResult | null): SoundChecks {
   if (mix?.checks) return mix.checks;
