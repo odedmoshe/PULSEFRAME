@@ -39,6 +39,10 @@ import { SEARCH_LANE_PREFIX, type Embedder } from './search/contract.ts';
 import { createSearchRuntime } from './search/runtime.ts';
 import type { PictureModelsTestSeams } from './picmodels/contract.ts';
 import { createPictureModelsRuntime } from './picmodels/runtime.ts';
+import { MadeHost } from '@pulseframe/renderer';
+import { MADE_JOB_TYPE } from '@pulseframe/core';
+import { MadeJobs } from './made/job.ts';
+import { createMadeRunner, type MadeRuntime } from './made/runner.ts';
 
 import { AutonomySettings } from './autonomy.ts';
 export { loadConfig, type Config } from './config.ts';
@@ -46,6 +50,8 @@ export interface RunningServer {
   url: string; /** Link that opens the editor as the owner (carries the launch secret). */ ownerUrl: string; cfg: Config; store: Store; auth: Auth; derivatives: Derivatives; governance: Governance; backup: BackupScheduler;
   /** The import queue and the phone drop door (ADR-0023), the render cache (ADR-0024): for proofs and tests that look inside. */
   imports: ImportQueue; door: DropDoor; renderCache: RenderCacheService;
+  /** «קליפ מקוד» (wave 8 motioncode): the made browser and the runner, for proofs that look inside (proof check 12: no context left open) */
+  made: { host: MadeHost; runner: MadeRuntime };
   close(): Promise<void>;
 }
 
@@ -119,7 +125,15 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // when the owner chose it and asks) and the compute lane; tests may pass their own (a labelled MOCK) in deps.assistant.local
   const assistantDeps: AssistantDeps = { ...(deps.assistant ?? { adapters: new Map(), endpoint: () => null }), lane, local: deps.assistant?.local !== undefined ? deps.assistant.local : createLlamaAdapter() };
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search });
-  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
+  // ---- «קליפ מקוד» (wave 8 motioncode, W1): the made browser (separate from the export browser), the made.render job and its runner ----
+  const madeHost = new MadeHost();
+  const made = createMadeRunner(store, new MadeJobs({ store, lane, host: madeHost }));
+  // the generic cancel (REST /jobs/:id/cancel and MCP cancel_job) ends in capabilities.cancel for a type it does not name: a made
+  // render is handed to its own cancel here (stand-in until the dispatch line `if (j.type === MADE_JOB_TYPE && extras.made) …` lands in http.ts and mcp.ts)
+  const capabilitiesCancel = capabilities.cancel.bind(capabilities);
+  capabilities.cancel = async (jobId: string, actor: string) => (store.getJob(jobId).type === MADE_JOB_TYPE ? made.cancel(jobId, actor) as any : capabilitiesCancel(jobId, actor));
+  // ---- end made clips ----
+  const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}), made });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   const bound = (server.address() as AddressInfo).port;
@@ -146,9 +160,10 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // its reservation released when nothing was sent, kept as unknown when the send had started ----
   recoverAssistantJobs(store, governance);
   // ---- end command bar assistant recovery ----
+  made.recover(); // «קליפ מקוד»: a render cut off by the restart ends failed (made_restarted); it never resumes
   backup.start();
   return {
-    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache,
+    url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache, made: { host: madeHost, runner: made },
     async close() {
       (app as any).browserExport?.stop();
       await mcp.close();
@@ -169,6 +184,8 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
       // without this, shutdown waited for them indefinitely.
       await new Promise((r) => { server.close(r); (server as unknown as { closeAllConnections?: () => void }).closeAllConnections?.(); });
       await host.close();
+      await made.stop(); // a running made render is stopped; its row stays for recover() (wave 8 motioncode)
+      await madeHost.close(); // the made browser
       store.onPrivacyChange = null;
       setStorageHooks(store, null);
       segments.close();

@@ -42,6 +42,16 @@ export const MADE_CHROMIUM_ARGS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * Extra arguments for WebGL pages: none. Measured 2026-11-26 in this container (W1, one run, bundled headless shell 153.0.8010.12,
+ * chromiumSandbox false, with --disable-gpu and the heap flag): `getContext('webgl2')` returned a WebGL2RenderingContext whose
+ * renderer is "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)", and a cleared red
+ * pixel read back as 255,0,0,255. Adding `--use-angle=swiftshader` or also `--enable-unsafe-swiftshader` gave the same renderer and
+ * pixel, so nothing is added. Under the sandboxed (uid-dropped) launch it is measured by proof check G-webgl.1. On the owner's
+ * Windows laptop the adapter is unknown until measured there.
+ */
+export const MADE_WEBGL_ARGS: readonly string[] = Object.freeze([]);
+
+/**
  * The response CSP of a made page (verify C5). `navigate-to` is not listed: it never shipped in Chromium. Navigation is caught by
  * the route and by failing the job on any `framenavigated`. `/lib/` and `/assets/` are the locally served pinned libraries and
  * the owner's media (decision 5); internet files are fetched once BEFORE drawing and served from the same origin.
