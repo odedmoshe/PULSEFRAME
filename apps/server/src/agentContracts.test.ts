@@ -199,14 +199,4 @@ describe('C12: backups never hold the agent folder', () => {
   });
 });
 
-// The builders' rows (proof:agent checks; packages/evals/src/agent-proof.ts lists them all)
-describe('to build (W1 loop, recovery, undo-all; W2 adapters and keys)', () => {
-  it.todo('W1 check 1: the walk «תחתכו את השקטים, תוסיפו כתוביות בעברית, תעשו גרסה 9:16 ותייצאו» against the MOCK scripted model succeeds');
-  it.todo('W1 check 3: every edit is a transaction by agent:run_<id> through serveAs; agent/ holds no .commit( call');
-  it.todo('W1 C6: Store.undoActor — run edits X at r10, owner edits X at r11, run edits X at r12: 409 undo_conflict lists X, nothing applied; partial undoes the rest');
-  it.todo('W1 C6: undoActor composes the run\'s own undo/redo; the composite marks every target undone_by and a redo clears them');
-  it.todo('W1 C7: undo-all after an export lists notUndone export_file 1, money_spent and data_sent');
-  it.todo('W1 C8: killed after a step started, restarted: no duplicate transaction, no second export job');
-  it.todo('W1 C16: 423 paused → waiting without burning steps; step limit → stopped_at_limit, continue finishes');
-  it.todo('W1: run answers pass forPrincipal for the reader (rows-scrubbed)');
-});
+// The builders' rows live in agentLoop, undoActor, agentRecover (W1) and agentKeys / agentAdapters (W2) tests; proof:agent lists all checks.

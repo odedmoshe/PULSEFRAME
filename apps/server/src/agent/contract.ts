@@ -25,10 +25,9 @@
  *  4. Messages for the model are rebuilt from the steps (images re-rendered at their {frame, revision}; at most keepImages).
  */
 import type Database from 'better-sqlite3';
-import { agentRunActor, AgentNotBuiltError } from '@pulseframe/core';
+import { agentRunActor } from '@pulseframe/core';
 import type { Principal } from '../governance.ts';
 import type { AgentEndpoint, AgentModelAdapter, AgentModelRow, AgentProviderPreset } from '@pulseframe/providers';
-import type { Store } from '../store.ts';
 
 export const AGENT_TABLES_SQL = `
   CREATE TABLE IF NOT EXISTS agent_runs (
@@ -58,22 +57,14 @@ export const IDEMPOTENT_TOOLS: ReadonlySet<string> = new Set(['apply_transaction
 export const AGENT_DIR = 'agent';
 export const AGENT_KEYS_DIR = 'agent/keys';
 export const AGENT_PROVIDERS_FILE = 'agent/providers.json';
-export const AGENT_MODELS_FILE = 'agent/models.json';
+/** the owner's model rows: OUTSIDE agent/ so they are backed up (W2, lead's answer 5) */
+export const AGENT_MODELS_FILE = 'agent-models.json';
 export const AGENT_FILE_MODE = 0o600;
 
 // ---------- model-call money (C8/C9): one ledger row per call, settled explicitly ----------
 /** budget_ledger.job_id of a model call: never equal to a job id, so Governance.settleFor never settles it by a job event. */
 export const modelCallLedgerId = (jobId: string, n: number): string => `${jobId}:${n}`;
-/**
- * W1. Reserve before the call (state 'reserved', reserved_cents = the bound from maxOutputTokens and the input estimate at the row's
- * prices, 0 when unpriced), under grant_id = the principal's grant id, or Part 1's owner-wide 'open-agents' ledger. Refuses with
- * 402 budget_reached past the owner-wide budget or the run's spend limit (the run stops `stopped_at_limit`, reason budget_reached).
- */
-export function reserveModelCall(store: Store, principal: Principal, jobId: string, n: number, boundCents: number): void { void store; void principal; void jobId; void n; void boundCents; throw new AgentNotBuiltError('reserveModelCall'); }
-/** W1. Settle with the actual cents (null usage = settle at the reservation, as settleAssistant does). */
-export function settleModelCall(store: Store, jobId: string, n: number, actualCents: number | null): void { void store; void jobId; void n; void actualCents; throw new AgentNotBuiltError('settleModelCall'); }
-/** W1. unknown_after_send: state 'unknown', never released automatically. */
-export function markModelCallUnknown(store: Store, jobId: string, n: number): void { void store; void jobId; void n; throw new AgentNotBuiltError('markModelCallUnknown'); }
+/** reserveModelCall / settleModelCall / releaseModelCall / markModelCallUnknown: agent/ledger.ts (W1). */
 
 // ---------- the seam between the loop (W1) and the providers (W2): FROZEN after the pre-pass ----------
 /** What a run needs to call its model: built by W2's agent/providers.ts createAgentProviders(dataDir, adapters), used by W1's loop. */
