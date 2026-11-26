@@ -4,21 +4,14 @@
  * this page runs in the owner's own browser instead. Nothing is sent anywhere: the result is shown for copying.
  * The timing at the end is ONE sample of one simple workload, labelled as such; it is not a performance figure.
  */
+import { adapterReport } from './gpuProbe.logic.ts';
 const out: Record<string, unknown> = { page: 'gpu.html', version: 2, at: new Date().toISOString(), userAgent: navigator.userAgent, hardwareConcurrency: navigator.hardwareConcurrency, deviceMemoryGb: (navigator as { deviceMemory?: number }).deviceMemory ?? null, screen: `${screen.width}x${screen.height} @${devicePixelRatio}` };
 const ok = async (f: () => Promise<{ supported?: boolean }>) => { try { return !!(await f()).supported; } catch { return false; } };
 
 async function webgpu() {
   const gpu = (navigator as { gpu?: any }).gpu;
   if (!gpu) return { api: false };
-  const describe = async (powerPreference: 'high-performance' | 'low-power') => {
-    try {
-      const a = await gpu.requestAdapter({ powerPreference });
-      if (!a) return null;
-      const info = a.info ?? (a.requestAdapterInfo ? await a.requestAdapterInfo() : {});
-      return { vendor: info.vendor ?? null, architecture: info.architecture ?? null, device: info.device ?? null, description: info.description ?? null, isFallbackAdapter: a.isFallbackAdapter ?? info.isFallbackAdapter ?? null, features: [...a.features].sort(), limits: { maxTextureDimension2D: a.limits.maxTextureDimension2D, maxBufferSize: a.limits.maxBufferSize, maxColorAttachments: a.limits.maxColorAttachments } };
-    } catch (e) { return { error: String(e) }; }
-  };
-  const res: Record<string, unknown> = { api: true, preferredCanvasFormat: gpu.getPreferredCanvasFormat?.() ?? null, highPerformance: await describe('high-performance'), lowPower: await describe('low-power') };
+  const res: Record<string, unknown> = await adapterReport(gpu);
   // One timing sample: 120 full-frame fragment passes at 1080x1920, then a readback of the last frame.
   try {
     const a = await gpu.requestAdapter({ powerPreference: 'high-performance' });
