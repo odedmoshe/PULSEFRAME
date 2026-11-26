@@ -10,6 +10,7 @@ import { CanvasHandles } from './editor/CanvasHandles.tsx';
 import { INK_UI_BUILT, InkMode } from './editor/ink/InkMode.tsx';
 import { INK_MODE } from './editor/ink/inkKeys.ts';
 import './editor/ink/InkPanel.tsx';
+import { ExposureOverlay } from './editor/grade/ExposureOverlay.tsx';
 import { TrackPicker } from './editor/TrackPicker.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
 import { chordOf, Keymap } from './editor/commands.ts';
@@ -190,6 +191,8 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
           <CanvasHandles canvas={canvasEl} />
           {INK_UI_BUILT && <InkMode canvas={canvasEl} />}
+          {/* zebra over the viewer (wave 8 grade, W3): renders nothing until ZEBRA_BUILT; never in a still or an export */}
+          <ExposureOverlay />
           <TrackPicker canvas={canvasEl} />
           <PreviewNotice />
           <Welcome />

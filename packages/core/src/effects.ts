@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { CURVES, KeyframeSchema, MAX_EFFECT_KEYS } from './keyframe.ts';
 // livingContract.ts imports zod only
 import { LIVING_DEFAULTS, LIVING_MOVES, OP_ONLY_EFFECTS } from './livingContract.ts';
+import { GradeCurvesSchema } from './gradeCurves.ts';
 
 const Color = z.string().regex(/^#[0-9a-fA-F]{6}$/).describe('#RRGGBB');
 const frac = (max: number, def: number, what: string) => z.number().min(0).max(max).default(def).describe(what);
@@ -369,6 +370,8 @@ export const EffectInstanceSchema = z
     keyframes: z.record(z.string(), z.array(KeyframeSchema).min(1).max(MAX_EFFECT_KEYS)).optional(),
     /** Parameters that kick on the beats of the music under the clip (render-time; nothing computed is stored). At most 4. */
     modulate: z.record(z.string().max(48), ModulatorSchema).refine((m) => Object.keys(m).length <= 4, 'at most 4 modulated parameters').optional(),
+    /** Colour curves of a color.grade instance only (wave 8 grade; gradeCurves.ts): not a parameter (params cannot hold arrays), not animatable. */
+    curves: GradeCurvesSchema.optional(),
   })
   .strict();
 /**

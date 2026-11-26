@@ -231,14 +231,14 @@ function applyLook(d: ProjectDocument, clip: MediaClip, angle: MulticamAngle, pi
   if (speedValue(clip) !== 1) warn(rep, 'speed_not_following_sound', clip.id);
 }
 /**
- * A look compared with ids ignored (set_angle_look apply 'unedited'): framing without opacity, effects, mask, blend, per-format
+ * A look compared with ids ignored (set_angle_look apply 'unedited'): framing without opacity, effects (with their colour curves), mask, blend, per-format
  * framing and follow. Privacy regions are not part of it: they belong to the file (MulticamPiece.redact), and every segment
  * showing the file gets them whatever its look.
  */
-function lookKey(look: { transform?: { x: number; y: number; scale: number; rotation: number }; effects?: { type: string; enabled: boolean; params: unknown; modulate?: unknown }[]; mask?: unknown; blend?: unknown; variantTransforms?: unknown } | undefined, follow: unknown): string {
+function lookKey(look: { transform?: { x: number; y: number; scale: number; rotation: number }; effects?: { type: string; enabled: boolean; params: unknown; modulate?: unknown; curves?: unknown }[]; mask?: unknown; blend?: unknown; variantTransforms?: unknown } | undefined, follow: unknown): string {
   const t = look?.transform ?? DEFAULT_TRANSFORM;
   return canonical({
-    t: [t.x, t.y, t.scale, t.rotation], e: (look?.effects ?? []).map((e) => ({ type: e.type, enabled: e.enabled, params: e.params, modulate: e.modulate ?? null })),
+    t: [t.x, t.y, t.scale, t.rotation], e: (look?.effects ?? []).map((e) => ({ type: e.type, enabled: e.enabled, params: e.params, modulate: e.modulate ?? null, curves: e.curves ?? null })), // colour curves are part of the look (wave 8 grade, verifier C4)
     m: look?.mask ?? null, b: look?.blend ?? null, v: look?.variantTransforms ?? null, f: follow ?? null,
   });
 }

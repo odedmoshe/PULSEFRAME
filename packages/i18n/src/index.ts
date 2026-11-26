@@ -28,6 +28,7 @@ import { TEACH_EN, TEACH_HE } from './teach.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
 import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
 import { LIVING_EN, LIVING_HE } from './living.ts';
+import { GRADE_EN, GRADE_HE } from './grade.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { COVER_EN, COVER_HE } from './cover.ts';
 import { OWNTEMPLATE_EN, OWNTEMPLATE_HE } from './owntemplate.ts';
@@ -256,6 +257,7 @@ export const he = {
   ...BOOTH_HE,
   ...COVER_HE,
   ...OWNTEMPLATE_HE,
+  ...GRADE_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -478,6 +480,7 @@ export const en: Record<keyof typeof he, string> = {
   ...BOOTH_EN,
   ...COVER_EN,
   ...OWNTEMPLATE_EN,
+  ...GRADE_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -517,3 +520,4 @@ export * from './cover.ts';
 export * from './tripMap.ts';
 export * from './owntemplate.ts';
 export * from './ink.ts';
+export * from './grade.ts';

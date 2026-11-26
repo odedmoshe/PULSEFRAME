@@ -17,7 +17,7 @@ import { OVERLAY_TYPES, heldOverlayParams } from './overlays.ts';
 import { pieceAt, runStart, stutterFrame, tapOffsets, tapWeights } from './taps.ts';
 import { beatPositionAt, isTimeEffect, temporalOf, type BeatPosition, type TextAnimation, effectParamsAt, pictureSourceAt, provideSoundTails, sourceAt, sourceFrameIndexAt, transformAt, type BlendMode, type Clip, type FollowInfo, type Mask, type ProjectDocument, type ResolvedRegion, type SoundTail, type TextStyle, type Track, type TransitionType, type Transform } from '@pulseframe/core';
 import { beatSwitchFrame, lightEnvelope, makeFieldIndex, resolveFields, stampText, switchFrame, transitionDef, transitionProgress, velocityOffsets, type FieldIndex } from '@pulseframe/core';
-import { clipSourceFrames, drawnSummary, limitToCover, steadyPose, type Asset, type ClipDepth, type DrawnPayload, type MediaClip } from '@pulseframe/core';
+import { clipSourceFrames, drawnSummary, limitToCover, steadyPose, type Asset, type ClipDepth, type DrawnPayload, type GradeCurves, type MediaClip } from '@pulseframe/core';
 import { audioPlan, soundEnd, type AudioPlan } from './audio.ts';
 import { resolveFollows, resolveRegions, type Follower } from './follow.ts';
 
@@ -36,7 +36,8 @@ export interface TimeTap {
 }
 /** Look applied by the compositor after the layer is placed (with its transform and opacity): effects in order, then mask, then transition and blend. */
 export interface LayerLook {
-  effects?: { type: string; params: Record<string, number | string | boolean> }[];
+  /** `curves`: a color.grade instance's colour curves, as stored (points, never tables: a typed array is unkeyable, frameKey.ts), so the frame key covers them (wave 8 grade). */
+  effects?: { type: string; params: Record<string, number | string | boolean>; curves?: GradeCurves }[];
   blend?: BlendMode;
   mask?: Mask;
   /**
@@ -145,6 +146,8 @@ const look = (cx: Ctx, clip: Clip, time: T.RationalTime): LayerLook => {
     // life line (ADR-0021): a date stamp that takes its text from the capture date of the picture (core fields.ts stampText);
     // no date gives '' and nothing is drawn. A stamp without source, or with source 'text', is passed on exactly as before.
     if (e.type === 'stylize.date-stamp' && params.source === 'capture') return { type: e.type, params: { ...params, text: stampText(cx.doc, cx.sequenceId, clip, time, { clock: params.clock === true, dateOrder: params.dateOrder === 'dmy' ? 'dmy' : 'ymd' }, { index: fieldIndexOf(cx.doc) }) } };
+    // colour curves (wave 8 grade): only a grade that has them carries the field, so every graph without curves is unchanged
+    if (e.type === 'color.grade' && e.curves) return { type: e.type, params, curves: e.curves };
     return { type: e.type, params: e.type === 'light.strobe' ? { ...params, [FLASH_SINCE]: cx.flash(clip.id, e.id) } : params };
   });
   // a mask lives on media clips (layer space) and on adjustment clips (frame space: the adjustment's box is the whole frame, ADR-0016)

@@ -8,7 +8,7 @@
  * reference, `amount` can be below 1, and the residual is always reported. color.grade has limited reach (white balance R/B
  * 0.67–1.5, no curves): a cast beyond it is reported as `partial`, with the values that hit their limit in `limitedBy`.
  */
-import { DEFAULT_TRANSFORM, isTimeEffect, paramRange, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { DEFAULT_TRANSFORM, GradeCurvesNotBuilt, isTimeEffect, paramRange, type GradeCurveTables, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 
 export interface GradeParams { exposure: number; temperature: number; tint: number; contrast: number; saturation: number; shadows: number; highlights: number; fade: number }
 /** The color.grade defaults (core effects.ts): no change. */
@@ -47,11 +47,22 @@ function gradeInto(r: number, g: number, b: number, k: GradeK, out: Float64Array
   out[o + 1] = clamp01(cg * (1 - 0.25 * k.f) + 0.12 * k.f);
   out[o + 2] = clamp01(cb * (1 - 0.25 * k.f) + 0.12 * k.f);
 }
-/** color.grade on one straight non-linear RGB value 0..1, step for step as gpu.ts (the 'color.grade' WGSL). A proof/fit model only, never rendered. */
-export function gradePixel(rgb: readonly [number, number, number], p: Readonly<GradeParams>): [number, number, number] {
+/**
+ * color.grade on one straight non-linear RGB value 0..1, step for step as gpu.ts (the 'color.grade' WGSL). A proof/fit model only, never
+ * rendered. With `tables` (core gradeCurveTables of the instance's curves, wave 8 grade) the curve step follows the sliders: curvePixel.
+ */
+export function gradePixel(rgb: readonly [number, number, number], p: Readonly<GradeParams>, tables?: GradeCurveTables): [number, number, number] {
   const out: [number, number, number] = [0, 0, 0];
   gradeInto(rgb[0], rgb[1], rgb[2], constantsOf(p), out, 0);
-  return out;
+  return tables ? curvePixel(out, tables) : out;
+}
+/**
+ * W1: the curve step of the pass on a clamped straight colour o (0..1 per channel), as the WGSL does it in f32 (grade-plan §3.5):
+ * q = 255·o; i = min(floor(q), 254); f = q − i; out = (T[i]·(1 − f) + T[i+1]·f) / 255, per channel with its own table. Model only.
+ */
+export function curvePixel(o: readonly [number, number, number], tables: GradeCurveTables): [number, number, number] {
+  void o; void tables;
+  throw new GradeCurvesNotBuilt('curvePixel');
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

@@ -3,7 +3,7 @@
  * used by the core-level fuzz (ops-fuzz.test.ts) and the store-level fuzz (store-fuzz.test.ts).
  */
 import * as T from '@pulseframe/time';
-import { animatableParams, LIVING_BUILT, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, LESSON_OPS_BUILT, LESSON_PART_ORDER, MAP_OPS_BUILT, MAP_MODES, MAP_LOOKS, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
+import { animatableParams, LIVING_BUILT, MOMENTS_ALGO, AUDIO_EFFECTS, AUDIO_PRESETS, encodeNoiseProfile, GENERIC_NOISE_PROFILE, knownGridOf, LIFE_OPS_BUILT, MUSIC_GENERATOR, musicLayout, musicProvenanceParams, sha256Hex, transitionDef, type Capture, type OpCall, type ProjectDocument, fingerprint, PEOPLE_OPS_BUILT, SEQUENCE_OPS_BUILT, SEQUENCE_OPS, EASINGS, KEYFRAME_OPS, KEYFRAME_OPS_BUILT, MULTICAM_OPS, MULTICAM_OPS_BUILT, LIBRARY_OPS_BUILT, CRAFT_OPS_BUILT, ATTRIBUTE_GROUPS, STEADY_OPS_BUILT, SST, SOURCE_RANGE_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, KEEP_RULES, GRADE_CURVE_PRESETS, LESSON_OPS_BUILT, LESSON_PART_ORDER, MAP_OPS_BUILT, MAP_MODES, MAP_LOOKS, musicAt, sourceAt, type MediaClip } from '@pulseframe/core';
 
 export const RATES = [{ num: 30, den: 1 }, { num: 25, den: 1 }, { num: 24000, den: 1001 }, { num: 30000, den: 1001 }, { num: 60, den: 1 }];
 
@@ -619,6 +619,28 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(opts.v1Replay ? [] : [() => genLiving(doc)]),
       // «ציור חי» (wave 8 ink): add_ink and edit_ink (never in the v1 corpus)
       ...(opts.v1Replay ? [] : [() => genInk(doc)]),
+      // colour curves (wave 8 grade, verifier C10d): set_grade_curves beside set_colour_grade — valid sets (the presets, generated
+      // monotone and non-monotone ones), identity channels (dropped), null (removes; adds nothing on an ungraded clip), and invalid sets
+      // (one point, 13 points, a value of 256 or 0.5, unordered or too close inputs, a missing end); on video clips mostly, sometimes any
+      // clip (titles accepted; captions and sound refused) — locked tracks come from update_track; never in the v1 replay corpus
+      ...(!opts.v1Replay ? [() => {
+        const curve = (): [number, number][] => {
+          const r = rnd();
+          if (r < 0.06) return [[0, 0]];
+          if (r < 0.1) return Array.from({ length: 13 }, (_, i) => [Math.min(255, i * 21), int(256)] as [number, number]);
+          if (r < 0.14) return [[0, 0], [128, rnd() < 0.5 ? 256 : 0.5], [255, 255]];
+          if (r < 0.18) return [[0, 0], [120, 40], [rnd() < 0.5 ? 118 : 122, 60], [255, 255]];
+          if (r < 0.21) return [[rnd() < 0.5 ? 3 : 0, 0], [rnd() < 0.5 ? 255 : 250, 255]];
+          if (r < 0.3) return [[0, 0], [255, 255]];
+          const k = 2 + int(rnd() < 0.9 ? 6 : 11), xs = new Set<number>([0, 255]);
+          while (xs.size < k) xs.add(4 + int(248));
+          const sorted = [...xs].sort((a, b) => a - b).filter((x, i, a) => i === 0 || x - a[i - 1]! >= 4);
+          if (sorted[sorted.length - 1] !== 255) sorted[sorted.length - 1] = 255;
+          return sorted.map((x) => [x, int(256)] as [number, number]);
+        };
+        const curves = rnd() < 0.15 ? null : rnd() < 0.15 ? pick([...GRADE_CURVE_PRESETS]).curves : Object.fromEntries((['master', 'r', 'g', 'b'] as const).filter(() => rnd() < 0.45).map((ch) => [ch, curve()]));
+        return { op: 'set_grade_curves', args: { clipId: rnd() < 0.8 ? videoId() : any(), curves } };
+      }] : []),
       // a held frame (add_clip freeze, wave 8 growing; never in the v1 corpus, which keyframe-replay and ripple-delete-golden pin): mostly a video picture right after a picture clip (where a dissolve out of it can
       // follow), now and then a still, linked sound, no duration or a picture past the end (each refused)
       ...(opts.v1Replay ? [] : [() => {

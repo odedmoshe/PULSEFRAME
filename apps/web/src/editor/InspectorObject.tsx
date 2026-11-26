@@ -59,6 +59,7 @@ import { FieldLiveLine, FieldMenu, FieldTextBox } from './lifeline/FieldMenu.tsx
 import { MulticamClipBlock } from './MulticamClipBlock.tsx';
 import { MUSICFIT_UI_BUILT } from './musicfit/MusicFitBlock.tsx';
 import { ImpactControls } from './musicfit/ImpactControls.tsx';
+import { CurvesBlock } from './grade/CurvesBlock.tsx';
 
 type Media = Extract<Clip, { type: 'media' }>;
 const run = (editor: Editor, id: string) => { const c = COMMANDS.find((x) => x.id === id)!; if (!c.enabled || c.enabled(editor)) void c.run(editor); };
@@ -749,6 +750,8 @@ function ColourTab({ clip, look, trackKind }: PanelProps) {
     <>
       <Section id="looks" title={S.secLooks} summary={S.looksCount(LOOK_CATALOG_COUNTS.looks)}><LookTargetLine look={look} /><LooksField look={look} /></Section>
       <ManualGrade clip={clip} />
+      {/* colour curves «עקומות» (wave 8 grade, W2): renders nothing until CURVES_UI_BUILT */}
+      {clip.type !== 'caption' && <CurvesBlock clip={clip} />}
       {media && clip.type === 'media' && <Section id="match" title={S.secMatch} defaultOpen={false} help><ColourMatchPanel key={`cm:${clip.id}`} clip={clip} /></Section>}
     </>
   );

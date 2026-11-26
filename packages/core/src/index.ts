@@ -221,3 +221,7 @@ export * from './livingOps.ts';
 export * from './inkContract.ts';
 export * from './inkOps.ts';
 export * from './inkSimplify.ts';
+// colour curves «עקומות» (wave 8 grade track): the contract, validation rule, canonical form, presets and the op set_grade_curves are
+// lead-built; the table maths (gradeCurveTable / gradeCurveTables / gradeCurveTablesRgba / gradeCurveTablesDigest) is W1's
+export * from './gradeCurves.ts';
+export * from './gradeCurvesOps.ts';

@@ -207,6 +207,8 @@ export const LEARN: Readonly<Record<string, LearnRow>> = {
   add_trip_map: no('placement'), update_trip_map: no('clip_content'), time_trip_map: no('clip_content'),
   // «תמונה חיה» (wave 8 living; rows added by the lead at the merge): a depth is drawn by hand for one picture
   set_clip_depth: no('hand_drawn'), set_living_picture: no('hand_drawn'),
+  // «ציור חי» and colour curves (wave 8 ink, grade; rows added by the lead at the merges): drawn by hand for one place / one picture
+  add_ink: no('placement'), edit_ink: no('hand_drawn'), set_grade_curves: no('hand_drawn'),
   apply_lesson: no('replaces'),
 };
 export const learnRow = (op: string): LearnRow | undefined => (Object.hasOwn(LEARN, op) ? LEARN[op] : undefined);

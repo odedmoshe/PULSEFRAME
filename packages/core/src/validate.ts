@@ -10,6 +10,7 @@ import { MAX_MOTION_TRACKS, MAX_PROJECT_TRACK_SAMPLES, TRACK_STATES } from './tr
 import { momentsProblem } from './momentsContract.ts';
 import { type Keyframe } from './keyframe.ts';
 import { turnsBack } from './curves.ts';
+import { gradeCurvesListIssues } from './gradeCurves.ts';
 
 /**
  * Keyframe curves (ADR-0019). Both rules can fire only on documents that use the new fields (`bezier`, the new easings).
@@ -171,6 +172,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
           });
         }
         const seenFx = new Set<string>();
+        // colour curves (wave 8 grade, gradeCurves.ts): only on color.grade, each curve valid; a field only new documents carry
+        for (const g of gradeCurvesListIssues(c.effects, `clip ${c.id}`)) issues.push({ ...g, ids: [c.id] });
         for (const fx of c.effects ?? []) {
           const d = findEffect(fx.type);
           if (!d) issues.push({ code: 'unknown_effect', message: `clip ${c.id} uses effect "${fx.type}", which this build does not have`, ids: [c.id] });
