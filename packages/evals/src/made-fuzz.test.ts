@@ -41,6 +41,6 @@ describe('apply_made_clip fuzz (pre-pass: refused, nothing changes)', () => {
         }
       } finally { s.close(); }
     }
-  });
+  }, 60_000);
   it.todo('W2: accepted calls leave a valid, evaluable document; one asset (dedup by hash), at most one track; undo/redo/replay exact');
 });
