@@ -8,7 +8,8 @@
  * - GET /api/v1/picture-models (scope observe): a read-only state report built ONLY from the registry, the worker digest, the probe and
  *   the ledger + file checks; core pictureModelsFor decides what a credential sees: the owner's own session every row, anyone else codes
  *   and numbers and NEVER the yunet row. No path, no file name, no worker message reaches any answer.
- * - POST /api/v1/projects/:id/eyes/propose: scope observe → isOwnerSession, else 403 owner_required BEFORE the body is read → the
+ * - POST /api/v1/projects/:id/eyes/propose: scope observe → actsAsOwner (ADR-0036: the owner's own session, or in open mode an
+ *   editing agent credential; autonomy.ts OPEN_GATES A17), else 403 owner_required BEFORE the body is read → the
  *   project → the body (core EyesProposeBodySchema, strict) → the asset and its frame (picmodels refusals) → yunet ready, else 409
  *   eyes_not_ready naming the code → decode AS SHOWN at long side EYES.inputLongSide (frames.ts) → ONE worker process
  *   (runEyesOnce below) → the worker line parsed with core EyesWorkerLineSchema (STRICT: an extra key is 502 eyes_engine_failed) →
@@ -19,7 +20,7 @@
  *   worker message reach app.onError's console.error (http.ts): every failure is a picmodelsError with a code, details holding only
  *   codes and integers. Not in the lane (no label), no MCP tool, not in the assistant summary.
  * - ONE PROCESS PER REQUEST, killed (SIGKILL) on abort (the request's signal: the client went away or «עצרו»), on the timeout and
- *   after the answer; no kept worker, PF_TOOLS_KEEP_SECONDS does not apply (verify C10). Started as `python -I pf_picture.py serve
+ *   after the answer; no kept worker, PF_TOOLS_KEEP_SECONDS does not apply (verify C10). Started as `python -I -X utf8 pf_picture.py serve
  *   --role eyes --model <verified path> --threads 2`, OFFLINE_ENV, cwd the store's tmp folder; stderr is kept to the last 2,000
  *   characters in memory for the owner's setup detail only and never logged.
  * - The generic launcher is a NEW file ../toolsWorker.ts used by picmodels only (C17): search/workers.ts stays exactly as it is.
@@ -47,7 +48,7 @@ export const PICTURE_WORKER_SHA256: string | null = null;
 const P = '/api/v1/projects/:id';
 /** Every picmodels route, as Hono registers it (peopleSurfaces.ts classifies each; openapi.ts documents each). No map route this wave. */
 export const PICMODELS_ROUTES = ['GET /api/v1/picture-models', `POST ${P}/eyes/propose`] as const;
-/** The routes only the owner's own session reaches (403 owner_required for every other credential, before anything is read). */
+/** The routes only a credential acting as the owner reaches (actsAsOwner, ADR-0036; 403 owner_required otherwise, before anything is read). */
 export const PICMODELS_OWNER_ROUTES: readonly string[] = [`POST ${P}/eyes/propose`];
 /** No MCP tool of this track, ever in this wave (no eyes tool, no map tool). */
 export const PICMODELS_MCP_TOOLS = [] as const;
@@ -101,10 +102,10 @@ export function notBuiltPictureModels(registry: typeof PICTURE_MODELS = PICTURE_
 }
 
 // ---------- the worker launcher's contract (../toolsWorker.ts, W1) ----------
-/** How the tools Python is started (always `python -I script …`, OFFLINE_ENV, cwd tmpDir). */
+/** How the tools Python is started (always `python -I -X utf8 script …` = pythonArgs.ts PYTHON_WORKER_FLAGS, OFFLINE_ENV, cwd tmpDir). */
 export interface ToolsProcessSpec { python: string; script: string; tmpDir: string }
 /**
- * ONE process, ONE request, ONE answer line: spawn `python -I script ...args`, write `request` as one JSON line to stdin, take the
+ * ONE process, ONE request, ONE answer line: spawn `python -I -X utf8 script ...args`, write `request` as one JSON line to stdin, take the
  * first stdout line that is JSON with this id (other lines are dropped), and resolve with it UNPARSED by any schema (the caller parses
  * it strictly). Kill with SIGKILL on `signal` abort (rejects with the signal's reason), on `timeoutMs` (rejects
  * picmodelsError('engineFailed', { reason: 'timeout' })) and as soon as the line arrived. An exit before the line rejects

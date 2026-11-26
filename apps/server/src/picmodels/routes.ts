@@ -3,9 +3,10 @@
  * report through the runtime and core pictureModelsFor) and the eyes route's checks in their order, delegating to the runtime (the
  * not-built runtime answers 501 eyes_not_built AFTER the owner check). W1 owns this file after the pre-pass and keeps the order:
  * scope observe → owner rule (before anything is read) → project → body (strict) → runtime.
+ * ADR-0036: the owner rule is a POLICY site (autonomy.ts OPEN_GATES A17): `actsAsOwner` — the owner's own session, or in open mode an
+ * agent credential that may edit. Read-only credentials are refused in both modes.
  */
 import { EyesProposeBodySchema, pictureModelsFor } from '@pulseframe/core';
-import { isOwnerSession } from '../assistant/contract.ts';
 import { ApiError } from '../store.ts';
 import { picmodelsError, type PicmodelsApp, type PicmodelsRouteDeps } from './contract.ts';
 import { actsAsOwner } from '../autonomy.ts';

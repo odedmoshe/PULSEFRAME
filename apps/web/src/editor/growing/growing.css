@@ -36,3 +36,9 @@
 .pf-growing-previewcanvas { inline-size: min(100%, 420px); max-block-size: 40vh; background: var(--pf-surface-3); }
 .pf-growing-warnings { margin: 0; padding-inline-start: 18px; font-size: var(--pf-fs-sm); }
 @media (prefers-reduced-motion: reduce) { .pf-growing-dialog *, .pf-growing-bar * { transition: none !important; animation: none !important; } }
+/* «הציעו עיניים»: proposed points are hollow rings (the marked points stay filled); the chosen face has a thicker ring */
+.pf-eyes-proposal { position: absolute; inset: 0; pointer-events: none; }
+.pf-growing-point.is-proposal { background: transparent; border: 2px dashed #fff; box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #000; }
+.pf-growing-point.is-proposal.is-chosen { border-style: solid; border-width: 3px; border-color: var(--pf-frame); }
+.pf-eyes-letter { position: absolute; transform: translate(-50%, -170%); min-inline-size: 20px; padding: 0 4px; text-align: center; font-size: 13px; font-weight: 700; color: var(--pf-text); background: var(--pf-surface-2); border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-sm); }
+.pf-eyes-letter.is-chosen { border: 2px solid var(--pf-frame); }

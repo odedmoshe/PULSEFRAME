@@ -4,7 +4,7 @@
  *   1.29.0, flatbuffers 25.12.19 and protobuf 7.36.2; no onnxruntime-gpu; the search lock does not hold them (it stays untouched);
  * - pf_picture.py: its yunet pin equals core's; PICTURE_WORKER_SHA256 is null or this file's digest; the network is disarmed; the
  *   request is parsed strictly; eyes_line() builds exactly the strict line (tooMany above eight, no point); serve refuses a file that
- *   is not the pinned yunet with model_mismatch; with no model code it never answers a point;
+ *   is not the pinned yunet with model_mismatch (inspect too); the eyes role's session settings and notice; its Python suite passes;
  * - the labelled fake: finds the drawn eyes, says tooMany for nine faces, and its bad modes fail core EyesWorkerLineSchema.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -15,6 +15,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EyesWorkerLineSchema, pictureModel } from '@pulseframe/core';
 import { PICTURE_WORKER, PICTURE_WORKER_SHA256 } from './contract.ts';
+import { PYTHON_WORKER_FLAGS } from '../pythonArgs.ts';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../..');
 const worker = path.join(root, PICTURE_WORKER);
@@ -22,7 +23,7 @@ const fake = path.join(root, 'apps/server/src/picmodels/testdata/fake_pf_picture
 const lock = path.join(root, 'apps/server/tools/requirements-picture-win-cpu.txt');
 const python = (() => { try { execFileSync('python3', ['-I', '-c', 'pass']); return 'python3'; } catch { return null; } })();
 const py = (args: string[], input = '', env: Record<string, string> = {}) => {
-  const r = spawnSync(python!, ['-I', ...args], { input, encoding: 'utf8', cwd: os.tmpdir(), env: { ...process.env, ...env }, timeout: 60_000 });
+  const r = spawnSync(python!, [...PYTHON_WORKER_FLAGS, ...args], { input, encoding: 'utf8', cwd: os.tmpdir(), env: { ...process.env, ...env }, timeout: 60_000 });
   return { code: r.status, lines: r.stdout.split('\n').filter(Boolean), stderr: r.stderr };
 };
 
@@ -85,7 +86,7 @@ print(json.dumps(res))
     expect(res.nine).toEqual({ id: 3, event: 'result', tooMany: true });
     expect([res.nan, res.third, res.good, res.extra, res.short, res.role, res.threads]).toEqual(['engine_failed', 'engine_failed', 'ok', 'bad_request', 'bad_request', 'bad_request', 'bad_request']);
   });
-  it.skipIf(!python)('probe answers one line naming what it cannot import; serve refuses a file that is not the pinned yunet; no point without model code', () => {
+  it.skipIf(!python)('probe answers one line naming what it cannot import; serve and inspect refuse a file that is not the pinned yunet', () => {
     const p = py([worker, 'probe']);
     expect(p.lines).toHaveLength(1);
     const o = JSON.parse(p.lines[0]!);
@@ -98,8 +99,31 @@ print(json.dumps(res))
       const s = py([worker, 'serve', '--role', 'eyes', '--model', notYunet], `${JSON.stringify({ id: 1, cmd: 'eyes', w: 1, h: 1, rgb: 'AAAA' })}\n`);
       expect(s.lines).toEqual(['{"event":"error","code":"model_mismatch"}']);
       expect(s.stderr).toBe('');
+      const i = py([worker, 'inspect', '--model', 'yunet', '--file', `model=${notYunet}`]);
+      expect([i.code, i.lines, i.stderr]).toEqual([1, ['{"event":"error","code":"model_mismatch"}'], '']);
+      expect(py([worker, 'inspect', '--model', 'da3-small', '--file', `model=${notYunet}`]).lines).toEqual(['{"event":"error","code":"bad_request"}']);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
+});
+
+describe('pf_picture.py (eyes role)', () => {
+  const text = fs.readFileSync(worker, 'utf8');
+  it('asks for the CPU provider only, two threads by default, errors-only logging, no profiling; carries the OpenCV notice; no torch, no map role', () => {
+    expect(text).toContain('providers=["CPUExecutionProvider"]');
+    expect(text).not.toMatch(/CUDAExecutionProvider|DmlExecutionProvider|import torch|--role map|"map"/);
+    for (const s of ['so.intra_op_num_threads = threads', 'so.inter_op_num_threads = 1', 'so.log_severity_level = 3', 'so.enable_profiling = False', 'DEFAULT_THREADS = 2', 'SCORE_FLOOR = 0.9', 'NMS_IOU = 0.3']) expect(text, s).toContain(s);
+    expect(text).toMatch(/face_detect\.cpp[\s\S]*Apache License, Version 2\.0/);
+    // the socket is disarmed before numpy or onnxruntime can be imported (both are imported inside functions only)
+    expect(text.indexOf('socket.getaddrinfo = _no_network')).toBeLessThan(text.indexOf('import numpy'));
+    expect(text).not.toMatch(/^import (numpy|onnxruntime)/m);
+    // nothing writes a file: no open() for writing, no tempfile, no os.makedirs
+    expect(text).not.toMatch(/open\([^)]*["'][wax]b?\+?["']|tempfile|makedirs|\.save\(|np\.save/);
+  });
+  it.skipIf(!python)('its Python unit suite passes (decode_yunet on synthetic heads, NMS, nine faces, the floor; skipped rows name their reason)', () => {
+    const r = spawnSync(python!, ['-I', '-B', '-m', 'unittest', 'discover', '-s', path.dirname(worker), '-p', 'test_pf_picture.py'], { encoding: 'utf8', cwd: os.tmpdir(), timeout: 120_000 });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toMatch(/Ran \d+ tests[\s\S]*OK/);
+  }, 180_000); // the suite's own spawn allows 120 s; vitest's 5 s default failed it on a loaded machine (integration, 2026-11-26)
 });
 
 describe('the labelled fake (fake_pf_picture.py)', () => {

@@ -7,18 +7,22 @@
  * Ground truth (the growing proof's rule): an eye square covers the pixels [X−3, X+3) × [Y−3, Y+3) for odd whole numbers X, Y, so its
  * centroid in continuous pixel coordinates (pixel i covers [i, i+1)) is exactly (X, Y), and its shown mark is (X / width, Y / height).
  * No other pixel is magenta: the background keeps green ≥ 60. The labelled fake adapter (fake_pf_picture.py) finds exactly these.
- * EXIF-rotated stills are made by the server part with apps/server/src/captureMeta.fixtures.ts (W1), not here.
+ * EXIF-rotated stills (makeExifStill, W1): the picture AS SHOWN is drawn as above, turned into the pixels a camera would store for
+ * that EXIF orientation (storedFromShown, from the EXIF definition of where stored row 0 and column 0 are shown — independent of
+ * ffmpeg), encoded as a JPEG at the highest quality with full chroma, and tagged with apps/server/src/captureMeta.fixtures.ts withExif.
+ * JPEG is lossy: the drawn squares' centroids survive to well under a pixel (the fixture test measures it), not exactly.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 
 export interface Pt { x: number; y: number }
 export interface DrawnFace { a: Pt; b: Pt }
 export interface StillFixture { name: string; file: string; width: number; height: number; faces: DrawnFace[]; decoys: Pt[] }
 export interface PicmodelsFixtures {
   dir: string;
-  stills: Record<'one' | 'two' | 'none' | 'decoy' | 'nine', StillFixture>;
+  stills: Record<'one' | 'two' | 'close' | 'none' | 'decoy' | 'nine', StillFixture>;
   /** 24 frames at 24 fps, 640×360; one face whose eyes are at x = 101 + 10n, 161 + 10n, y = 181 on frame n */
   video: { file: string; width: number; height: number; frames: number; fps: number; eyesAt: (frame: number) => DrawnFace };
 }
@@ -28,6 +32,8 @@ const face = (cx: number, cy: number, d: number): DrawnFace => ({ a: { x: cx - d
 const SPECS: Record<keyof PicmodelsFixtures['stills'], Omit<StillFixture, 'file'>> = {
   one: { name: 'one.png', width: 640, height: 480, faces: [face(321, 201, 80)], decoys: [] },
   two: { name: 'two.png', width: 640, height: 480, faces: [face(181, 221, 60), face(461, 181, 72)], decoys: [] },
+  // two faces whose choice areas overlap (mids 100 px apart, reach 1.5 × 40 = 60): a click at (321, 241) is 50 px from both (E4 «closer»)
+  close: { name: 'close.png', width: 640, height: 480, faces: [face(271, 241, 40), face(371, 241, 40)], decoys: [] },
   none: { name: 'none.png', width: 640, height: 480, faces: [], decoys: [] },
   decoy: { name: 'decoy.png', width: 640, height: 480, faces: [], decoys: [{ x: 301, y: 241 }] },
   nine: { name: 'nine.png', width: 960, height: 480, faces: Array.from({ length: 9 }, (_, k) => face(61 + 100 * k, 141 + 160 * (k % 2), 40)), decoys: [] },
@@ -73,12 +79,42 @@ export function makePicmodelsFixtures(dir: string): PicmodelsFixtures {
   return { dir, stills, video: { file, width: W, height: H, frames: N, fps, eyesAt } };
 }
 
+/**
+ * The pixels a camera stores for a picture SHOWN as `shown` (w × h, rgb24) when it tags EXIF orientation `o` (1–8). From the EXIF
+ * definition (where stored row 0 / column 0 are shown): the stored pixel (c, r) is shown at
+ *   1 (c, r) · 2 (Ws−1−c, r) · 3 (Ws−1−c, Hs−1−r) · 4 (c, Hs−1−r) · 5 (r, c) · 6 (Hs−1−r, c) · 7 (Hs−1−r, Ws−1−c) · 8 (r, Ws−1−c).
+ */
+export function storedFromShown(shown: Buffer, w: number, h: number, o: number): { rgb: Buffer; width: number; height: number } {
+  const turned = o >= 5;
+  const Ws = turned ? h : w, Hs = turned ? w : h;
+  const out = Buffer.alloc(Ws * Hs * 3);
+  for (let r = 0; r < Hs; r++) for (let c = 0; c < Ws; c++) {
+    const [x, y] = ({
+      1: [c, r], 2: [Ws - 1 - c, r], 3: [Ws - 1 - c, Hs - 1 - r], 4: [c, Hs - 1 - r],
+      5: [r, c], 6: [Hs - 1 - r, c], 7: [Hs - 1 - r, Ws - 1 - c], 8: [r, Ws - 1 - c],
+    } as Record<number, [number, number]>)[o] ?? [c, r];
+    shown.copy(out, 3 * (r * Ws + c), 3 * (y * w + x), 3 * (y * w + x) + 3);
+  }
+  return { rgb: out, width: Ws, height: Hs };
+}
+/** A JPEG whose picture AS SHOWN has these faces, stored for EXIF orientation `o` and tagged so. */
+export function makeExifStill(dir: string, name: string, o: number, w: number, h: number, faces: readonly DrawnFace[]): StillFixture {
+  fs.mkdirSync(dir, { recursive: true });
+  const s = storedFromShown(drawFaces(w, h, faces), w, h, o);
+  const jpeg = encode(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${s.width}x${s.height}`, '-i', 'pipe:0', '-frames:v', '1', '-c:v', 'mjpeg', '-pix_fmt', 'yuvj444p', '-q:v', '1', '-f', 'image2pipe', 'pipe:1'], s.rgb);
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, withExif(jpeg, { orientation: o, date: null }));
+  return { name, file, width: w, height: h, faces: [...faces], decoys: [] };
+}
+/** The two EXIF stills of check E3 (shown 640 × 480; one face off-centre so a wrong turn moves it). */
+export const EXIF_FACE: DrawnFace = face(201, 141, 80);
+
 /** The checks of proof:picmodels (verify-corrected; each sentence is what the check must show). */
 export const PICMODELS_CHECKS: Record<string, string> = {
   E1: 'without PF_TOOLS_PYTHON the button is disabled with the setup words (engine_not_configured); no request is sent; hand marking still places two points',
   E2: 'one.png: one face, each point within 1.5 shown px of the drawn centre; Enter accepts through placePoint (the order rule), the mark is done and «סומנו 1 מתוך 2» moves',
   E3: 'EXIF-6 and EXIF-3 JPEGs: the points come back at the SHOWN positions; for all 8 orientations the decoded size equals asset.image',
-  E4: 'two.png: two faces, nothing chosen; a click near face ב chooses ב; ] then Enter, Enter accepts the other by keyboard only; a click equidistant chooses none and says «לחצו קרוב יותר לפנים הרצויות»; while a proposal is shown Enter does not place a point and Escape drops it (C12)',
+  E4: 'two.png: two faces, nothing chosen; a click near face ב chooses ב; ] then Enter, Enter accepts the other by keyboard only; on close.png (two faces whose reaches overlap) a click as far from one as from the other chooses none and says «לחצו קרוב יותר לפנים הרצויות»; while a proposal is shown Enter does not place a point and Escape drops it (C12)',
   E5: 'none.png and decoy.png: outcome none and «לא נמצאו פנים…»; nothing is drawn',
   E6: 'move.mp4 frame 12: the points match frame 12\'s drawn positions, not frame 0\'s',
   E7: 'nothing stored: around 20 proposals whose fake answers carry a planted coordinate; the planted value is in no table, event, job row, file of the data or tmp folder, and no line of server output; row counts of jobs, transactions, outbox, derivatives unchanged',
