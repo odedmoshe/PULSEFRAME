@@ -232,7 +232,16 @@ export interface Manifest {
 export interface Blocker { code: string; message: string; ids: string[]; hint?: string; /** size_fit_too_small only: the smallest target that works for this film (bytes) */ minBytes?: number }
 
 /** The export warnings of library content (wave 7 library track); preflight shows credits_for_description and stock_people as notes. */
-export const LIBRARY_EXPORT_CODES = ['non_commercial_content', 'credits_for_description', 'credit_not_on_screen', 'stock_people'] as const;
+export const LIBRARY_EXPORT_CODES = ['non_commercial_content', 'credits_for_description', 'credit_not_on_screen', 'stock_people', 'licence_no_derivatives', 'licence_share_alike', 'licence_unknown', 'licence_unconfirmed', 'source_terms'] as const;
+/** wave 8 sources (C3/C14/C15): the licence and term findings of fetched files, in this order; non-blocking warnings quoting the licence. */
+const SOURCE_EXPORT_CODES = ['licence_no_derivatives', 'licence_share_alike', 'licence_unknown', 'licence_unconfirmed', 'source_terms'] as const;
+const SOURCE_EXPORT_HINTS: Record<(typeof SOURCE_EXPORT_CODES)[number], string> = {
+  licence_no_derivatives: 'The export goes ahead. Read the licence at its link; replace the file if its words do not fit this video.',
+  licence_share_alike: 'The export goes ahead. Read the licence at its link; replace the file if its words do not fit this video.',
+  licence_unknown: 'The export goes ahead. Look for the licence on the file\'s page, or replace the file.',
+  licence_unconfirmed: 'The export goes ahead. Read the licence at its link before publishing.',
+  source_terms: 'The export goes ahead. The service\'s own words are quoted with their link.',
+};
 export const LIBRARY_EXPORT_NOTES: ReadonlySet<string> = new Set(['credits_for_description', 'stock_people']);
 const list = (xs: readonly { title: string }[]) => xs.slice(0, 8).map((x) => `"${x.title.slice(0, 60)}"`).join(', ') + (xs.length > 8 ? ` and ${xs.length - 8} more` : '');
 /**
@@ -243,19 +252,33 @@ const list = (xs: readonly { title: string }[]) => xs.slice(0, 8).map((x) => `"$
 export function libraryExportWarnings(doc: ProjectDocument): Blocker[] {
   const r = collectCredits(doc);
   const out: Blocker[] = [];
-  if (r.nonCommercial.length) out.push({ code: 'non_commercial_content', message: `this video holds library material for non-commercial use only (${list(r.nonCommercial)}); it may not be used commercially, and those files are never passed on in a shared archive`, ids: r.nonCommercial.map((n) => n.assetId), hint: 'Keep the video for non-commercial use, or replace those files.' });
+  // wave 8 sources: a fetched file (provenance.source) is named neutrally with its licence; library-only answers keep their words (golden)
+  const fetched = (assetId: string) => !!(Object.hasOwn(doc.assets, assetId) && doc.assets[assetId]!.provenance.source);
+  const ncFetched = r.nonCommercial.some((n) => fetched(n.assetId));
+  if (r.nonCommercial.length && !ncFetched) out.push({ code: 'non_commercial_content', message: `this video holds library material for non-commercial use only (${list(r.nonCommercial)}); it may not be used commercially, and those files are never passed on in a shared archive`, ids: r.nonCommercial.map((n) => n.assetId), hint: 'Keep the video for non-commercial use, or replace those files.' });
+  if (r.nonCommercial.length && ncFetched) {
+    const licenceOf = (assetId: string) => { const p = doc.assets[assetId]?.provenance; return p?.source ? (p.source.licence.name.trim() || p.source.licence.id) : (p?.library?.licence.id ?? ''); };
+    const named = r.nonCommercial.slice(0, 8).map((n) => `"${n.title.slice(0, 60)}" (${licenceOf(n.assetId).slice(0, 60)})`).join(', ') + (r.nonCommercial.length > 8 ? ` and ${r.nonCommercial.length - 8} more` : '');
+    out.push({ code: 'non_commercial_content', message: `this video holds files whose licence is marked non-commercial (${named}): for non-commercial use only; those files are never passed on in a shared archive`, ids: r.nonCommercial.map((n) => n.assetId), hint: 'Keep the video for non-commercial use, or replace those files.' });
+  }
   // credits due (never a courtesy line of a licence that needs none) whose place is the description: a reminder with the text to
   // paste, and the credits card offered (never a required fix: the owner decided the card is offered, not added by itself)
   const described = r.lines.filter((l) => l.placement !== 'on_screen' && creditDue(doc, l));
-  if (described.length) out.push({ code: 'credits_for_description', message: `${described.length} credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional`, ids: described.map((l) => l.assetId) });
+  if (described.length && described.some((l) => fetched(l.assetId))) out.push({ code: 'credits_for_description', message: `${described.length} credit line(s) that the files' licences ask for belong in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional`, ids: described.map((l) => l.assetId) });
+  else if (described.length) out.push({ code: 'credits_for_description', message: `${described.length} credit line(s) of library files must go in the video's description: copy them from the credits (GET /api/v1/projects/{id}/credits) when you publish. A credits card at the end can also be added (add_credits_card); it is optional`, ids: described.map((l) => l.assetId) });
   if (r.onScreenMissing.length) out.push({ code: 'credit_not_on_screen', message: `${r.onScreenMissing.length} credit(s) that the licence wants in the video itself appear in no visible title (${list(r.onScreenMissing)})`, ids: r.onScreenMissing.map((l) => l.assetId), hint: 'Add a credits card (add_credits_card), or a title of your own with the credit.' });
   if (r.people.length) out.push({ code: 'stock_people', message: `the video holds stock footage that shows people (${list(r.people)})`, ids: r.people.map((p) => p.assetId) });
+  // the licence and term findings of fetched files (sourceDuties via collectCredits): each names the licence and quotes its own words
+  for (const code of SOURCE_EXPORT_CODES) {
+    const notes = (r.licenceNotes ?? []).filter((n) => n.code === code);
+    if (notes.length) out.push({ code, message: notes.map((n) => n.message).join('; '), ids: [...new Set(notes.map((n) => n.assetId ?? ''))].filter(Boolean), hint: SOURCE_EXPORT_HINTS[code] });
+  }
   return out;
 }
 /** The export job's output.licence: the credits of the rendered snapshot, the text written as the <jobId>.credits.txt sidecar. Null when the video holds no library duty. */
 export function exportLicence(snapshot: ProjectDocument): (Omit<CreditsView, 'descriptionText'> & { credits: { descriptionText: string; file: string | null } }) | null {
   const view = creditsView(collectCredits(snapshot), 'he');
-  if (!view.lines.length && !view.nonCommercial.length && !view.people.length) return null;
+  if (!view.lines.length && !view.nonCommercial.length && !view.people.length && !view.licenceNotes?.length) return null;
   const { descriptionText, ...rest } = view;
   return { ...rest, credits: { descriptionText, file: null } };
 }

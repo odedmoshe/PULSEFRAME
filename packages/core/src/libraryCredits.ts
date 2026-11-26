@@ -12,7 +12,8 @@
 import * as T from '@pulseframe/time';
 import type { Asset, LibraryRecord, ProjectDocument } from './schema.ts';
 import { recordNeedsCredit, recordShareable } from './libraryDuties.ts';
-import { SourcesNotBuiltError, type SourceRecord, type SourceWarning } from './sourcesContract.ts';
+import type { SourceRecord, SourceWarning } from './sourcesContract.ts';
+import { sourceDuties } from './sourceDuties.ts';
 
 export interface CreditLine {
   assetId: string; title: string; text: string; placement: 'description' | 'on_screen' | 'either'; group: 'music' | 'sound' | 'picture';
@@ -93,11 +94,38 @@ export interface LicensedOrigin {
   nonCommercial: boolean; people: boolean; shareable: boolean; licenceId: string; itemId: string; licenceNotes: SourceWarning[];
 }
 export function licensedOrigins(doc: ProjectDocument, assetId: string): LicensedOrigin[] {
-  void doc; void assetId;
-  throw new SourcesNotBuiltError('licensedOrigins');
+  const out: LicensedOrigin[] = [];
+  const seen = new Set<string>();
+  const lib = (asset: Asset, record: LibraryRecord): LicensedOrigin => ({
+    asset, origin: 'library', library: record, title: titleOf(asset, record), creditText: record.credit?.text ?? null, placement: record.credit?.placement ?? null,
+    due: recordNeedsCredit(record), group: groupOf(record), nonCommercial: !!record.flags.nonCommercial, people: !!record.flags.people, shareable: recordShareable(record),
+    licenceId: record.licence.id, itemId: record.itemId, licenceNotes: [],
+  });
+  const src = (asset: Asset, record: SourceRecord): LicensedOrigin => {
+    const title = record.title || asset.name;
+    return {
+      asset, origin: 'source', source: record, title, creditText: record.credit?.text ?? null, placement: record.credit?.placement ?? null, due: record.credit?.due === true,
+      group: sourceGroup(record), nonCommercial: record.flags.nonCommercial === true, people: record.flags.people === true, shareable: record.flags.notShareable !== true,
+      licenceId: record.licence.id, itemId: record.itemId, licenceNotes: sourceDuties(record, title).map((w) => ({ ...w, assetId: asset.id })),
+    };
+  };
+  const visit = (id: string) => {
+    if (seen.has(id) || !Object.hasOwn(doc.assets, id)) return;
+    seen.add(id);
+    const a = doc.assets[id]!;
+    if (a.provenance.library) out.push(lib(a, a.provenance.library));
+    for (const r of a.provenance.instruments?.records ?? []) out.push(lib(a, r));
+    // a fetched file, or a song shortened from one (it carries its one source's record, C4a)
+    if (a.provenance.source) out.push(src(a, a.provenance.source));
+    for (const s of a.provenance.derived?.sourceAssetIds ?? []) visit(s);
+    if (a.provenance.voice?.referenceAssetId) visit(a.provenance.voice.referenceAssetId);
+  };
+  visit(assetId);
+  return out;
 }
 
 const groupOf = (r: LibraryRecord): CreditLine['group'] => (r.kind === 'music' || r.kind === 'loop' ? 'music' : r.kind === 'sound' ? 'sound' : 'picture');
+const sourceGroup = (r: SourceRecord): CreditLine['group'] => (r.kind === 'music' ? 'music' : r.kind === 'sound' ? 'sound' : 'picture');
 const GROUP_ORDER: readonly CreditLine['group'][] = ['music', 'sound', 'picture'];
 /** Whitespace-normalised text, for finding a credit inside a title. */
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
@@ -125,21 +153,30 @@ export function collectCredits(doc: ProjectDocument, opts: { sequenceId?: string
   const texts = new Set<string>();
   const nonCommercial: CreditsReport['nonCommercial'] = [], people: CreditsReport['people'] = [];
   const ncSeen = new Set<string>(), peopleSeen = new Set<string>();
+  const licenceNotes: SourceWarning[] = [];
+  const notesSeen = new Set<string>();
   for (const { c } of clips) {
     if (c.type !== 'media') continue;
-    for (const { asset, record } of libraryOrigins(doc, c.assetId)) {
-      const title = titleOf(asset, record);
+    for (const o of licensedOrigins(doc, c.assetId)) {
+      const { asset, title } = o;
       const shortened = !!asset.provenance.fitted;
-      if (record.credit && !texts.has(record.credit.text)) {
-        texts.add(record.credit.text);
-        lines.push({ assetId: asset.id, title, text: record.credit.text, placement: record.credit.placement, group: groupOf(record), ...(shortened ? { modified: 'shortened' as const } : {}) });
-      } else if (record.credit && shortened) {
+      if (o.creditText !== null && o.placement !== null && !texts.has(o.creditText)) {
+        texts.add(o.creditText);
+        lines.push({ assetId: asset.id, title, text: o.creditText, placement: o.placement, group: o.group, ...(shortened ? { modified: 'shortened' as const } : {}) });
+      } else if (o.creditText !== null && shortened) {
         // the same credit met first through the original song: the change must still be indicated
-        const line = lines.find((l) => l.text === record.credit!.text);
+        const line = lines.find((l) => l.text === o.creditText);
         if (line) line.modified = 'shortened';
       }
-      if (record.flags.nonCommercial && !ncSeen.has(asset.id)) { ncSeen.add(asset.id); nonCommercial.push({ assetId: asset.id, title }); }
-      if (record.flags.people && !peopleSeen.has(asset.id)) { peopleSeen.add(asset.id); people.push({ assetId: asset.id, title }); }
+      if (o.nonCommercial && !ncSeen.has(asset.id)) { ncSeen.add(asset.id); nonCommercial.push({ assetId: asset.id, title }); }
+      if (o.people && !peopleSeen.has(asset.id)) { peopleSeen.add(asset.id); people.push({ assetId: asset.id, title }); }
+      // the source warnings once per file (the non-commercial mark is said by nonCommercial above)
+      for (const n of o.licenceNotes) {
+        const k = `${asset.id}\n${n.code}`;
+        if (n.code === 'non_commercial_content' || notesSeen.has(k)) continue;
+        notesSeen.add(k);
+        licenceNotes.push(n);
+      }
     }
   }
   // music, then sounds, then pictures and video; timeline order inside each group (a stable sort keeps it)
@@ -147,7 +184,7 @@ export function collectCredits(doc: ProjectDocument, opts: { sequenceId?: string
   const shown = seq.tracks.filter((t) => !t.hidden).flatMap((t) => t.clips).flatMap((c) => (c.type === 'text' ? [norm(c.text)] : []));
   // a duty only: a courtesy line (a licence that needs no credit) is listed but never missing
   const onScreenMissing = lines.filter((l) => l.placement === 'on_screen' && creditDue(doc, l) && !shown.some((s) => s.includes(norm(l.text))));
-  return { lines, descriptionText: (lang) => describe(lines, nonCommercial, lang), onScreenMissing, nonCommercial, people };
+  return { lines, descriptionText: (lang) => describe(lines, nonCommercial, lang), onScreenMissing, nonCommercial, people, ...(licenceNotes.length ? { licenceNotes } : {}) };
 }
 /** Is this credit line a duty of its file's licence (libraryDuties.ts recordNeedsCredit), or a courtesy line? */
 export function creditDue(doc: ProjectDocument, line: CreditLine): boolean {
@@ -155,11 +192,14 @@ export function creditDue(doc: ProjectDocument, line: CreditLine): boolean {
   if (!a) return false;
   // a recorded built-in track (wave 7 instruments) holds several records: the one whose credit is this line's
   const r = a.provenance.library ?? a.provenance.instruments?.records.find((x) => x.credit?.text === line.text);
-  return !!r && recordNeedsCredit(r);
+  if (r) return recordNeedsCredit(r);
+  // a fetched file (wave 8 sources): its record says whether its licence asks for the credit (credit.due)
+  const s = a.provenance.source;
+  return !!s?.credit && s.credit.text === line.text && s.credit.due;
 }
 /** A report as JSON (GET /projects/:id/credits, MCP get_credits, the export job's output). */
 export function creditsView(r: CreditsReport, lang: 'he' | 'en'): CreditsView {
-  return { lines: r.lines, descriptionText: r.descriptionText(lang), onScreenMissing: r.onScreenMissing, nonCommercial: r.nonCommercial, people: r.people };
+  return { lines: r.lines, descriptionText: r.descriptionText(lang), onScreenMissing: r.onScreenMissing, nonCommercial: r.nonCommercial, people: r.people, ...(r.licenceNotes?.length ? { licenceNotes: r.licenceNotes } : {}) };
 }
 
 /**
@@ -168,7 +208,9 @@ export function creditsView(r: CreditsReport, lang: 'he' | 'en'): CreditsView {
  */
 export function shareable(asset: Asset): boolean {
   const r = asset.provenance.library;
-  return !r || recordShareable(r);
+  if (r) return recordShareable(r);
+  // a fetched file (wave 8 sources): its record marks what may not travel (notShareable is a data fact of its licence id)
+  return asset.provenance.source?.flags.notShareable !== true;
 }
 
 /**
@@ -183,19 +225,21 @@ export function archiveLibraryPlan(doc: ProjectDocument): ArchiveLibraryPlan {
   const noticed = new Set<string>();
   for (const a of Object.values(doc.assets).sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))) {
     // by the record, not the asset: a recorded built-in track carries several records (wave 7 instruments); for a copied file the two agree
-    const restricted = libraryOrigins(doc, a.id).filter((o) => !recordShareable(o.record));
+    // wave 8 sources: a fetched file whose record marks it not shareable is left out the same way (licensedOrigins)
+    const restricted = licensedOrigins(doc, a.id).filter((o) => !o.shareable);
     if (!restricted.length) continue;
     const root = restricted[0]!;
+    const rootTitle = root.library?.title ?? root.source?.title ?? '';
     for (const hash of [a.contentHash, ...(a.conform ? [a.conform.originalContentHash] : [])]) {
       if (omit.has(hash)) continue;
       omit.add(hash);
-      omitted.push({ hash, assetId: a.id, itemId: root.record.itemId, title: a.provenance.library ? titleOf(a, root.record) : a.name, licenceId: root.record.licence.id });
+      omitted.push({ hash, assetId: a.id, itemId: root.itemId, title: a.provenance.library || a.provenance.source ? rootTitle || a.name : a.name, licenceId: root.licenceId });
     }
-    for (const { asset, record } of restricted) {
-      const nk = `${asset.id}\n${record.itemId}`;
+    for (const o of restricted) {
+      const nk = `${o.asset.id}\n${o.itemId}`;
       if (noticed.has(nk)) continue;
       noticed.add(nk);
-      notices.push({ title: titleOf(asset, record), licenceId: record.licence.id, credit: record.credit?.text ?? null, url: record.licence.url ?? null });
+      notices.push({ title: o.title, licenceId: o.licenceId, credit: o.creditText, url: (o.library ? o.library.licence.url : o.source?.licence.url) ?? null });
     }
   }
   return { omit: [...omit].sort(), omitted, notices };

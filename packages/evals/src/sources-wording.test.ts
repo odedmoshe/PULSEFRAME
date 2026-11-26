@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, OpError, SOURCE_JOB_FAILURES, SOURCE_OP_REFUSALS, SOURCE_WARNING_CODES, SOURCES_API } from '@pulseframe/core';
+import { applyTransaction, createProject, OpError, SOURCE_JOB_FAILURES, SOURCE_OP_REFUSALS, SOURCE_WARNING_CODES, SOURCES_API, SOURCES_BUILT } from '@pulseframe/core';
 import { HE_SOURCES, SOURCES_EN, SOURCES_HE, SOURCES_REFUSAL_PATTERNS, translateRefusal } from '../../i18n/src/index.ts';
 
 const SAMPLES: Record<string, string> = {
@@ -46,7 +46,15 @@ describe('sources wording', () => {
     expect(SOURCES_HE['sources.warn.licence_no_derivatives']).toContain('בלשונו');
     expect(SOURCES_HE['sources.searchHint']).toContain('נשלחות');
   });
-  it('provoked for real: use_source_item refuses with the not-built row until W1 builds it', () => {
+  it.runIf(SOURCES_BUILT.op)('provoked for real (W1 built): use_source_item without a record refuses with its row, worded in Hebrew with a next step', () => {
+    const doc = createProject({ id: 'p', name: 'p', frameRate: { num: 30, den: 1 } });
+    let err: unknown;
+    try { applyTransaction(doc, [{ op: 'use_source_item', args: { asset: { duration: T.ZERO } } }], { idSeed: 's_', actor: 'test', allowInternal: true }); } catch (e) { err = e; }
+    expect(err).toBeInstanceOf(OpError);
+    expect((err as OpError).details.why).toBe('source_no_record');
+    expect(translateRefusal('he', (err as OpError).message)).toMatch(IMPERATIVE);
+  });
+  it.runIf(!SOURCES_BUILT.op)('provoked for real: use_source_item refuses with the not-built row until W1 builds it', () => {
     const doc = createProject({ id: 'p', name: 'p', frameRate: { num: 30, den: 1 } });
     let err: unknown;
     try { applyTransaction(doc, [{ op: 'use_source_item', args: { asset: { duration: T.ZERO } } }], { idSeed: 's_', actor: 'test', allowInternal: true }); } catch (e) { err = e; }
