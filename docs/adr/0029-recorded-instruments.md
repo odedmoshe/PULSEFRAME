@@ -87,8 +87,13 @@ nothing. Nobody here can listen: nothing below says how anything sounds.
   music goldens recomputed there equal the committed files (L2 on Windows). At the placeholder −18 dB the piano parts were far below
   their synthesised twins (RMS 0.004 against 0.048 for the arp). Starting gains set from that report: pad −11.4, double −13.9, arp +3.7,
   lead +3.4 dB — for each part the lower of the RMS-matching and the peak-matching gain, so no recorded part is louder than its
-  synthesised twin by either measure (the RMS-matching gains alone gave 2,488 clamped samples in the mix against 8). Not yet run with
-  these gains; L3 (128 s timing) and L5 (the owner listening to the blind pair) not done.
+  synthesised twin by either measure (the RMS-matching gains alone gave 2,488 clamped samples in the mix against 8).
+- Same day, rerun at commit a9a77f9 with those gains (`docs/evidence/kit-check-calm-vsco-2026-11-26-rerun.txt`; one sample each): the
+  track is valid, 594 samples of 2,304,000 reach the soft clip (8 at the placeholder gains), PCM and all eight goldens equal again.
+  L3, a 129 s piece in a fresh process: cold 6,357 ms (20.3× real time, event-loop maximum 99.8 ms, against the 100 ms the proof's
+  I13 allows), warm 5,449 ms (23.7×, 62.7 ms), peak RSS 247.6 MB. L5: the level-matched blind pair was written to
+  `D:\PULSEFRAME-Tools\audition` (A.wav, B.wav, key.txt; the helper did not open the key). Nobody has listened yet: the owner's ear
+  decides the gains and whether the recorded sound is worth offering first.
 - 2026-11-26: the upright piano's 70 files (`UprightPiano.sfz`, 253,644,252 bytes, table digest f002db28…d4a0, recomputed here from the
   lines the owner's computer printed) are in the kit table (`packages/core/src/musicKits.vsco.ts`). The overview of the 50 piano, harp
   and strings instruments read there showed no missing file, no path leaving the item and no `..` segment, so `sfzPath` needs no
