@@ -5,7 +5,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import * as T from '@pulseframe/time';
-import { applyTransaction, ASSISTANT_ACTOR, ASSISTANT_GRANT_ID, ASSISTANT_JOB_TYPE, canonical, clipEnd, diffEntities, OpError, RationalTimeSchema, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, ASSISTANT_ACTOR, ASSISTANT_GRANT_ID, ASSISTANT_JOB_TYPE, canonical, isReservedAgentName, clipEnd, diffEntities, OpError, RationalTimeSchema, type EntityChange, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { z } from 'zod';
 import { ApiError, type CommitRequest, type CommitResult, type Store } from './store.ts';
 import { assertMayWritePeople, assertOwnerTagsPeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
@@ -63,6 +63,8 @@ export class Governance {
     const g = p.data;
     // agent:assistant is the in-editor assistant's own in-memory principal (ADR-0027): no credential may act under that name
     if (`agent:${g.name}` === ASSISTANT_ACTOR) throw new ApiError(400, 'invalid_request', `the name "${g.name}" is reserved for the in-editor language assistant`, { name: g.name }, 'Choose another name for this agent.');
+    // agent:run_<id> is the actor of one in-editor agent run (wave 8 autonomy C8.1): undo-all and the resume rule read it as unique
+    if (isReservedAgentName(g.name)) throw new ApiError(400, 'invalid_request', `names that start with "run_" are reserved for the in-editor agent's runs`, { name: g.name }, 'Choose another name for this agent.');
     if (g.range && !T.lt(g.range.start, g.range.end)) throw new ApiError(400, 'invalid_request', 'range.start must be before range.end');
     const id = rid('grt');
     const token = `pfg_${randomBytes(24).toString('base64url')}`;

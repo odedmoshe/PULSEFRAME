@@ -32,6 +32,9 @@ import { RENDER_CACHE_DIR, SegmentStore } from './segmentStore.ts';
 import { closeLibraryService } from './library/index.ts';
 import { dataDirBytes, setStorageHooks } from './storage.ts';
 import { assistantHostWarnings, recoverAssistantJobs } from './assistant/job.ts'; // command bar assistant recovery (ADR-0027)
+import { createAgentService, recoverAgentRuns } from './agent/loop.ts';
+import { createAgentProviders } from './agent/providers.ts'; // the in-editor agent «סוכן» (wave 8 autonomy Part 2, W1)
+import type { AgentAdapters, AgentProviders } from './agent/contract.ts';
 import type { AssistantDeps } from './assistant/contract.ts';
 import { createLlamaAdapter } from './assistant/local/llamaAdapter.ts'; // the local assistant's loopback adapter (wave 7)
 import type { MusicKit, SizeFitFault } from '@pulseframe/core';
@@ -40,7 +43,7 @@ import { createSearchRuntime } from './search/runtime.ts';
 import type { PictureModelsTestSeams } from './picmodels/contract.ts';
 import { createPictureModelsRuntime } from './picmodels/runtime.ts';
 
-import { AutonomySettings } from './autonomy.ts';
+import { actsAsOwner, AutonomySettings, stampOpen } from './autonomy.ts';
 import { AssistantFiles } from './assistant/credential.ts';
 export { loadConfig, type Config } from './config.ts';
 export interface RunningServer {
@@ -54,7 +57,7 @@ export interface RunningServer {
  * `deps.assistant`: the command bar assistant's installed adapters (ADR-0027). Wave 1 ships none, so the CLI passes nothing and
  * the setup state is honest (provider_not_configured); tests and pnpm proof:command-bar install the labelled MOCK adapter here.
  */
-export async function startServer(overrides: Partial<Config> = {}, deps: { providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 8 picmodels proof): the labelled fake worker, its digest, a synthetic registry and library root; never from the environment */ picmodelsTest?: PictureModelsTestSeams; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[] } = {}): Promise<RunningServer> {
+export async function startServer(overrides: Partial<Config> = {}, deps: { /** the in-editor agent (wave 8): its providers (W2's createAgentProviders at integration) and, for tests and proof:agent, the labelled MOCK adapters per family */ agent?: { providers?: AgentProviders; adapters?: AgentAdapters }; providerAdapter?: ProviderAdapter; assistant?: AssistantDeps; /** TEST only (wave 7 send proof S3/S4): a labelled size-fit fault, never from the environment */ fitFault?: SizeFitFault; /** TEST only (wave 7 search proof): the labelled test double of the picture model (search/testEmbedder.ts), never from the environment */ searchEmbedder?: Embedder; /** TEST only (wave 8 picmodels proof): the labelled fake worker, its digest, a synthetic registry and library root; never from the environment */ picmodelsTest?: PictureModelsTestSeams; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS (packages/fixtures/src/instruments.ts), never from the environment */ musicKits?: readonly MusicKit[] } = {}): Promise<RunningServer> {
   const cfg = { ...loadConfig(), ...overrides };
   if (overrides.dataDir && !overrides.speechModelsDir && !process.env.PF_SPEECH_MODELS_DIR) cfg.speechModelsDir = path.join(cfg.dataDir, 'speech-models');
   const backup = new BackupScheduler(cfg.dataDir, cfg.backupDir, cfg.backupEveryHours, cfg.backupKeep); // throws on a destination inside the data directory, before anything is opened
@@ -124,6 +127,11 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   const assistantFiles = new AssistantFiles(cfg.dataDir, cfg.assistantHosts, cfg);
   const standingWarnings = () => [...assistantHostWarnings(cfg, assistantFiles.readConfig().config), ...uploadCapWarnings(cfg)];
   const mcp = createMcp(store, auth, exporter, capabilities, presence, governance, speech, derivatives, { autonomy, imports, renderCache, search, standingWarnings });
+  // the in-editor agent «סוכן» (wave 8 autonomy Part 2): its loop calls MCP in process through serveAs (C9)
+  const agentService = createAgentService({ store, gov: governance, mcp, providers: deps.agent?.providers ?? createAgentProviders(cfg.dataDir, ...(deps.agent?.adapters ? [deps.agent.adapters] : [])), ...(deps.agent?.adapters ? { adapters: deps.agent.adapters } : {}),
+    // Part 1 (autonomy.ts): the run's principal is stamped like any agent's, every step; the owner-or-open predicate; a switch to guarded stops open runs (C4); the owner-wide budget
+    stamp: (p) => stampOpen(p, autonomy.mode), actsAsOwner, modeEvents: autonomy, ownerBudgetCents: () => autonomy.agentBudgetCents });
+  mcp.bindAgent(agentService);
   const app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, governance, backup, speech, { autonomy, imports, door, renderCache, search, pictureModels, assistant: assistantDeps, renderHost: host, ...(deps.musicKits ? { musicKits: deps.musicKits } : {}) });
   const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
   await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
@@ -151,11 +159,13 @@ export async function startServer(overrides: Partial<Config> = {}, deps: { provi
   // its reservation released when nothing was sent, kept as unknown when the send had started ----
   recoverAssistantJobs(store, governance);
   // ---- end command bar assistant recovery ----
+  recoverAgentRuns(agentService); // the in-editor agent: runs cut off by the restart resume by the resume rule (agent/contract.ts)
   backup.start();
   return {
     url, ownerUrl: `${url}/?key=${auth.tokens.owner}`, cfg, store, auth, derivatives, governance, backup, imports, door, renderCache,
     async close() {
       (app as any).browserExport?.stop();
+      await agentService.stop(); // the agent's steps in flight finish their write; its runs stay running for recover
       await mcp.close();
       await backup.stop();
       await capabilities.stop();

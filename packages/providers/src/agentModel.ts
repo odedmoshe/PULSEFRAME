@@ -21,7 +21,7 @@
  * card says «מחובר דרך נקודת הקצה התואמת» for providers reached through family C (preset.compatNote).
  *
  * Errors (C16): every adapter maps its provider's answer to AgentProviderError with one of AGENT_PROVIDER_ERROR_CODES (core):
- *  Anthropic (R§1.5): 401 unauthorized · 402 / 400 "spend limit" → no_credit · 429 → rate_limited (retry-after) · 529 / 500 / 504
+ *  Anthropic (R§1.5): 401 / 403 unauthorized · 402 / 400 "spend limit" → no_credit · 429 → rate_limited (retry-after) · 529 / 500 / 504
  *  → overloaded · 400 "prompt is too long" or stop_reason model_context_window_exceeded → context_too_long · stop_reason refusal → refused.
  *  OpenAI-style (R§2.6, R§3.5, R§4.6): 401 unauthorized · 429 credit_balance_exhausted / insufficient_quota / *_spend_limit_exceeded
  *  → no_credit · other 429 → rate_limited · 503 / 500 → overloaded · 402 (Gemini payment_required) → no_credit · ECONNREFUSED on a
@@ -39,7 +39,10 @@ import type { JsonSchema } from './chat.ts';
 export interface AgentImage { mediaType: 'image/png' | 'image/jpeg'; base64: string; /** what the loop shows instead once the image is dropped (keepImages) */ label: string }
 export type AgentMessage =
   | { role: 'user'; text: string; images?: AgentImage[] }
-  | { role: 'assistant'; text: string | null; toolCalls: AgentToolCall[] }
+  | { role: 'assistant'; text: string | null; toolCalls: AgentToolCall[];
+      /** the live run's opaque copy of this turn as the provider answered it (AgentTurnResponse.providerState): replayed unchanged by
+       *  its own family's converter, never stored, never shown; absent after a restart or once the history was shortened (lead decision 6) */
+      providerState?: unknown }
   | { role: 'tool'; results: AgentToolResult[] };
 export interface AgentToolCall { id: string; name: string; /** parsed object (family C parses the JSON string; a parse failure is bad_tool_call) */ input: unknown }
 export interface AgentToolResult { callId: string; text: string; isError: boolean; images?: AgentImage[] }
@@ -62,6 +65,13 @@ export interface AgentTurnResponse {
   finish: 'tool' | 'stop' | 'length' | 'refusal' | 'other';
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number } | null;
   providerRequestId: string | null;
+  /**
+   * Opaque, in memory only (lead decision 6): what the family needs back unchanged on the next request of the same conversation.
+   * Family A: the answer's whole `content` (thinking blocks with their signatures included), which the Messages API wants passed
+   * back unchanged in a tool loop; the API also accepts a history with ALL thinking blocks removed (a leading run, a trailing run or
+   * all of them; the claude-api skill, "preserved thinking"), so a run continues without them after a restart or a trim.
+   */
+  providerState?: unknown;
 }
 export type AgentProbeResult = { ok: true; model: string } | { ok: false; code: AgentProviderErrorCode | 'bad_config'; detail: string };
 
@@ -109,7 +119,8 @@ export interface AnthropicMessagesResponse {
 export const ANTHROPIC_VERSION = '2026-10-21';
 
 // ---------- family C wire types (R§2.3) ----------
-export type OpenAIChatContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+/** `image_url` as a plain data-URL string only where the preset says so (Ollama's own example, R§5). */
+export type OpenAIChatContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } | string };
 export type OpenAIChatMessage =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string | OpenAIChatContentPart[] }
@@ -131,11 +142,194 @@ export interface OpenAIChatResponse {
 }
 
 // ---------- converters (W2; pure, unit-tested against the research's quoted examples) ----------
-const notBuilt = (fn: string): never => { throw new Error(`${fn}: the agent adapters are not built in this build yet (agent_not_built)`); };
-export function toAnthropicRequest(req: AgentTurnRequest, model: string): AnthropicMessagesRequest { void req; void model; return notBuilt('toAnthropicRequest'); }
-export function fromAnthropicResponse(res: AnthropicMessagesResponse): AgentTurnResponse { void res; return notBuilt('fromAnthropicResponse'); }
-export function toOpenAIChatRequest(req: AgentTurnRequest, model: string, preset: AgentProviderPreset): OpenAIChatRequest { void req; void model; void preset; return notBuilt('toOpenAIChatRequest'); }
-export function fromOpenAIChatResponse(res: OpenAIChatResponse): AgentTurnResponse { void res; return notBuilt('fromOpenAIChatResponse'); }
+/** JSON object (not an array, not null): the shape both families' tool input must have. */
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** Shown to the model in place of a tool result the history does not hold (both families need exactly one result per call). */
+export const MISSING_RESULT_TEXT = 'no result was recorded for this call (the run was interrupted before it answered)';
+
+/**
+ * Family A (R§1.2, R§1.4). Rules: tool input is an OBJECT; the user message after an assistant turn with tool_use starts with
+ * EXACTLY one tool_result per tool_use, in the calls' order (a missing one becomes an is_error result with MISSING_RESULT_TEXT;
+ * a result whose call is not in the previous assistant turn is dropped), and any text or picture of a following user turn comes
+ * AFTER the results in the same message; pictures of a tool result sit inside its tool_result.content; `is_error: true` only on
+ * failures (the docs' success example has no flag); tool_choice is always {type:'auto'} (+ disable_parallel_tool_use when
+ * parallel calls are off), and is left out when there are no tools; `cache` marks the system text and the LAST tool with
+ * cache_control ephemeral (two of the four breakpoints); NEVER temperature / top_p / top_k (a 400 on 2026-10-21, R§1.1).
+ * Thinking blocks: an assistant message carrying `providerState` from fromAnthropicResponse is replayed as that answer's content,
+ * UNCHANGED (thinking blocks and their signatures included, lead decision 6); without it the turn is rebuilt from its text and calls
+ * and holds no thinking block (the API accepts a history with all of them removed: after a restart, or once the loop shortened it).
+ */
+export function toAnthropicRequest(req: AgentTurnRequest, model: string): AnthropicMessagesRequest {
+  type Block = AnthropicTextBlock | AnthropicImageBlock | AnthropicToolUseBlock | AnthropicToolResultBlock;
+  const img = (i: AgentImage): AnthropicImageBlock => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.base64 } });
+  const out: { role: 'user' | 'assistant'; content: Block[] }[] = [];
+  const push = (role: 'user' | 'assistant', blocks: Block[]) => {
+    if (!blocks.length) return;
+    const last = out[out.length - 1];
+    if (last && last.role === role) last.content.push(...blocks); else out.push({ role, content: blocks });
+  };
+  let pendingCalls: AgentToolCall[] = [];
+  for (const m of req.messages) {
+    if (m.role === 'assistant') {
+      const raw = anthropicContentOf(m.providerState);
+      const blocks: Block[] = [];
+      if (raw && sameCalls(raw, m.toolCalls)) blocks.push(...(raw as Block[]));
+      else {
+        if (m.text) blocks.push({ type: 'text', text: m.text });
+        for (const c of m.toolCalls) blocks.push({ type: 'tool_use', id: c.id, name: c.name, input: isObject(c.input) ? c.input : {} });
+      }
+      push('assistant', blocks);
+      pendingCalls = m.toolCalls;
+      continue;
+    }
+    if (m.role === 'tool') {
+      const byId = new Map(m.results.map((r) => [r.callId, r]));
+      const blocks: Block[] = pendingCalls.map((c): AnthropicToolResultBlock => {
+        const r = byId.get(c.id);
+        if (!r) return { type: 'tool_result', tool_use_id: c.id, content: MISSING_RESULT_TEXT, is_error: true };
+        const content: AnthropicToolResultBlock['content'] = r.images?.length ? [...(r.text ? [{ type: 'text' as const, text: r.text }] : []), ...r.images.map(img)] : r.text;
+        return { type: 'tool_result', tool_use_id: c.id, content, ...(r.isError ? { is_error: true } : {}) };
+      });
+      pendingCalls = [];
+      push('user', blocks);
+      continue;
+    }
+    // a user turn: if it directly follows an assistant turn with calls and no tool message, the results are missing
+    if (pendingCalls.length) { push('user', pendingCalls.map((c) => ({ type: 'tool_result' as const, tool_use_id: c.id, content: MISSING_RESULT_TEXT, is_error: true }))); pendingCalls = []; }
+    push('user', [...(m.images ?? []).map(img), ...(m.text ? [{ type: 'text' as const, text: m.text }] : [])]);
+  }
+  if (pendingCalls.length) push('user', pendingCalls.map((c) => ({ type: 'tool_result' as const, tool_use_id: c.id, content: MISSING_RESULT_TEXT, is_error: true })));
+  const tools = req.tools.map((t, i) => ({ name: t.name, description: t.description, input_schema: t.inputSchema, ...(req.cache && i === req.tools.length - 1 ? { cache_control: { type: 'ephemeral' as const } } : {}) }));
+  const body: AnthropicMessagesRequest = { model, max_tokens: req.maxOutputTokens, tools, messages: out };
+  if (req.system) body.system = req.cache ? [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }] : req.system;
+  if (tools.length) body.tool_choice = req.parallelToolCalls ? { type: 'auto' } : { type: 'auto', disable_parallel_tool_use: true };
+  return body;
+}
+
+/** The raw content an anthropic-messages providerState carries, or null (another family's state, or none). */
+function anthropicContentOf(state: unknown): unknown[] | null {
+  if (!state || typeof state !== 'object') return null;
+  const c = (state as { anthropicContent?: unknown }).anthropicContent;
+  return Array.isArray(c) && c.length ? c : null;
+}
+/** The raw content's tool_use blocks are exactly the turn's calls (same ids, same order): otherwise the turn is rebuilt. */
+function sameCalls(raw: unknown[], calls: AgentToolCall[]): boolean {
+  const ids = raw.filter((b) => isObject(b) && (b as { type?: unknown }).type === 'tool_use').map((b) => (b as { id?: unknown }).id);
+  return ids.length === calls.length && ids.every((id, i) => id === calls[i]!.id);
+}
+
+/**
+ * Family A answer → neutral. Text blocks are joined; tool_use blocks become calls (an input that is not an object throws
+ * bad_tool_call); every other block type (thinking, progress updates, anything newer) is ignored. Raw stop reasons the loop
+ * must act on are mapped by the network adapter (agentAnthropic.ts): refusal → refused, model_context_window_exceeded →
+ * context_too_long; here they read as finish 'refusal' / 'length'.
+ */
+export function fromAnthropicResponse(res: AnthropicMessagesResponse): AgentTurnResponse {
+  const content = Array.isArray(res.content) ? res.content as { type: string }[] : [];
+  const texts: string[] = [];
+  const toolCalls: AgentToolCall[] = [];
+  for (const b of content) {
+    if (b.type === 'text') texts.push((b as AnthropicTextBlock).text);
+    else if (b.type === 'tool_use') {
+      const u = b as AnthropicToolUseBlock;
+      if (!isObject(u.input) || typeof u.id !== 'string' || typeof u.name !== 'string') throw new AgentProviderError('bad_tool_call', false, `tool_use block ${String(u.id)} has no object input`);
+      toolCalls.push({ id: u.id, name: u.name, input: u.input });
+    }
+  }
+  const sr = res.stop_reason;
+  const finish: AgentTurnResponse['finish'] = sr === 'tool_use' ? 'tool' : sr === 'end_turn' || sr === 'stop_sequence' ? 'stop' : sr === 'max_tokens' || sr === 'model_context_window_exceeded' ? 'length' : sr === 'refusal' ? 'refusal' : toolCalls.length ? 'tool' : 'other';
+  const u = res.usage;
+  return {
+    text: texts.length ? texts.join('\n') : null,
+    toolCalls,
+    finish,
+    usage: u ? { inputTokens: u.input_tokens, outputTokens: u.output_tokens, ...(u.cache_read_input_tokens !== undefined ? { cacheReadTokens: u.cache_read_input_tokens } : {}), ...(u.cache_creation_input_tokens !== undefined ? { cacheWriteTokens: u.cache_creation_input_tokens } : {}) } : null,
+    providerRequestId: typeof res.id === 'string' ? res.id : null,
+    // the whole answer, unchanged, for the next request of this live run only (lead decision 6); never stored
+    ...(content.length ? { providerState: { anthropicContent: structuredClone(content) } } : {}),
+  };
+}
+
+/** The label line that introduces the stills of the tool calls just above (family C, verifier C11). */
+export const STILLS_FOLLOW_TEXT = 'Pictures returned by the tool calls above:';
+/**
+ * Family C (R§2.3, R§4.8, R§5, R§6). Rules: the system text is the first message; tool arguments are a JSON STRING; results are
+ * `{role:"tool", tool_call_id, content}` text only, one per call in the calls' order (a missing one says MISSING_RESULT_TEXT), an
+ * error result's text starts with "Error: " (no is_error flag exists, R§2.3); the stills of the results go in ONE following user
+ * message, after a text line naming each picture's call (an image in a tool message is confirmed for no provider, R§8);
+ * an image part is `{type:"image_url", image_url:{url:"data:…"}}`, or the plain data-URL string where the preset says so (Ollama's
+ * own example, R§5); tool_choice 'auto' only when the preset supports it (Ollama: not supported, R§5); `parallel_tool_calls:false`
+ * is sent when parallel calls are off for the request or the preset (local servers, R§6), and nothing when they are on (the default
+ * on OpenAI and xAI; unknown on Gemini's compat endpoint, R§4.8, so nothing unasked is sent).
+ */
+export function toOpenAIChatRequest(req: AgentTurnRequest, model: string, preset: AgentProviderPreset): OpenAIChatRequest {
+  const part = (i: AgentImage): OpenAIChatContentPart => {
+    const url = `data:${i.mediaType};base64,${i.base64}`;
+    return preset.imageUrlAsString ? { type: 'image_url', image_url: url } : { type: 'image_url', image_url: { url } };
+  };
+  const messages: OpenAIChatMessage[] = [];
+  if (req.system) messages.push({ role: 'system', content: req.system });
+  let pendingCalls: AgentToolCall[] = [];
+  const closeMissing = () => { for (const c of pendingCalls) messages.push({ role: 'tool', tool_call_id: c.id, content: MISSING_RESULT_TEXT }); pendingCalls = []; };
+  for (const m of req.messages) {
+    if (m.role === 'assistant') {
+      closeMissing();
+      messages.push({ role: 'assistant', content: m.text ?? null, ...(m.toolCalls.length ? { tool_calls: m.toolCalls.map((c) => ({ id: c.id, type: 'function' as const, function: { name: c.name, arguments: JSON.stringify(isObject(c.input) ? c.input : {}) } })) } : {}) });
+      pendingCalls = m.toolCalls;
+      continue;
+    }
+    if (m.role === 'tool') {
+      const byId = new Map(m.results.map((r) => [r.callId, r]));
+      const stills: { callId: string; image: AgentImage }[] = [];
+      for (const c of pendingCalls) {
+        const r = byId.get(c.id);
+        messages.push({ role: 'tool', tool_call_id: c.id, content: !r ? MISSING_RESULT_TEXT : r.isError ? `Error: ${r.text}` : r.text });
+        for (const image of r?.images ?? []) stills.push({ callId: c.id, image });
+      }
+      pendingCalls = [];
+      if (stills.length) {
+        const lines = stills.map((s, k) => `${k + 1}. ${s.image.label} (call ${s.callId})`);
+        messages.push({ role: 'user', content: [{ type: 'text', text: [STILLS_FOLLOW_TEXT, ...lines].join('\n') }, ...stills.map((s) => part(s.image))] });
+      }
+      continue;
+    }
+    closeMissing();
+    messages.push({ role: 'user', content: m.images?.length ? [...(m.text ? [{ type: 'text' as const, text: m.text }] : []), ...m.images.map(part)] : m.text });
+  }
+  closeMissing();
+  const body: OpenAIChatRequest = { model, messages, tools: req.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })), max_tokens: req.maxOutputTokens };
+  if (body.tools.length && preset.supportsToolChoice) body.tool_choice = 'auto';
+  if (body.tools.length && (!req.parallelToolCalls || !preset.parallelToolCalls)) body.parallel_tool_calls = false;
+  return body;
+}
+
+/**
+ * Family C answer → neutral. choices[0] only; arguments are parsed from the JSON string (unparseable, or not an object →
+ * bad_tool_call); finish_reason tool_calls → 'tool', stop → 'stop', length → 'length', content_filter or a non-empty `refusal`
+ * → 'refusal'; no choices → bad_request.
+ */
+export function fromOpenAIChatResponse(res: OpenAIChatResponse): AgentTurnResponse {
+  const choice = Array.isArray(res.choices) ? res.choices[0] : undefined;
+  if (!choice || !choice.message) throw new AgentProviderError('bad_request', false, 'the answer has no choices');
+  const msg = choice.message;
+  const toolCalls: AgentToolCall[] = (msg.tool_calls ?? []).map((c) => {
+    let input: unknown;
+    try { input = JSON.parse(c.function.arguments); } catch { throw new AgentProviderError('bad_tool_call', false, `the arguments of call ${c.id} (${c.function?.name}) are not JSON`); }
+    if (!isObject(input)) throw new AgentProviderError('bad_tool_call', false, `the arguments of call ${c.id} (${c.function?.name}) are not a JSON object`);
+    return { id: c.id, name: c.function.name, input };
+  });
+  const fr = choice.finish_reason;
+  const finish: AgentTurnResponse['finish'] = msg.refusal ? 'refusal' : fr === 'tool_calls' ? 'tool' : fr === 'stop' ? (toolCalls.length ? 'tool' : 'stop') : fr === 'length' ? 'length' : fr === 'content_filter' ? 'refusal' : toolCalls.length ? 'tool' : 'other';
+  const u = res.usage;
+  const cached = u?.prompt_tokens_details?.cached_tokens;
+  return {
+    text: typeof msg.content === 'string' && msg.content.length ? msg.content : (msg.refusal ?? null),
+    toolCalls,
+    finish,
+    usage: u ? { inputTokens: u.prompt_tokens, outputTokens: u.completion_tokens, ...(cached !== undefined ? { cacheReadTokens: cached } : {}) } : null,
+    providerRequestId: typeof res.id === 'string' ? res.id : null,
+  };
+}
 
 // ---------- provider presets (data; the owner edits base URL and model in the connect card) ----------
 export interface AgentProviderPreset {
@@ -154,13 +348,15 @@ export interface AgentProviderPreset {
   local: boolean;
   /** research section the facts come from */
   source: string;
+  /** the image part's `image_url` is the plain data-URL string (Ollama's compat page example, R§5); otherwise {url} */
+  imageUrlAsString?: boolean;
 }
 export const AGENT_PROVIDER_PRESETS: readonly AgentProviderPreset[] = Object.freeze([
   { id: 'anthropic', family: 'anthropic-messages', baseUrl: 'https://api.anthropic.com', needsKey: true, versionHeader: `anthropic-version: ${ANTHROPIC_VERSION}`, supportsToolChoice: true, parallelToolCalls: true, compatNote: false, local: false, source: 'R§1' },
   { id: 'openai', family: 'openai-chat', baseUrl: 'https://api.openai.com/v1', needsKey: true, versionHeader: null, supportsToolChoice: true, parallelToolCalls: true, compatNote: true, local: false, source: 'R§2.1, R§2.3' },
   { id: 'xai', family: 'openai-chat', baseUrl: 'https://api.x.ai/v1', needsKey: true, versionHeader: null, supportsToolChoice: true, parallelToolCalls: true, compatNote: true, local: false, source: 'R§3.1 (Chat Completions is xAI\'s legacy endpoint)' },
   { id: 'gemini', family: 'openai-chat', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', needsKey: true, versionHeader: null, supportsToolChoice: true, parallelToolCalls: true, compatNote: true, local: false, source: 'R§4.8 (beta)' },
-  { id: 'ollama', family: 'openai-chat', baseUrl: 'http://localhost:11434/v1', needsKey: false, versionHeader: null, supportsToolChoice: false, parallelToolCalls: false, compatNote: false, local: true, source: 'R§5' },
+  { id: 'ollama', family: 'openai-chat', baseUrl: 'http://localhost:11434/v1', needsKey: false, versionHeader: null, supportsToolChoice: false, parallelToolCalls: false, compatNote: false, local: true, source: 'R§5', imageUrlAsString: true },
   { id: 'llamacpp', family: 'openai-chat', baseUrl: 'http://127.0.0.1:9931/v1', needsKey: false, versionHeader: null, supportsToolChoice: true, parallelToolCalls: false, compatNote: false, local: true, source: 'R§6 (port of this README version; the owner types his)' },
 ]);
 /** True when the key and the stills would cross the network unencrypted (http:// to a host other than loopback): the card says so. */

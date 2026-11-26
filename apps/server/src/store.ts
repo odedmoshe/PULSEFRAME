@@ -301,6 +301,7 @@ export class Store {
    * the list of conflicts, and unrelated later edits by anyone are never touched.
    */
   undo(projectId: string, actor: string, mode: 'undo' | 'redo', transactionId?: string, guard?: CommitRequest['guard'], anyActor = false): CommitResult {
+    let composite = null as string[] | null; // set below when the target is an undoActor composite or its redo (wave 8 autonomy C6)
     const run = this.db.transaction((): CommitRequest => {
       const { doc } = this.wholeProject(projectId); // the stored states are compared with the whole document
       const kinds = mode === 'undo' ? "('edit','redo')" : "('undo')";
@@ -320,10 +321,33 @@ export class Store {
       const conflicts = changes.filter((c) => !sameEntity(live.get(c.id) ?? null, c.after)).map((c) => ({ entityId: c.id, ...(this.entityVersion(projectId, c.id) ?? {}) }));
       if (conflicts.length) throw new ApiError(409, 'undo_conflict', `cannot ${mode}: ${conflicts.length} item(s) were changed afterwards`, { transactionId: target.id, conflicts }, 'Those later changes are kept. Undo them first, or edit manually.');
       const label = `${mode === 'undo' ? 'Undo' : 'Redo'}: ${target.label ?? JSON.parse(target.result).summary}`.slice(0, 200);
+      // a composite's redo clears its marks; a Ctrl+Z of that redo marks the same transactions again (lead decision 5)
+      const tr = JSON.parse(target.result) as { undoesAll?: string[]; redoesAll?: string[] };
+      composite = (mode === 'redo' ? tr.undoesAll : tr.redoesAll) ?? null;
       return { projectId, actor, label, allowInternal: true, kind: mode, undoes: target.id, ops: [{ op: 'restore_entities', args: { targets: changes.map((c) => ({ id: c.id, state: c.before })) } }] };
     });
     const req = run.immediate();
     try {
+      // the redo of an undoActor composite (wave 8 autonomy C6): restores the composed last states AND, in the same SQLite
+      // transaction, clears every undone_by mark the composite set (the composite itself is marked by commit as usual)
+      if (composite) {
+        const targets = composite;
+        return this.db.transaction(() => {
+          const r = this.commit({ ...req, guard });
+          if (r.committed && r.transactionId) {
+            if (mode === 'redo') {
+              const clear = this.db.prepare('UPDATE transactions SET undone_by = NULL WHERE project_id = ? AND id = ? AND undone_by = ?');
+              for (const t of targets) clear.run(projectId, t, req.undoes);
+              this.db.prepare("UPDATE transactions SET result = json_set(result, '$.redoesAll', json(?)) WHERE project_id = ? AND id = ?").run(JSON.stringify(targets), projectId, r.transactionId);
+            } else { // Ctrl+Z of a composite's redo: every target is reversed again, so it is marked again, by this undo (its redo clears them)
+              const mark = this.db.prepare('UPDATE transactions SET undone_by = ? WHERE project_id = ? AND id = ? AND undone_by IS NULL');
+              for (const t of targets) mark.run(r.transactionId, projectId, t);
+              this.db.prepare("UPDATE transactions SET result = json_set(result, '$.undoesAll', json(?)) WHERE project_id = ? AND id = ?").run(JSON.stringify(targets), projectId, r.transactionId);
+            }
+          }
+          return r;
+        }).immediate();
+      }
       return this.commit({ ...req, guard });
     } catch (e) {
       // Restoring would produce an invalid timeline (e.g. the space is now occupied): a conflict, not a server error.
@@ -351,8 +375,73 @@ export class Store {
    *  Files the actor made stay in the library, as with every undo; jobs and non-op effects are the caller's (UndoAllAnswer.notUndone).
    */
   undoActor(projectId: string, actor: string, sinceRevision: number, opts: { byActor: string; dryRun?: boolean; partial?: boolean; guard?: CommitRequest['guard'] }): { transactionId: string | null; revision: number; undoes: string[]; entities: number; conflicts: { entityId: string; changedAtRevision: number; by: string }[] } {
-    void projectId; void actor; void sinceRevision; void opts;
-    throw new ApiError(501, 'agent_not_built', 'undoing every edit of an agent at once is not built in this build yet', {}, 'Undo its edits one by one from the receipts meanwhile.');
+    type Row = { id: string; revision: number; actor: string; kind: string; undone_by: string | null; result: string; changes: string };
+    const parse = (r: Row) => JSON.parse(r.result) as { undoesAll?: string[]; redoesAll?: string[] };
+    const plan = () => {
+      const { doc, revision } = this.wholeProject(projectId);
+      const mine = this.db.prepare('SELECT id, revision, actor, kind, undone_by, result, changes FROM transactions WHERE project_id = ? AND actor = ? AND revision > ? ORDER BY revision').all(projectId, actor, sinceRevision) as Row[];
+      // a composite of an earlier undoActor (and its redo) committed BY this actor is not one of its edits
+      const own = mine.filter((r) => { const x = parse(r); return !x.undoesAll && !x.redoesAll; });
+      const ids = new Set(own.map((r) => r.id));
+      // an edit reversed by SOMEONE ELSE (an earlier «ביטול הכול», the owner's single undo) is already gone; one reversed by this
+      // actor's own undo stays in the walk with that undo, so the pair composes to nothing (C6: its own undos never read as conflicts)
+      const walk = own.filter((r) => !r.undone_by || ids.has(r.undone_by));
+      const first = new Map<string, { before: unknown; rev: number }>();
+      const last = new Map<string, unknown>();
+      for (const t of walk) for (const c of JSON.parse(t.changes) as EntityChange[]) {
+        if (!first.has(c.id)) first.set(c.id, { before: c.before, rev: t.revision });
+        last.set(c.id, c.after);
+      }
+      const walked = new Set(walk.map((r) => r.id));
+      const conflicts = new Map<string, { entityId: string; changedAtRevision: number; by: string }>();
+      if (first.size) {
+        const minRev = Math.min(...[...first.values()].map((f) => f.rev));
+        const others = this.db.prepare('SELECT id, revision, actor, kind, undone_by, result, changes FROM transactions WHERE project_id = ? AND actor != ? AND revision > ? ORDER BY revision').all(projectId, actor, minRev) as Row[];
+        for (const o of others) {
+          const x = parse(o);
+          // an earlier composite over these very edits and its redo: the current-state check below decides (they leave the run's states)
+          if ([...(x.undoesAll ?? []), ...(x.redoesAll ?? [])].some((t) => walked.has(t))) continue;
+          for (const c of JSON.parse(o.changes) as EntityChange[]) {
+            const f = first.get(c.id);
+            if (f && o.revision > f.rev) conflicts.set(c.id, { entityId: c.id, changedAtRevision: o.revision, by: o.actor });
+          }
+        }
+      }
+      const live = entityMap(doc);
+      const targets: { id: string; state: unknown }[] = [];
+      for (const [eid, f] of first) {
+        const after = last.get(eid) ?? null;
+        if (!conflicts.has(eid) && !sameEntity(live.get(eid) ?? null, after as never)) {
+          const v = this.entityVersion(projectId, eid);
+          conflicts.set(eid, { entityId: eid, changedAtRevision: v?.revision ?? revision, by: v?.actor ?? 'unknown' });
+        }
+        if (conflicts.has(eid)) continue;
+        if (sameEntity(f.before as never, after as never)) continue; // composed to nothing (made and removed, or undone by itself)
+        targets.push({ id: eid, state: f.before });
+      }
+      return { revision, undoes: walk.map((r) => r.id), targets, conflicts: [...conflicts.values()].sort((a, b) => a.changedAtRevision - b.changedAtRevision || a.entityId.localeCompare(b.entityId)) };
+    };
+    const p = this.db.transaction(plan).immediate();
+    const out = { transactionId: null as string | null, revision: p.revision, undoes: p.undoes, entities: p.targets.length, conflicts: p.conflicts };
+    if (opts.dryRun) return out;
+    if (p.conflicts.length && !opts.partial)
+      throw new ApiError(409, 'undo_conflict', `cannot undo every edit of ${actor}: ${p.conflicts.length} item(s) were changed by someone else in between`, { actor, sinceRevision, conflicts: p.conflicts }, 'Those later changes are kept. Undo what can be undone (partial), or undo them first.');
+    if (!p.targets.length || !p.undoes.length) return out;
+    const label = (actor.startsWith('agent:run_') ? `ביטול ריצת סוכן ${actor.slice('agent:'.length)}` : `ביטול כל העריכות של ${actor}`).slice(0, 200);
+    try {
+      // ONE SQLite transaction: the composite commit, every reversed transaction marked undone_by it, and its list stored (C6)
+      return this.db.transaction(() => {
+        const r = this.commit({ projectId, actor: opts.byActor, label, allowInternal: true, kind: 'undo', undoes: p.undoes[0], guard: opts.guard, ops: [{ op: 'restore_entities', args: { targets: p.targets } }] });
+        if (!r.committed || !r.transactionId) return { ...out, revision: r.revision };
+        const mark = this.db.prepare('UPDATE transactions SET undone_by = ? WHERE project_id = ? AND id = ?');
+        for (const t of p.undoes) mark.run(r.transactionId, projectId, t);
+        this.db.prepare("UPDATE transactions SET result = json_set(result, '$.undoesAll', json(?)) WHERE project_id = ? AND id = ?").run(JSON.stringify(p.undoes), projectId, r.transactionId);
+        return { ...out, transactionId: r.transactionId, revision: r.revision };
+      }).immediate();
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'invalid_result') throw new ApiError(409, 'undo_conflict', `cannot undo every edit of ${actor}: ${e.message}`, { actor, sinceRevision, conflicts: p.conflicts }, 'Undo what can be undone (partial), or edit manually.');
+      throw e;
+    }
   }
   /** The transaction an actor committed with this idempotency key, if any: tools that plan before committing check it FIRST (wave 8 autonomy C8), so a resend never re-plans on a moved document. */
   findTransactionByKey(projectId: string, actor: string, key: string): CommitResult | null {

@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import * as T from '@pulseframe/time';
-import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, STABILISE_JOB_TYPE, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
+import { clipEnd, findClip, projectOutput, projectSequence, sequenceDuration, AGENT_JOB_TYPE, STABILISE_JOB_TYPE, TRACKING_JOB_TYPE, transformAt, type Clip, type Follow, type FollowInfo, type OpCall, type ProjectDocument, type Transform, type TrackRun, type TemplateInput, type ExportMode, type SegmentPlanView } from '@pulseframe/core';
 import { groupTimeAt, multicamGroupOf, projectVariant, type SwitchAnglesOutput } from '@pulseframe/core';
 import type { TakeRequest, TakeResult } from '@pulseframe/core';
 import type { ClipStabilise } from '@pulseframe/core';
@@ -113,6 +113,8 @@ export interface EditorState {
   trackJobs: Record<string, JobEvent>;
   /** The latest event of each camera-stabilise job seen in this session, by job id (the block «ייצוב תמונה» reads it; no polling while the stream is open). */
   stabiliseJobs: Record<string, JobEvent>;
+  /** The latest event of each in-editor agent run's job (type agent.run, stage step:<n>:<status>), by job id: the «סוכן» tab reads its run again on each (lead decision 7). */
+  agentJobs: Record<string, JobEvent>;
   /** The tracking job this session started for each motion track (motion track id → job id). */
   trackJobFor: Record<string, string>;
   /** The track picker on the monitor (TrackPicker.tsx): open while a point or an area of a clip's picture is being picked. */
@@ -295,7 +297,7 @@ export class Editor {
   private state: EditorState = {
     lang: localStorage.getItem('pf.lang') === 'en' ? 'en' : 'he', doc: null, rawDoc: null, activeSequenceId: '', revision: 0, selection: [], save: 'save.saved', activity: [], exportJob: null, capJob: null, capJobs: {},
     provider: null, providerAsking: false, providerError: null, gpu: null, error: null, errorHeadline: null, uploading: false, derivativeTick: 0, tick: 0, paletteOpen: false, pxPerSecond: 90, ghosts: [], followAgent: false, agentsPaused: false, proposals: [], approvals: [], viewVariantId: null, safeAreaOn: readSafeArea(), workspace: readWorkspace(), targets: { video: null, audio: null }, clipboard: [], cutPending: [], actor: null,
-    trackJobs: {}, stabiliseJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
+    trackJobs: {}, stabiliseJobs: {}, agentJobs: {}, trackJobFor: {}, picker: null, activeTrackId: null,
     templatesOpen: false, templatesFocus: 0, templateRun: null,
     cutClipId: null, loupe: false, inspectorTab: null, panelRequest: null, gallery: null, stageNote: null, notice: null, exportSheet: 0,
     segmentPlan: { status: 'off', view: null, revision: null }, fastExport: readFastExport(), planOptions: {}, // the export sheet's first pick (the computer destination: high quality, whose options are all defaults)
@@ -633,7 +635,7 @@ export class Editor {
     if (j.type === 'import') { this.imports.onJobEvent(j as ImportJobEvent); return; }
     // a fast export that stored segments changes what the next one reuses: the lane and the sheet line ask again
     if (j.type === 'export' && j.status === 'succeeded' && this.state.fastExport && (j.output as { segments?: unknown } | null)?.segments) void this.planPolicy.now(this.state.revision);
-    this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : j.type === TRACKING_JOB_TYPE ? { trackJobs: rememberJob(this.state.trackJobs, j) } : j.type === STABILISE_JOB_TYPE ? { stabiliseJobs: rememberJob(this.state.stabiliseJobs, j) } : {});
+    this.set(j.type === 'capability' ? { capJob: j, capJobs: rememberJob(this.state.capJobs, j) } : j.type === 'export' ? { exportJob: j } : j.type === TRACKING_JOB_TYPE ? { trackJobs: rememberJob(this.state.trackJobs, j) } : j.type === STABILISE_JOB_TYPE ? { stabiliseJobs: rememberJob(this.state.stabiliseJobs, j) } : j.type === AGENT_JOB_TYPE ? { agentJobs: rememberJob(this.state.agentJobs, j) } : {});
     // An export this tab started saves its file as soon as it is ready, once; the link in the header stays for another copy.
     if (j.type === 'export' && j.status === 'succeeded' && this.myExports.delete(j.id)) {
       const a = document.createElement('a');

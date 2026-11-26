@@ -57,6 +57,7 @@ import { storyA11yScenarios } from './a11y-story.ts';
 import { growingA11yScenarios } from './a11y-growing.ts';
 import { searchA11yScenarios } from './a11y-search.ts';
 import { audiencesA11yScenarios } from './a11y-audiences.ts';
+import { agentA11yScenarios } from './a11y-agent.ts';
 import { makeApi, ownerApi } from './incremental-fixtures.ts';
 import { KF_TESTIDS } from '../../../apps/web/src/editor/keyframes.testids.ts';
 import { auditInPage, focusAudit, toastAfterModal, toastInOpenModal } from './a11y-lib.ts';
@@ -881,6 +882,12 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      // the in-editor agent «סוכן» (wave 8 autonomy Part 2): the tab not connected, the connect card after a probe, a run (a11y-agent.ts)
+      for (const sc of agentA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
       // music that fits the film «מוזיקה שמתאימה לסרט» (wave 7 musicfit): the fit block, the swap dialog, the impact controls (a11y-musicfit.ts)
       for (const sc of musicfitA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -1242,6 +1249,12 @@ async function main() {
       }
       // «גרסה לכל קהל» (wave 8 audiences): the panel «מה שונה בגרסה הזו» open on a calm version, in the light theme, on a scratch project (a11y-audiences.ts)
       for (const sc of audiencesA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // the in-editor agent «סוכן» (wave 8 autonomy Part 2): the tab not connected, the connect card after a probe, a run (a11y-agent.ts)
+      for (const sc of agentA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });

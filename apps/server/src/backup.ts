@@ -13,6 +13,8 @@ import { CONNECTORS_FILE } from './connectors/keys.ts';
 
 /** The owner's own templates file (apps/server/src/ownTemplates.ts OWN_TEMPLATES_FILE; core OWN_TEMPLATE_STORE.file). */
 const OWN_TEMPLATES_FILE = OWN_TEMPLATE_STORE.file;
+/** The owner's rows of the agent's model table (agent/keys.ts AGENT_OWNER_MODELS_FILE; agentKeys.test.ts keeps them equal). */
+export const AGENT_OWNER_MODELS_FILE = 'agent-models.json';
 
 /**
  * Files of the data directory a backup never holds: the assistant's key and its config (assistant/contract.ts ASSISTANT_KEY_FILE,
@@ -94,7 +96,11 @@ export async function backupDataDir(src: string, dest: string): Promise<BackupRe
     try { fs.chmodSync(part, 0o600); } catch { /* Windows */ }
     fs.renameSync(part, ownOut);
   } else fs.rmSync(ownOut, { force: true });
-  // 3c. the outside services' settings (wave 8 sources, D8: connectors/keys.ts CONNECTORS_FILE; the download limit, no secret): copied
+  // 3c. the owner's rows of the agent's model table (wave 8 agent, lead's answer 5): the owner's edits, nothing secret; copied the
+  //     same way. The keys and provider settings under agent/ are NOT copied (NEVER_BACKED_UP below).
+  const models = path.join(src, AGENT_OWNER_MODELS_FILE), modelsOut = path.join(dest, AGENT_OWNER_MODELS_FILE);
+  if (fs.existsSync(models)) { fs.copyFileSync(models, `${modelsOut}.part`); try { fs.chmodSync(`${modelsOut}.part`, 0o600); } catch { /* Windows */ } fs.renameSync(`${modelsOut}.part`, modelsOut); } else fs.rmSync(modelsOut, { force: true });
+  // 3d. the outside services' settings (wave 8 sources, D8: connectors/keys.ts CONNECTORS_FILE; the download limit, no secret): copied
   //     every time like 3b (rewritten in place); removed from the destination when the source has none. Its keys are never copied (4).
   const con = path.join(src, CONNECTORS_FILE), conOut = path.join(dest, CONNECTORS_FILE);
   if (fs.existsSync(con)) {

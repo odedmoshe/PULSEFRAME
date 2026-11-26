@@ -21,5 +21,7 @@ export const AGENT_TESTIDS = {
   continue: 'agent-continue', undoAll: 'agent-undo-all', undoPartial: 'agent-undo-partial', undoConflicts: 'agent-undo-conflicts', notUndone: 'agent-not-undone', notUndoneItem: 'agent-not-undone-item',
   // a refusal or provider failure line (data-code) and the list of earlier runs
   error: 'agent-error', runs: 'agent-runs',
+  // the provider's own words under a failed «בדיקה» (lead decision 7; key redacted by the server)
+  probeDetail: 'agent-probe-detail',
 } as const;
 export type AgentTestId = (typeof AGENT_TESTIDS)[keyof typeof AGENT_TESTIDS];

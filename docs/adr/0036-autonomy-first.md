@@ -37,7 +37,16 @@ The owner wants agents to do everything the editor's own window does, with no ap
 - Licences: ONE rule is the aim (a licence finding is a warning quoting the licence's own deed; refusals only for data facts).
   The library's fail-closed refusal of share-alike, no-derivatives and unknown licences (ADR-0029 §6) and the archive's exclusion
   of such files are re-decided with those rows.
-- Part 2 (the in-editor agent) and Part 3 (saved skills) get their own sections here when they are integrated.
+- **Part 2, the in-editor agent «סוכן», is integrated and merged (2026-11-26).** A run is one durable `agent.run` job: the
+  connected model plans and calls the editor's own MCP tools in process as `agent:run_<id>` (no token, not reachable from HTTP),
+  one step row written before every call, ledger rows per model call, limits on steps and spend, cancel and continue, resume
+  after the server was killed, and «ביטול הכול»: every edit of the run as ONE new revision, never over an edit someone else made
+  in between, listing what it cannot undo. Two adapter families (anthropic-messages, openai-chat with presets for OpenAI, xAI,
+  Gemini's compatible endpoint, llama.cpp and Ollama); the model table is data the owner may edit (backed up); keys are typed by
+  the owner into the connect card and kept in 0600 files outside backups (floor C9b). Claude's thinking blocks are replayed
+  unchanged from memory during a live run and never stored. A run reads any project its credential may read and edits only its
+  own (undo-all covers one project). `pnpm proof:agent` 28/28 in one run with a LABELLED SCRIPTED model (server checks 1–14, the
+  adapter checks, UI rows U1–U14): no real model has been run, no real provider called. Part 3 (saved skills) is not designed.
 - Not verified: MCP listen streams closing on a mode switch (code only); the proofs of lifeline, stills, craft and teach in either
   mode after this change; how Windows folder permissions protect `autonomy.json`; `proof:phase5` in open mode fails 7 of 34 checks
   that pin gates this ADR opens (they stay as guarded-mode checks).

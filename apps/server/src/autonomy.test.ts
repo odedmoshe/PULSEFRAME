@@ -39,6 +39,7 @@ const RAW_ALLOWED: readonly { file: string; frag: string; why: string }[] = [
   { file: 'music.ts', frag: '.mode === \'propose\') throw', why: 'A25 fact: a proposal cannot carry internal steps (propose credentials are never stamped open)' },
   { file: 'story.ts', frag: '.mode === \'propose\') throw', why: 'A25 fact: a proposal cannot carry internal steps (propose credentials are never stamped open)' },
   { file: 'musicfit/routes.ts', frag: '.mode === \'propose\') throw', why: 'A25 fact: a proposal cannot carry internal steps (propose credentials are never stamped open)' },
+  { file: 'agent/undoAll.ts', frag: 'if (!opts.dryRun && p.kind === \'agent\') d.gov.assertMayAct(p, projectId, \'edit\');', why: 'an agent\'s «ביטול הכול» passes the same governance check as its edits (pause 423, a read-only credential): not a gate' },
 ];
 /** Policy sites not swapped yet (this list is emptied family by family; an entry here is a gate still shut in open mode). */
 const PENDING: readonly { file: string; frag: string }[] = [
