@@ -25,6 +25,7 @@ import { TemplatesDrawer } from './TemplatesDrawer.tsx';
 import { TextStyles } from './TextStyles.tsx';
 import { TripMapEntry, TRIPMAP_ENTRY_SHOWN } from './tripMap/TripMapDialog.tsx';
 import { MadeEntry, MADE_UI_BUILT } from './made/MadeEntry.tsx';
+import { MediaSourcesTabs, SOURCES_UI_BUILT } from './sources/SourcesTab.tsx';
 import { LifeHost, LifeLibrary, LifeViewSwitch } from './lifeline/LifeLibrary.tsx';
 import { FontsSection, MusicTab, PacksSection } from './lifeline/PacksMount.tsx';
 import { PACKS_MOUNT_STRINGS } from './lifeline/packs.mount.strings.ts';
@@ -140,9 +141,10 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
   const total = doc ? Object.keys(doc.assets).length : 0;
   const chips: [MediaFilter, string][] = [['all', S.filterAll], ['video', S.filterVideo], ['audio', S.filterAudio], ['image', S.filterImage], ['unused', S.filterUnused]];
   const { view } = useLifeUi(); // life line (ADR-0021): the library by date and by event; the chips and the search belong to the plain view
-  return (
-    <Pane title={S.rail.media} count={total || undefined} action={<ImportButton />}>
-      <Imports />
+  // «הקבצים שלי»: what this drawer always showed. «מאגר» (wave 8 sources) puts it as the first of two tabs once SOURCES_UI_BUILT
+  // (sources/SourcesTab.tsx MediaSourcesTabs, W3); until then exactly as before.
+  const mine = (
+    <>
       {total === 0 ? <DropZone /> : (
         <>
           <label className="pf-bw-search">
@@ -159,6 +161,12 @@ function MediaDrawer({ onView }: { onView: (id: string) => void }) {
           <MulticamLibraryEntry lang={state.lang} />
         </>
       )}
+    </>
+  );
+  return (
+    <Pane title={S.rail.media} count={total || undefined} action={<ImportButton />}>
+      <Imports />
+      {SOURCES_UI_BUILT ? <MediaSourcesTabs mine={mine} /> : mine}
     </Pane>
   );
 }

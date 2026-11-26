@@ -39,6 +39,8 @@ import { creditsFor } from './library/credits.ts';
 import { useLibraryItemFor } from './library/routes.ts';
 import { MadeRenderRequestSchema } from '@pulseframe/core';
 import { madeError } from './made/contract.ts';
+import { SOURCE_JOB_TYPE, SourceImportBodySchema, SourceLinkBodySchema, SourceSearchQuerySchema, SEARCHABLE_SOURCES } from '@pulseframe/core';
+import { notBuiltSourcesRuntime, type SourcesRuntime } from './sources/contract.ts';
 import { FindQuerySchema } from '@pulseframe/core';
 import { findTextFor } from './craft/findText.ts';
 import { pearlsView } from './pearls.ts';
@@ -61,9 +63,10 @@ import { findInFootageFor } from './search/routes.ts';
 export const SERVER_INFO = { name: 'pulseframe-studio', version: '0.0.0' };
 
 /** `derivatives` lets tracking jobs read an asset's editing proxy; without it they read the stored media. */
-export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { imports?: ImportQueue; renderCache?: RenderCacheService; /** picture search (wave 7 search track; search/runtime.ts); index.ts always passes the built runtime; absent (a test host) = the not-built runtime */ search?: SearchRuntime } = {}) {
+export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, presence: Presence, governance?: Governance, speech?: Speech, derivatives?: Derivatives, extras: { imports?: ImportQueue; renderCache?: RenderCacheService; /** picture search (wave 7 search track; search/runtime.ts); index.ts always passes the built runtime; absent (a test host) = the not-built runtime */ search?: SearchRuntime; /** «מאגר» (wave 8 sources; sources/contract.ts): index.ts passes W2's runtime; absent = the not-built runtime (501 sources_not_built) */ sources?: SourcesRuntime } = {}) {
   const gov = governance ?? new Governance(store);
   const search = extras.search ?? notBuiltRuntime();
+  const sources = extras.sources ?? notBuiltSourcesRuntime;
   /**
    * The assistant's job controls (ADR-0027), handed over by createApp once it has made them (bindAssistant below): cancel_job
    * cancels an assistant.propose job through the very handler POST /jobs/:jobId/cancel calls. Null only for an MCP endpoint
@@ -190,6 +193,15 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
       run('edit', () => { read(projectId); throw madeError('notBuilt'); }));
     server.registerTool('view_made_clip', { description: 'The report of a «קליפ מקוד» render (status, stage, frame progress, the checks with their numbers, warnings, the failure with its next step) and, once it succeeded, three stills (first, middle, last frame) as images, to judge the design and draw again. Your own renders, or any for the owner.', inputSchema: z.object({ projectId: pid, jobId: z.string() }), annotations: ro }, ({ projectId }) =>
       run('observe', () => { read(projectId); throw madeError('notBuilt'); }));
+    // «מאגר» / «ייבוא מקישור» (wave 8 sources; sources/contract.ts SOURCES_MCP_TOOLS): one handler with REST each (the runtime); 501 sources_not_built until W2
+    server.registerTool('list_sources', { description: 'The stock sources this editor can search (Openverse: photos, illustrations, music, sound effects, no key; Pixabay: video, photos, illustrations, the owner\'s key; Wikimedia Commons: photos, video, sound, with the contact line the owner typed), each with its state (ready, needs_key, needs_contact), the searches left in the service\'s current window as counted here, and the download limit. Never a key. Read-only.', inputSchema: z.object({}), annotations: ro }, () =>
+      run('observe', () => sources.list(principal)));
+    server.registerTool('search_sources', { description: 'Search a stock source. q: plain words for the picture or sound wanted; the words are sent to the chosen service (nothing else about the project is). Rows carry title, author, length, size, the licence as the service names it with its warnings (no-derivatives, share-alike, unknown, non-commercial: warnings quoting the licence, never refusals), a credit preview, and an itemId for import_source. Answers are kept in memory (Pixabay 24 hours, as its terms ask). Read-only.', inputSchema: z.object({ provider: z.enum(SEARCHABLE_SOURCES), ...SourceSearchQuerySchema.shape }), annotations: ro }, ({ provider, ...q }) =>
+      run('observe', () => sources.search(principal, provider, SourceSearchQuerySchema.parse(q))));
+    server.registerTool('import_source', { description: 'Import a search result into the project as a durable job (source_fetch: download, import, use_source_item with the source record — service, item, licence verbatim, credit, fetch time, hash — and, with place, add_clip at that frame-aligned time), committed as you; wait with get_job, stop with cancel_job. Licence findings come back as warnings, never refusals. idempotencyKey makes a repeat return the first job.', inputSchema: z.object({ projectId: pid, ...SourceImportBodySchema.shape }) }, ({ projectId, ...b }) =>
+      run('edit', () => { read(projectId); gov.assertMayAct(principal, projectId, 'job'); return sources.importItem(principal, projectId, SourceImportBodySchema.parse(b)); }));
+    server.registerTool('import_from_link', { description: 'Import a file from a direct http(s) link (a Dropbox share link too) as a durable job (source_fetch), committed as you; the link must lead to a video, sound or picture file. Links to this computer, its own network doors or link-local addresses are refused (link_address_refused); home-network addresses work with a warning. Video-site pages are not files (download_not_media). The link is kept out of the job row and logs.', inputSchema: z.object({ projectId: pid, ...SourceLinkBodySchema.shape }) }, ({ projectId, ...b }) =>
+      run('edit', () => { read(projectId); gov.assertMayAct(principal, projectId, 'job'); return sources.importLink(principal, projectId, SourceLinkBodySchema.parse(b)); }));
     server.registerTool('perform_take', { description: 'Record a performance take (perform mode): pad presses (timeline seconds, pads 0-7) with the pad bank (built-in moves: adjustment hits, zoom punch, sounds, titles, stickers; catalogue ids, never asset ids), the project assets each sound or sticker pad resolved to, and the snap settings (snap off/beat/half, tempo, strength). The server quantises and plans the take with fixed rules (no model) and commits it as ONE undoable step; a hit that would change light faster than three times a second, or needs what is missing, is left out and its chip says why. dryRun plans without changing anything (observe). Credentials in propose mode are refused. Answers 501 take_not_built while this build has no planner; 409 take_empty when no tap could be kept.', inputSchema: z.object({ projectId: pid, ...TakeRequestSchema.shape }) }, ({ projectId, ...b }) =>
       run('observe', () => { read(projectId); return takeFor(store, gov, principal, projectId, TakeRequestSchema.parse(b)); }));
     // the content library on disk (wave 7 library track): use an item by its catalogue key, and read the credits a sequence needs.
@@ -342,6 +354,7 @@ export function createMcp(store: Store, auth: Auth, exporter: Exporter, capabili
         const j = store.getJob(jobId);
         gov.assertMayAct(principal, j.projectId, 'observe');
         if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, principal, j, 'cancel'); return extras.imports.cancel(jobId, principal.actor); }
+        if (j.type === SOURCE_JOB_TYPE) return sources.cancel(principal, jobId); // a stock-source download (wave 8 sources; W2: who may cancel)
         assertMayCancel(gov, principal, j);
         // the same dispatch as POST /jobs/:jobId/cancel (http.ts)
         if (j.type === ASSISTANT_JOB_TYPE) {

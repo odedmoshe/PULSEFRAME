@@ -288,6 +288,12 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'GET /api/v1/agent/providers': ['no-document'], 'PUT /api/v1/agent/providers/:providerId': ['owner-only'], 'PUT /api/v1/agent/providers/:providerId/key': ['owner-only'],
   'DELETE /api/v1/agent/providers/:providerId/key': ['owner-only'], 'POST /api/v1/agent/providers/:providerId/probe': ['owner-only'],
   'GET /api/v1/agent/models': ['no-document'], 'PUT /api/v1/agent/models': ['owner-only'],
+  // «מאגר» / «ייבוא מקישור» (wave 8 sources; sources/contract.ts): services' answers and machine settings, no document; the imports
+  // write through use_source_item and add_clip; storing a service's credential is the owner's own session
+  'GET /api/v1/sources': ['no-document'], 'GET /api/v1/sources/settings': ['no-document'], 'PUT /api/v1/sources/settings': ['no-document'],
+  'GET /api/v1/sources/:provider/search': ['no-document'], 'GET /api/v1/source-previews/:handle': ['no-document'],
+  'PUT /api/v1/sources/:provider/credentials': ['owner-only'], 'DELETE /api/v1/sources/:provider/credentials': ['owner-only'],
+  [`POST ${P}/sources/import`]: ['write'], [`POST ${P}/sources/link`]: ['write'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -340,6 +346,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   find_sharp_frames: ['reader-document'], read_sharp_frames: ['reader-document'],
   // the in-editor agent «סוכן» (wave 8 autonomy Part 2): run rows pass forPrincipal (mcp.ts text); undo writes through Store.undoActor
   start_agent_run: ['rows-scrubbed'], get_agent_run: ['rows-scrubbed'], undo_actor_since: ['write'],
+  // «מאגר» (wave 8 sources): services' answers hold no document; imports write through use_source_item and add_clip
+  list_sources: ['no-document'], search_sources: ['no-document'], import_source: ['write'], import_from_link: ['write'],
 };
 /** MCP resources and prompts (every resource answer passes forPrincipal; prompts carry no project content). */
 export const PEOPLE_MCP_RESOURCES: Readonly<Record<string, readonly PeopleFilter[]>> = {

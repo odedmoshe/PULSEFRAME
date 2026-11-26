@@ -29,6 +29,7 @@ import { HE_COVER } from './cover.ts';
 import { HE_OWNTEMPLATE } from './owntemplate.ts';
 import { HE_LIVING } from './living.ts';
 import { HE_MADE } from './made.ts';
+import { HE_SOURCES } from './sources.ts';
 import { HE_GRADE } from './grade.ts';
 import { HE_FOOTAGE } from './footageSearch.ts';
 import { HE_PICMODELS } from './picmodels.ts';
@@ -306,7 +307,7 @@ const HE_MEDIA: [RegExp, (m: RegExpExecArray) => string][] = [
 /** The refusal's detail in the interface language when it is one of the common ones, else undefined (show the server's own text). */
 export function translateRefusal(lang: 'he' | 'en', message: string): string | undefined {
   if (lang !== 'he') return undefined;
-  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_INK, ...HE_TRIPMAP, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING, ...HE_GRADE, ...HE_LIVING, ...HE_MADE, ...HE_TEACH, ...HE_OWNTEMPLATE, ...HE_PICMODELS]) { const m = re.exec(message); if (m) return say(m); }
+  for (const [re, say] of [...HE, ...HE_AUDIO_FX, ...HE_AI, ...HE_TREND, ...HE_PORTRAIT, ...HE_MONTAGE, ...HE_TRACKING, ...HE_TEMPLATES, ...HE_LIFE, ...HE_PACKS, ...HE_PEOPLE, ...HE_TIMELINE, ...HE_RENDER_CACHE, ...HE_RENDER_CACHE_PURGE, ...HE_IMPORT_QUEUE, ...HE_FAMILY_FILM, ...HE_SHORTS, ...HE_KEYFRAMES, ...HE_MULTICAM, ...HE_MULTICAM_W1, ...HE_PERFORM, ...HE_ASSISTANT, ...HE_MEDIA, ...HE_LIBRARY, ...HE_SEND, ...HE_CRAFT, ...HE_STABILISE, ...HE_DRAWN, ...HE_INK, ...HE_TRIPMAP, ...HE_PEARLS, ...HE_STORY, ...HE_MUSICFIT, ...HE_AUDIENCES, ...HE_FOOTAGE, ...HE_INSTRUMENTS, ...HE_BOOTH, ...HE_COVER, ...HE_GROWING, ...HE_GRADE, ...HE_LIVING, ...HE_MADE, ...HE_SOURCES, ...HE_TEACH, ...HE_OWNTEMPLATE, ...HE_PICMODELS]) { const m = re.exec(message); if (m) return say(m); }
   for (const [re, say] of HE_PEOPLE_SERVER) { const m = re.exec(message); if (m) return say(m, (inner) => translateRefusal('he', inner)); }
   // The export routes wrap the first blocker (Exporter.start, the browser export): worded only when the blocker itself is.
   const start = /^export cannot start: ([\s\S]+)$/.exec(message);
@@ -397,6 +398,8 @@ export const TEACH_REFUSAL_PATTERNS: readonly RegExp[] = HE_TEACH.map(([re]) => 
 export const LIVING_REFUSAL_PATTERNS: readonly RegExp[] = HE_LIVING.map(([re]) => re);
 /** The patterns of «קליפ מקוד» (made.ts HE_MADE, wave 8 motioncode), for packages/evals/src/made-wording.test.ts. */
 export const MADE_REFUSAL_PATTERNS: readonly RegExp[] = HE_MADE.map(([re]) => re);
+/** The patterns of «מאגר» (sources.ts HE_SOURCES, wave 8 sources), for packages/evals/src/sources-wording.test.ts. */
+export const SOURCES_REFUSAL_PATTERNS: readonly RegExp[] = HE_SOURCES.map(([re]) => re);
 /** The patterns of «ציור חי» (ink.ts HE_INK, wave 8), for packages/evals/src/ink-wording.test.ts. */
 export const INK_REFUSAL_PATTERNS: readonly RegExp[] = HE_INK.map(([re]) => re);
 /** The patterns of colour curves (grade.ts HE_GRADE, wave 8), for packages/evals/src/grade-wording.test.ts. */

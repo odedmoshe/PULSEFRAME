@@ -80,6 +80,9 @@ import { registerOwnTemplateRoutes } from './ownTemplates.ts';
 import { registerAgentRoutes } from './agent/routes.ts';
 import { notBuiltAgentService, type AgentRunService } from './agent/loop.ts';
 import { registerMadeRoutes } from './made/routes.ts';
+import { registerSourcesRoutes } from './sources/routes.ts';
+import { notBuiltSourcesRuntime, type SourcesRuntime } from './sources/contract.ts';
+import { SOURCE_JOB_TYPE } from '@pulseframe/core';
 import type { MadeRunner } from './made/contract.ts';
 import type { RenderHost } from '@pulseframe/renderer';
 
@@ -161,7 +164,7 @@ export const APP_CSP = "default-src 'self'; script-src 'self'; style-src 'self';
 export const DATA_CSP = "default-src 'none'; frame-ancestors 'none'; sandbox";
 
 /** Services wired by the server (index.ts) that tests may leave out: the import queue and the phone drop (ADR-0023), the render cache (ADR-0024). */
-export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** the local picture-model runtime and eyes (wave 8 picmodels; picmodels/runtime.ts): absent = the not-built runtime */ pictureModels?: PictureModelsRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost; /** «קליפ מקוד» (wave 8 motioncode): the render runner (made/contract.ts MadeRunner, W1); absent = 501 made_not_built */ made?: MadeRunner }
+export interface AppExtras { imports?: ImportQueue; door?: DropDoor | null; renderCache?: RenderCacheService; /** The command bar's assistant (ADR-0027): installed adapters (none in wave 1) and the owner's endpoint. */ assistant?: AssistantDeps; /** picture search (wave 7 search track; search/runtime.ts): absent = the not-built runtime */ search?: SearchRuntime; /** the local picture-model runtime and eyes (wave 8 picmodels; picmodels/runtime.ts): absent = the not-built runtime */ pictureModels?: PictureModelsRuntime; /** TEST only (wave 7 instruments proof): a labelled synthetic kit list in place of MUSIC_KITS, never from the environment */ musicKits?: readonly MusicKit[]; /** The render host whose identity the export uses (wave 8 booth: self-check row export-gpu); absent in test apps without one */ renderHost?: RenderHost; /** «קליפ מקוד» (wave 8 motioncode): the render runner (made/contract.ts MadeRunner, W1); absent = 501 made_not_built */ made?: MadeRunner; /** «מאגר» (wave 8 sources): the runtime (sources/contract.ts SourcesRuntime, W2); absent = 501 sources_not_built */ sources?: SourcesRuntime }
 export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Exporter, capabilities: Capabilities, derivatives: Derivatives, presence: Presence, mcp: (req: Request) => Promise<Response>, governance?: Governance, backup?: BackupScheduler, speechService?: Speech, extras: AppExtras = {}) {
   setMeasurementExporter(exporter); // colour-match jobs render stills, also when they are recovered after a restart
   const gov = governance ?? new Governance(store);
@@ -977,6 +980,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // «שמירת הסרט כתבנית» (wave 8 owntemplate; ownTemplates.ts, core OWN_TEMPLATE_ROUTES): the owner's own session only; 501 own_template_not_built until W2
   registerOwnTemplateRoutes(app, { cfg, store, gov, need });
   registerMadeRoutes(app, { cfg, store, gov, need, ...(extras.made ? { runner: extras.made } : {}) }); // «קליפ מקוד» (wave 8 motioncode; made/contract.ts MADE_ROUTES): 501 made_not_built until W1/W2
+  registerSourcesRoutes(app, { store, gov, need, ...(extras.sources ? { runtime: extras.sources } : {}) }); // «מאגר» (wave 8 sources; sources/contract.ts SOURCES_ROUTES): 501 sources_not_built until W2
   registerBoothRoutes(app, { cfg, store, gov, need, exporter, renderHost: extras.renderHost ?? null, speech, assistant, search: searchRuntime, door: extras.door ?? null, ...(extras.musicKits ? { musicKits: extras.musicKits } : {}) });
   // the in-editor agent «סוכן» (wave 8 autonomy Part 2; agent/routes.ts, core AGENT_ROUTES): runs, undo-all, providers; 501 agent_not_built until built
   registerAgentRoutes(app, { store, gov, need, service: () => (mcp as { agentService?: () => AgentRunService }).agentService?.() ?? notBuiltAgentService() });
@@ -1083,6 +1087,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     if (j.type === SPEECH_ENGINE_JOB_TYPE) speech.engineInstall.assertOwner(c.var.principal); // the owner's own, before any scope is named
     const p = need(c, 'edit');
     if (j.type === IMPORT_JOB_TYPE && extras.imports) { assertMayHandleImportJob(gov, p, j, 'cancel'); return c.json(extras.imports.cancel(j.id, p.actor)); }
+    if (j.type === SOURCE_JOB_TYPE) return c.json((extras.sources ?? notBuiltSourcesRuntime).cancel(p, j.id)); // a stock-source download (wave 8 sources; W2: who may cancel)
     assertMayCancel(gov, p, j);
     if (j.type === ASSISTANT_JOB_TYPE) return c.json(assistant.cancel(p, j.id));
     if (j.type === 'analysis') return c.json(cancelAnalysisJob(store, j.id, p.actor));

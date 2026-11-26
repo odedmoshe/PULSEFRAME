@@ -235,3 +235,9 @@ export * from './agentContract.ts';
 export * from './madeContract.ts';
 export * from './madeCheck.ts';
 export * from './madeOps.ts';
+// «מאגר» / «ייבוא מקישור» (wave 8 sources track, part A): the contract (record, limits, term rows, wire types, refusals), the
+// validation rule and use_source_item's registration are lead-built; the op body (sourceOps.ts), sourceDuties and licensedOrigins
+// (libraryCredits.ts) are W1's
+export * from './sourcesContract.ts';
+export * from './sourceDuties.ts';
+export * from './sourceOps.ts';

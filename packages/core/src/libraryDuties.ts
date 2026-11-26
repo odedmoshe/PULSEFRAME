@@ -181,3 +181,19 @@ export function recordShareable(record: LibraryRecord): boolean {
   const row = tableRow(record.licence.id, record.sourceId);
   return !!row && tableDuties(row, record.licence.id).shareable;
 }
+
+/**
+ * ONE licence table for library and sources (wave 8 `sources`, verify C14; decisions «sources»: one rule, one table). What an exact
+ * licence id means for a video, read from SPDX_LICENCES (and tableDuties' "-NC" rule) for the ids the table admits; an id outside the
+ * table is classified by refusedSpdx (no-derivatives, share-alike, else unknown), credit when it is a CC BY family id. `known` false
+ * means the table does not admit it: the library refuses such an id today (ADR-0029 §6, re-decided in ADR-0036; this track does not
+ * change it), sources WARN (sourceDuties.ts). Never shareable when unknown, non-commercial, or outside the table. Pure.
+ */
+export interface LicenceFacts { known: boolean; credit: boolean; nonCommercial: boolean; shareAlike: boolean; noDerivatives: boolean; shareable: boolean }
+export function licenceFacts(licenceId: string): LicenceFacts {
+  const row = own(SPDX_LICENCES, licenceId);
+  const nc = /-NC(-|$)/.test(licenceId);
+  if (row) { const t = tableDuties(row, licenceId); return { known: true, credit: t.credit, nonCommercial: t.nonCommercial, shareAlike: false, noDerivatives: false, shareable: t.shareable }; }
+  const why = licenceId.startsWith('custom:') || licenceId.startsWith('provider:') ? 'licence_unknown' : refusedSpdx(licenceId);
+  return { known: false, credit: /^CC-BY(-|$)/.test(licenceId), nonCommercial: nc, shareAlike: why === 'licence_share_alike', noDerivatives: why === 'licence_no_derivatives', shareable: false };
+}
