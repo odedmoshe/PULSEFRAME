@@ -1,0 +1,38 @@
+/* «גדלים מול העיניים» (wave 8 growing): dialog, marking view, preview, bar. Logical properties; targets at least 32 px; nothing animates. */
+.pf-growing-entry { display: inline-flex; align-items: center; gap: 8px; min-block-size: 56px; padding: 10px 14px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); color: var(--pf-text); font: inherit; cursor: pointer; text-align: start; }
+.pf-growing-entry:focus-visible, .pf-growing-btn:focus-visible, .pf-growing-pic:focus-visible, .pf-growing-stage:focus-visible, .pf-growing-frame:focus-visible { outline: 2px solid var(--pf-frame); outline-offset: 2px; }
+.pf-growing-body { display: flex; flex-direction: column; gap: 12px; }
+.pf-growing-steps { display: flex; gap: 12px; margin: 0; }
+.pf-growing-steps span.is-on { font-weight: 700; text-decoration: underline; }
+.pf-growing-muted { margin: 0; font-size: var(--pf-fs-sm); color: var(--pf-text-2); }
+.pf-growing-error { margin: 0; color: var(--pf-danger); font-weight: 700; }
+.pf-growing-privacy { margin: 0; font-size: var(--pf-fs-sm); border-inline-start: 3px solid var(--pf-line-strong); padding-inline-start: 8px; }
+.pf-growing-count, .pf-growing-prompt { margin: 0; font-weight: 700; }
+.pf-growing-row, .pf-growing-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pf-growing-bar { padding: 6px 10px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-md); background: var(--pf-surface-2); }
+.pf-growing-why { inline-size: 100%; }
+.pf-growing-spacer { flex: 1; }
+.pf-growing-ask { padding: 8px 10px; border: 2px solid var(--pf-danger); border-radius: var(--pf-r-md); }
+.pf-growing-list, .pf-growing-pics { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; max-block-size: 40vh; overflow: auto; }
+.pf-growing-item { display: flex; flex-direction: column; gap: 2px; padding: 4px 8px; border: 1px solid var(--pf-line); border-radius: var(--pf-r-sm); min-block-size: 32px; }
+.pf-growing-item label { display: flex; align-items: center; gap: 8px; min-block-size: 32px; }
+.pf-growing-pics { flex-direction: row; flex-wrap: wrap; max-block-size: none; }
+.pf-growing-pic, .pf-growing-btn { min-block-size: 32px; padding-inline: 10px; font: inherit; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-sm); background: var(--pf-surface-2); color: var(--pf-text); cursor: pointer; }
+.pf-growing-pic.is-on, .pf-growing-btn.is-on { border-width: 2px; font-weight: 700; }
+.pf-growing-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-growing-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pf-growing-field input[type='number'] { inline-size: 6em; min-block-size: 32px; }
+.pf-growing-markview { display: flex; flex-direction: column; gap: 6px; }
+.pf-growing-stage { position: relative; max-inline-size: 100%; max-block-size: 50vh; inline-size: min(100%, 560px); cursor: crosshair; background: var(--pf-surface-3); }
+.pf-growing-canvas { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; }
+.pf-growing-point { position: absolute; inline-size: 18px; block-size: 18px; margin: -9px 0 0 -9px; border: 2px solid #fff; border-radius: 50%; background: #d00; display: grid; place-items: center; box-shadow: 0 0 0 1px #000; }
+.pf-growing-point i { font-style: normal; font-size: 11px; font-weight: 700; color: #fff; }
+.pf-growing-point.is-second { background: #06c; }
+.pf-growing-cross { position: absolute; inline-size: 24px; block-size: 24px; margin: -12px 0 0 -12px; pointer-events: none; background: linear-gradient(#fff, #fff) center / 2px 100% no-repeat, linear-gradient(#fff, #fff) center / 100% 2px no-repeat; mix-blend-mode: difference; }
+.pf-growing-frame { padding: 4px 8px; border: 1px solid var(--pf-line-strong); border-radius: var(--pf-r-sm); inline-size: fit-content; min-block-size: 32px; display: flex; align-items: center; }
+.pf-growing-note { margin: 0; min-block-size: 1.2em; font-size: var(--pf-fs-sm); }
+.pf-growing-preview { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pf-growing-previewlabel { margin: 0; font-weight: 700; }
+.pf-growing-previewcanvas { inline-size: min(100%, 420px); max-block-size: 40vh; background: var(--pf-surface-3); }
+.pf-growing-warnings { margin: 0; padding-inline-start: 18px; font-size: var(--pf-fs-sm); }
+@media (prefers-reduced-motion: reduce) { .pf-growing-dialog *, .pf-growing-bar * { transition: none !important; animation: none !important; } }
