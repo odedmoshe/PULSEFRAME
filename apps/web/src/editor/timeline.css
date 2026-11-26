@@ -65,6 +65,10 @@
 .timeline.pf-ds .tl-bar[data-narrow='true'] .tl-more-narrow { display: flex; }
 .timeline.pf-ds .tl-bar[data-narrow='true'] .tl-hist .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
 .timeline.pf-ds .tl-bar[data-narrow='true'] .tl-hist { inline-size: var(--pf-h-sm); padding-inline: 0; justify-content: center; }
+/* crowded (RideBar.tsx, rideRoom.ts): even the icons-only ride bar did not fit between the toolbar's ends, so every worded toolbar
+   button keeps only its icon (its name stays for assistive technology and in its tooltip) until the bar fits again */
+.timeline.pf-ds .tl-bar[data-crowded='true'] .tl-act .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.timeline.pf-ds .tl-bar[data-crowded='true'] .tl-act { min-inline-size: var(--pf-h-sm); padding-inline: var(--pf-sp-2); justify-content: center; }
 .timeline.pf-ds .tl-tools, .timeline.pf-ds .tl-view { flex: none; display: flex; align-items: center; gap: var(--pf-sp-2); }
 .timeline.pf-ds .tl-view { gap: var(--pf-sp-3); }
 .timeline.pf-ds .tl-sep { flex: none; inline-size: 1px; block-size: 18px; margin-inline: var(--pf-sp-2); background: var(--pf-line-strong); }

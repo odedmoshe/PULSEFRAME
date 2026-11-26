@@ -141,6 +141,11 @@ async function main() {
     check('"hide in this format" hides the clip there only; "clear override" removes the override', hidden && cleared);
     await chooseFormat(page, '');
 
+    // The zoom the timeline opened at: a film under 3 minutes is fitted to the ruler when it opens (wave 8D WP1), so pixel
+    // positions are worked out from it (PF = pixels per frame) instead of the 90 px/s the editor used to open at; every expected
+    // frame below is unchanged.
+    const PF = Number(await page.locator('.tl-inner').getAttribute('data-pps')) / 30;
+    console.log(`timeline zoom on open: ${Math.round(PF * 30 * 10) / 10} px/s`);
     console.log('\n# clip moves snap to beats');
     d = await doc();
     const beatFrames: number[] = (await call(`/projects/${pid}/timeline`)).body.markers.beatSeconds.map((x2: number) => Math.round(x2 * 30));
@@ -157,9 +162,9 @@ async function main() {
       return fr(clipOf(await doc(), picClip).start);
     };
     const snapOn = await page.getByTestId('snap-beats').isChecked();
-    const afterSnap = await dragClip(21); // 7 px = 2.3 frames at 90 px/s: lands near frame 14, one frame from the beat at 15
+    const afterSnap = await dragClip(7 * PF); // 2.3 frames (7 px at 90 px/s): lands near frame 14, one frame from the beat at 15
     await page.getByTestId('snap-beats').click();
-    const afterFree = await dragClip(21);
+    const afterFree = await dragClip(7 * PF);
     await page.getByTestId('snap-beats').click();
     check('with snapping on, a clip dropped near a beat lands exactly on it; with snapping off the same drag lands on a plain frame', snapOn && beatFrames.includes(afterSnap) && !beatFrames.includes(afterFree) && afterFree !== afterSnap, { beatFrames: beatFrames.slice(0, 5), afterSnap, afterFree });
 
@@ -167,7 +172,7 @@ async function main() {
     await page.locator(`.clip[data-clip-id="${musicClip}"]`).click();
     await page.getByTestId('analysis-panel').waitFor();
     const rb = (await page.getByTestId('ruler').boundingBox())!;
-    await page.mouse.click(rb.x + 77, rb.y + rb.height / 2); // somewhere between beats
+    await page.mouse.click(rb.x + (77 / 3) * PF, rb.y + rb.height / 2); // somewhere between beats
     const n0 = (await doc()).analyses[music.assetId].beats.beats.length;
     await page.getByTestId('analysis-add-beat').click();
     const added = await until((x2) => x2.analyses[music.assetId].beats.beats.length === n0 + 1);
@@ -203,7 +208,7 @@ async function main() {
     await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
     const srcClip = clipOf(await doc(), picClip);
     await page.keyboard.press('Control+c');
-    await page.mouse.click(rb.x + 600, rb.y + rb.height / 2); // playhead to 6.67 s = frame 200 (90 px/s)
+    await page.mouse.click(rb.x + 200 * PF, rb.y + rb.height / 2); // playhead to 6.67 s = frame 200
     const countVideo = async () => (await doc()).sequences.seq_main.tracks.filter((t: any) => t.kind === 'video').flatMap((t: any) => t.clips).length;
     const v0 = await countVideo();
     await page.keyboard.press('Control+v');
@@ -215,7 +220,7 @@ async function main() {
     check('Ctrl+C then Ctrl+V pastes a full copy at the playhead (same source, trim and length) and selects it; Ctrl+D duplicates the selection right after itself', pasted && !!paste && fr(paste.duration) === fr(srcClip.duration) && fr(paste.sourceIn) === fr(srcClip.sourceIn) && duplicated, { pastedAtFrame: paste ? fr(paste.start) : null });
     await chooseFormat(page, tall);
     await page.locator(`.clip[data-clip-id="${title}"]`).click();
-    await page.mouse.click(rb.x + 30, rb.y + rb.height / 2); // playhead inside the title: the sliders are enabled only while the clip is on screen
+    await page.mouse.click(rb.x + 10 * PF, rb.y + rb.height / 2); // playhead inside the title: the sliders are enabled only while the clip is on screen
     await page.locator('[data-testid=transform-scope][data-scope=format]').waitFor();
     const masterScale = clipOf(await doc(), title).transform.scale;
     await page.getByTestId('transform-scale').fill('1.5');
@@ -257,7 +262,7 @@ async function main() {
     console.log('\n# effect parameter keyframes; cut and paste');
     await page.locator(`.clip[data-clip-id="${picClip}"]`).click();
     const pc0 = clipOf(await doc(), picClip);
-    const px0 = rb.x + (fr(pc0.start) + 5) * 3; // 90 px/s = 3 px per frame: five frames into the clip
+    const px0 = rb.x + (fr(pc0.start) + 5) * PF; // five frames into the clip
     await page.mouse.click(px0, rb.y + rb.height / 2);
     await page.getByTestId('effect-add').selectOption('blur.gaussian');
     await until((x2) => clipOf(x2, picClip).effects?.length === 1);
@@ -323,7 +328,7 @@ async function main() {
     await page.keyboard.press('Control+x');
     const pending = await page.locator(`.clip.cut-pending[data-clip-id="${picClip}"]`).count();
     const r2 = await revOf();
-    await page.mouse.click(rb.x + 900, rb.y + rb.height / 2); // frame 300
+    await page.mouse.click(rb.x + 300 * PF, rb.y + rb.height / 2); // frame 300
     await page.keyboard.press('Control+v');
     const moved = await until((x2) => !clipOf(x2, picClip));
     const dAfter = await doc();
@@ -336,7 +341,7 @@ async function main() {
     console.log('\n# volume automation in the Sound tab');
     await page.locator(`.clip[data-clip-id="${musicClip}"]`).click({ position: { x: 5, y: 5 } });
     const volKeys = (d: any) => (clipOf(d, musicClip).volume ?? []).map((k: any) => [fr(k.time), k.value]);
-    const setLevelAt = async (frame: number, v: string) => { await page.mouse.click(rb.x + frame * 3 + 0.5, rb.y + 5); await page.getByTestId('volume-level').fill(v); // typed straight after the seek, on purpose: the key must land at the new playhead
+    const setLevelAt = async (frame: number, v: string) => { await page.mouse.click(rb.x + frame * PF + 0.5, rb.y + 5); await page.getByTestId('volume-level').fill(v); // typed straight after the seek, on purpose: the key must land at the new playhead
       await page.getByTestId('volume-level').press('Enter'); };
     // The server having the key is not enough: the next step types into the panel, so wait until the panel shows it (as a person would).
     const panelKeys = (n: number) => page.waitForFunction((k) => document.querySelector('[data-testid=volume-key-count]')?.textContent?.includes(`(${k})`), n, { timeout: 8000 }).catch(() => {});
@@ -346,10 +351,10 @@ async function main() {
     await setLevelAt(90, '1.2');
     const vk2 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[30, 0.5], [90, 1.2]]));
     await panelKeys(2);
-    await page.mouse.click(rb.x + 60 * 3 + 0.5, rb.y + 5);
+    await page.mouse.click(rb.x + 60 * PF + 0.5, rb.y + 5);
     await page.waitForFunction(() => (document.querySelector('[data-testid=volume-level]') as HTMLInputElement)?.value === '0.85', undefined, { timeout: 5000 }).catch(() => {});
     const midShown = await page.getByTestId('volume-level').inputValue();
-    await page.mouse.click(rb.x + 90 * 3 + 0.5, rb.y + 5);
+    await page.mouse.click(rb.x + 90 * PF + 0.5, rb.y + 5);
     await page.getByTestId('volume-key-remove').click();
     const vk3 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[30, 0.5]]));
     check('Sound tab: typing a level writes a volume key at the playhead; between two keys the field shows the interpolated level (0.85 halfway between 0.5 and 1.2); "remove this key" removes only that key', vk1 && vk2 && midShown === '0.85' && vk3, { midShown, keys: volKeys(await doc()) });
@@ -359,18 +364,18 @@ async function main() {
     await vkeysEl.first().waitFor({ timeout: 5000 });
     const lineBox = (await vline.boundingBox())!;
     const k0 = (await vkeysEl.first().boundingBox())!;
-    const handleAt = Math.abs(k0.x + k0.width / 2 - (lineBox.x + 30 * 3)) < 1.5; // the key at clip frame 30 sits 90 px into the clip
+    const handleAt = Math.abs(k0.x + k0.width / 2 - (lineBox.x + 30 * PF)) < 1.5; // the key at clip frame 30 sits 30 frames into the clip
     const tcBefore = (await page.getByTestId('timecode').textContent()) ?? '';
     // drag the handle 30 px right (10 frames) and 13 px up (+1.0 on the 0..2 scale)
     await page.mouse.move(k0.x + k0.width / 2, k0.y + k0.height / 2);
     await page.mouse.down();
-    await page.mouse.move(k0.x + k0.width / 2 + 15, k0.y + k0.height / 2 - 6, { steps: 3 });
-    await page.mouse.move(k0.x + k0.width / 2 + 30, k0.y + k0.height / 2 - 13, { steps: 3 });
+    await page.mouse.move(k0.x + k0.width / 2 + 5 * PF, k0.y + k0.height / 2 - 6, { steps: 3 });
+    await page.mouse.move(k0.x + k0.width / 2 + 10 * PF, k0.y + k0.height / 2 - 13, { steps: 3 });
     await page.mouse.up();
     const vl1 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[40, 1.5]]));
     // double-click on the line at clip frame 80 (the level there is held at 1.5): a key appears
     await page.waitForFunction(() => document.querySelector('[data-testid=volume-line-key]')?.getAttribute('data-frame') === '40', undefined, { timeout: 5000 }).catch(() => {});
-    await page.mouse.dblclick(lineBox.x + 80 * 3, lineBox.y + 10.5);
+    await page.mouse.dblclick(lineBox.x + 80 * PF, lineBox.y + 10.5);
     const vl2 = await until((x2) => JSON.stringify(volKeys(x2)) === JSON.stringify([[40, 1.5], [80, 1.5]]));
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=volume-line-key]').length === 2, undefined, { timeout: 5000 }).catch(() => {});
     // keyboard on the handle: down twice, left once; the playhead and the clip are not affected
@@ -389,10 +394,10 @@ async function main() {
     const tcAfter = (await page.getByTestId('timecode').textContent()) ?? '';
     // a drag that starts on the line moves the clip, as a drag on the clip does (then undone)
     const startWas = fr(clipOf(await doc(), musicClip).start);
-    await page.mouse.move(lineBox.x + 200, lineBox.y + 10.5);
+    await page.mouse.move(lineBox.x + (200 / 3) * PF, lineBox.y + 10.5);
     await page.mouse.down();
-    await page.mouse.move(lineBox.x + 215, lineBox.y + 10.5, { steps: 3 });
-    await page.mouse.move(lineBox.x + 230, lineBox.y + 10.5, { steps: 3 });
+    await page.mouse.move(lineBox.x + (215 / 3) * PF, lineBox.y + 10.5, { steps: 3 });
+    await page.mouse.move(lineBox.x + (230 / 3) * PF, lineBox.y + 10.5, { steps: 3 });
     await page.mouse.up();
     const vl5 = await until((x2) => fr(clipOf(x2, musicClip).start) === startWas + 10, 4000);
     if (vl5) { await page.keyboard.press('Control+z'); await until((x2) => fr(clipOf(x2, musicClip).start) === startWas); }
@@ -405,7 +410,7 @@ async function main() {
     const smoothSet = await until((x2) => clipOf(x2, musicClip).volume?.[0]?.curve === 'smooth');
     await page.waitForFunction(() => document.querySelector('[data-testid=volume-line-key]')?.getAttribute('data-curve') === 'smooth', undefined, { timeout: 5000 }).catch(() => {});
     const musicStart = fr(clipOf(await doc(), musicClip).start);
-    await page.mouse.click(rb.x + (musicStart + 45) * 3 + 0.5, rb.y + 5); // a quarter of the way along the stretch
+    await page.mouse.click(rb.x + (musicStart + 45) * PF + 0.5, rb.y + 5); // a quarter of the way along the stretch
     await page.waitForFunction(() => (document.querySelector('[data-testid=volume-level]') as HTMLInputElement)?.value === '0.609', undefined, { timeout: 5000 }).catch(() => {});
     const quarterShown = await page.getByTestId('volume-level').inputValue(); // 0.5 + 0.7 × (3·0.25² − 2·0.25³) = 0.609; a straight line gives 0.675
     // freehand: Alt + drag from the line at clip frame 110 (level 1.2, held after the last key) down to about 0.4 at frame 170
@@ -413,9 +418,9 @@ async function main() {
     const yOf = (v: number) => lb2.y + 34 - 4 - (v / 2) * 26;
     const revBeforeDraw = (await call(`/projects/${pid}`)).body.revision as number;
     await page.keyboard.down('Alt');
-    await page.mouse.move(lb2.x + 110 * 3, yOf(1.2));
+    await page.mouse.move(lb2.x + 110 * PF, yOf(1.2));
     await page.mouse.down();
-    for (let i = 1; i <= 10; i++) await page.mouse.move(lb2.x + (110 + i * 6) * 3, yOf(1.2 - 0.08 * i));
+    for (let i = 1; i <= 10; i++) await page.mouse.move(lb2.x + (110 + i * 6) * PF, yOf(1.2 - 0.08 * i));
     await page.mouse.up();
     await page.keyboard.up('Alt');
     const drew = await until((x2) => (clipOf(x2, musicClip).volume?.length ?? 0) > 6);
@@ -445,7 +450,7 @@ async function main() {
     console.log('\n# markers');
     const markersOf = (d: any) => Object.values(d.markers ?? {}).sort((x: any, y: any) => fr(x.time) - fr(y.time)) as any[];
     const tc = async () => (await page.getByTestId('timecode').textContent()) ?? '';
-    await page.mouse.click(rb.x + 180.5, rb.y + 5); // frame 60
+    await page.mouse.click(rb.x + 60 * PF + 0.5, rb.y + 5); // frame 60
     await page.keyboard.press('m');
     const mAdded = await until((x2) => markersOf(x2).length === 1 && fr(markersOf(x2)[0].time) === 60);
     await page.getByTestId('marker-label').fill('פזמון chorus');
@@ -476,7 +481,7 @@ async function main() {
     const speedOver = async (ms: number) => { const a = await tcFrame(), t = Date.now(); await sleep(ms); const b = await tcFrame(); const v = (b - a) / (((Date.now() - t) / 1000) * 30); return v; };
     // the undo above reaches the page a moment after the server: wait for it, because a project change arriving during playback pauses it
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=user-marker]').length === 2, undefined, { timeout: 8000 });
-    await page.mouse.click(rb.x + 90.5, rb.y + 5); // frame 30
+    await page.mouse.click(rb.x + 30 * PF + 0.5, rb.y + 5); // frame 30
     await page.keyboard.press('l');
     await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'true', undefined, { timeout: 5000 });
     const sh0 = await shuttleText(); // ordinary playback: no shuttle indicator
@@ -500,7 +505,7 @@ async function main() {
     const kAt = await tcFrame();
     await sleep(300);
     const kStops = (await shuttleText()) === '' && (await tcFrame()) === kAt && (await page.getByTestId('play').getAttribute('data-playing')) === 'false';
-    await page.mouse.click(rb.x + 60.5, rb.y + 5); // frame 20
+    await page.mouse.click(rb.x + 20 * PF + 0.5, rb.y + 5); // frame 20
     for (let i = 0; i < 3; i++) await page.keyboard.press('j'); // ×4 backwards: reaches the start within a fraction of a second
     await page.waitForFunction(() => !document.querySelector('[data-testid=shuttle]') && document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'false', undefined, { timeout: 5000 }).catch(() => {});
     const atStart = await tcFrame(), shEnd = await shuttleText();
@@ -508,7 +513,7 @@ async function main() {
     check('shuttle: L plays, L again goes to 2× (indicator shown, measured speed about 2×); J goes backwards at 1× and J again at 2×; Space stops and the frame holds; shuttling backwards stops at the first frame', sh0 === '' && /▶▶ ×2/.test(sh1) && fwd2 > 1.5 && fwd2 < 2.5 && /◀◀ ×1/.test(sh2) && back1 < -0.6 && back1 > -1.4 && /◀◀ ×2/.test(sh3) && sh4 === '' && still && pausedIcon && atStart === 0 && shEnd === '', { sh0, sh1, fwd2: +fwd2.toFixed(2), sh2, back1: +back1.toFixed(2), sh3, sh4, still, pausedIcon, atStart, shEnd });
 
     console.log('\n# playback continues when the project changes');
-    await page.mouse.click(rb.x + 30.5, rb.y + 5); // frame 10
+    await page.mouse.click(rb.x + 10 * PF + 0.5, rb.y + 5); // frame 10
     await page.keyboard.press('Space');
     await page.waitForFunction(() => document.querySelector('[data-testid=play]')?.getAttribute('data-playing') === 'true', undefined, { timeout: 5000 });
     const revPlay0 = (await call(`/projects/${pid}`)).body.revision;
@@ -552,11 +557,12 @@ async function main() {
     const twoSelected = await mpage.locator('.clip.selected').count();
     const rev0 = (await mdoc()).revision as number;
     const bb = (await clipEl(mB).boundingBox())!;
+    const mPF = Number(await mpage.locator('.tl-inner').getAttribute('data-pps')) / 30; // this project's zoom on open
     await mpage.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
     await mpage.mouse.down();
-    for (const dx of [10, 25, 40, 60]) await mpage.mouse.move(bb.x + bb.width / 2 + dx, bb.y + bb.height / 2, { steps: 2 });
+    for (const dx of [10, 25, 40, 60]) await mpage.mouse.move(bb.x + bb.width / 2 + (dx / 3) * mPF, bb.y + bb.height / 2, { steps: 2 });
     await mpage.keyboard.down('Alt'); // no snapping: the result must be exactly 20 frames
-    await mpage.mouse.move(bb.x + bb.width / 2 + 60, bb.y + bb.height / 2);
+    await mpage.mouse.move(bb.x + bb.width / 2 + 20 * mPF, bb.y + bb.height / 2);
     await mpage.mouse.up();
     await mpage.keyboard.up('Alt');
     const revDrag = await mUntil([20, 65, 120]);

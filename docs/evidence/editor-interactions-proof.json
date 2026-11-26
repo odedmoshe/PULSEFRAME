@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-26T13:14:54.590Z",
+  "ranAt": "2026-11-26T13:28:23.150Z",
   "result": "FAILED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
@@ -8,8 +8,8 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 2,
-  "total": 3,
+  "passed": 21,
+  "total": 30,
   "checks": [
     {
       "name": "dragging the title on the canvas while viewing a format writes a format-only override by the dragged fraction of that format's frame; the master position is untouched",
@@ -34,9 +34,460 @@
       "ok": true
     },
     {
+      "name": "with snapping on, a clip dropped near a beat lands exactly on it; with snapping off the same drag lands on a plain frame",
+      "ok": true,
+      "detail": {
+        "beatFrames": [
+          15,
+          30,
+          45,
+          60,
+          75
+        ],
+        "afterSnap": 15,
+        "afterFree": 22
+      }
+    },
+    {
+      "name": "\"add beat at playhead\" and \"remove nearest beat\" change the stored beat grid and mark it as corrected by hand",
+      "ok": true,
+      "detail": {
+        "beats": 23
+      }
+    },
+    {
+      "name": "while the drum loop plays, the meter shows a real level (above -40 dB and not above 0)",
+      "ok": true,
+      "detail": {
+        "peakDbShown": 0
+      }
+    },
+    {
+      "name": "\"export all formats\" lists one job per format and each finishes with a download of the right size",
+      "ok": true,
+      "detail": {
+        "sizes": [
+          "360x360",
+          "360x640"
+        ]
+      }
+    },
+    {
+      "name": "Ctrl+C then Ctrl+V pastes a full copy at the playhead (same source, trim and length) and selects it; Ctrl+D duplicates the selection right after itself",
+      "ok": false,
+      "detail": {
+        "pastedAtFrame": null
+      }
+    },
+    {
+      "name": "while a format is viewed, the Inspector scale slider writes a format-only override (master unchanged), keyframe buttons are disabled, and \"reset to master\" removes the override; back on the master the controls edit the master again",
+      "ok": true,
+      "detail": {
+        "sliderOverride": true,
+        "masterKept": true,
+        "kfDisabled": true,
+        "resetOk": true,
+        "scopeMaster": true
+      }
+    },
+    {
+      "name": "while a format is viewed, editing the title text changes the wording in that format only: the rendered frame of that format changes, the master and another format render byte-identically, the field shows each wording in its own view, and \"back to the master text\" restores it",
+      "ok": true,
+      "detail": {
+        "hintBefore": true,
+        "wordingSet": true,
+        "tallChanged": true,
+        "masterSame": true,
+        "squareSame": true,
+        "masterField": "כותרת",
+        "tallField": "קצר",
+        "wordingCleared": true,
+        "fieldBack": "כותרת",
+        "restoredSame": true
+      }
+    },
+    {
+      "name": "effect keyframes in the editor: the ◆ button sets a key at the playhead; moving the playhead and changing the slider adds a second key 20 frames later instead of changing the static value",
+      "ok": false,
+      "detail": {
+        "keys": [
+          [
+            4,
+            0.01
+          ],
+          [
+            22,
+            0.1
+          ]
+        ]
+      }
+    },
+    {
+      "name": "keyframe strip by keyboard: Alt+K focuses a strip key, Enter opens the curve picker with the focus inside, Escape closes it and the focus is back on the same key; no commit",
+      "ok": true,
+      "detail": {
+        "afterAltK": {
+          "id": "key-strip-key",
+          "frame": "4",
+          "inPicker": false
+        },
+        "pickerOpen": true,
+        "inPicker": {
+          "id": null,
+          "frame": null,
+          "inPicker": true
+        },
+        "afterEsc": {
+          "id": "key-strip-key",
+          "frame": "4",
+          "inPicker": false
+        },
+        "revisions": [
+          24,
+          24
+        ]
+      }
+    },
+    {
+      "name": "a toast raised while the curve picker is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
+      "name": "a toast raised while the effect gallery is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
+      "name": "a toast raised while the command palette is open is inside it (in its own toast region), one status only, in the accessibility tree and on screen; Tab reaches the toast's action and its × without leaving the modal and wraps back into it; Escape typed on the × closes the modal, and the region is the page's again",
+      "ok": true,
+      "detail": {
+        "shown": true,
+        "inModal": true,
+        "host": "modal",
+        "inert": false,
+        "regionName": "התראות",
+        "regions": 1,
+        "statusesWithText": 1,
+        "liveAncestors": 0,
+        "onScreen": true,
+        "notCovered": true,
+        "announced": true,
+        "toastActionReachedByKeyboard": true,
+        "toastCloseReachedByKeyboard": true,
+        "tabWrapsInsideModal": true,
+        "tabStepsThatLeftTheDialog": 0,
+        "focusOnToastClose": true,
+        "closed": true,
+        "toastBackOnPage": true
+      }
+    },
+    {
+      "name": "keyframe diamonds: the selected clip's keyframe strip and its passive diamonds once unselected each show one diamond per distinct key frame, effect keys included (an x key on the frame of a radius key counts once)",
+      "ok": true,
+      "detail": {
+        "distinct": [
+          4,
+          7,
+          22
+        ],
+        "keys": 4,
+        "stripFrames": [
+          4,
+          7,
+          22
+        ],
+        "passive": 3
+      }
+    },
+    {
+      "name": "cut then paste moves the clip in one transaction (effects and keyframes come along); nothing is committed by the cut itself; one undo puts it back",
+      "ok": false,
+      "detail": {
+        "pending": 1,
+        "revisions": [
+          25,
+          25,
+          26
+        ],
+        "landedAt": null
+      }
+    },
+    {
+      "name": "Sound tab: typing a level writes a volume key at the playhead; between two keys the field shows the interpolated level (0.85 halfway between 0.5 and 1.2); \"remove this key\" removes only that key",
+      "ok": false,
+      "detail": {
+        "midShown": "0.85",
+        "keys": [
+          [
+            29,
+            0.5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "volume line: the key is drawn at its frame; dragging it changes time and level in one edit (30→40, 0.5→1.5); a double-click on the line adds a key at the level there; arrow keys nudge the focused key without moving the playhead; Delete removes the key, not the clip; the key is named for assistive technology; a drag on the line moves the clip",
+      "ok": false,
+      "detail": {
+        "handleAt": false,
+        "vl1": false,
+        "vl2": false,
+        "vl3": false,
+        "vl4": false,
+        "vl5": false,
+        "tcBefore": "00:00:02:25",
+        "tcAfter": "00:00:02:25",
+        "namedKey": "נקודת עוצמה 00:00:02:15 · 140%",
+        "keys": [
+          [
+            38,
+            1.5
+          ]
+        ]
+      }
+    },
+    {
+      "name": "volume line: S on a key makes the stretch to the next key smooth (the level a quarter of the way is 0.609, not the straight line's 0.675); Alt + drag draws the level — one edit replaces the keys under the stroke with keys along it (from frame 110 at 1.2 down to 170 at about 0.4), the earlier keys stay",
+      "ok": false,
+      "detail": {
+        "smoothSet": true,
+        "quarterShown": "0.573",
+        "revisions": 1,
+        "drawnKeys": [
+          [
+            104,
+            1.2
+          ],
+          [
+            110,
+            1.12
+          ],
+          [
+            116,
+            1.04
+          ],
+          [
+            122,
+            0.96
+          ],
+          [
+            128,
+            0.88
+          ],
+          [
+            134,
+            0.8
+          ],
+          [
+            138,
+            0.72
+          ],
+          [
+            144,
+            0.64
+          ],
+          [
+            150,
+            0.56
+          ],
+          [
+            156,
+            0.48
+          ],
+          [
+            162,
+            0.4
+          ]
+        ]
+      }
+    },
+    {
+      "name": "Sound tab: \"end the music with the picture\" trims the music to the last detected beat before the picture ends and gives it a fade-out, in one transaction; undo restores it",
+      "ok": true,
+      "detail": {
+        "pictureEnd": 279,
+        "wantEnd": 278,
+        "gotEnd": 278,
+        "fadeOutFrames": 30,
+        "fitUndone": true
+      }
+    },
+    {
+      "name": "markers: M adds one at the playhead; name (Hebrew + Latin) and colour are committed edits; a marker added by an agent appears; Shift+M / Alt+M jump between them; remove and undo work; the timeline query lists both",
+      "ok": false,
+      "detail": {
+        "shownMarkers": [
+          {
+            "frame": 57,
+            "name": "פזמון chorus 00:00:01:27"
+          },
+          {
+            "frame": 150,
+            "name": "agent note 00:00:05:00"
+          }
+        ],
+        "hops": [
+          "00:00:01:27",
+          "00:00:05:00",
+          "00:00:01:27"
+        ],
+        "removed": true,
+        "undone": true
+      }
+    },
+    {
+      "name": "shuttle: K stops it and the frame holds",
+      "ok": true
+    },
+    {
+      "name": "shuttle: L plays, L again goes to 2× (indicator shown, measured speed about 2×); J goes backwards at 1× and J again at 2×; Space stops and the frame holds; shuttling backwards stops at the first frame",
+      "ok": true,
+      "detail": {
+        "sh0": "",
+        "sh1": "▶▶ ×2",
+        "fwd2": 1.85,
+        "sh2": "◀◀ ×1",
+        "back1": -1.07,
+        "sh3": "◀◀ ×2",
+        "sh4": "",
+        "still": true,
+        "pausedIcon": true,
+        "atStart": 0,
+        "shEnd": ""
+      }
+    },
+    {
+      "name": "a project change by another participant during playback does not stop it (normal speed and 2× shuttle both continue at their speed); a change while paused does not start it",
+      "ok": true,
+      "detail": {
+        "keptPlaying": true,
+        "playSpeed": 1.08,
+        "keptShuttle": "▶▶ ×2",
+        "shuttleSpeed": 1.78,
+        "staysPaused": true
+      }
+    },
+    {
+      "name": "multi-select: Ctrl+click adds a clip to the selection; dragging one moves both by the same 20 frames in one transaction and a third clip stays; Alt+→ nudges both; Ctrl+A selects all, Shift+click removes one; Delete removes the two selected in one transaction and one undo restores them",
+      "ok": false,
+      "detail": {
+        "twoSelected": 2,
+        "stillTwo": 2,
+        "allSelected": 3,
+        "revisions": [
+          2,
+          -1,
+          -1,
+          5,
+          -1
+        ],
+        "errors": []
+      }
+    },
+    {
+      "name": "marquee: dragging a box over empty timeline space selects exactly the clips it touches (live while dragging); Shift+drag adds to the selection; Escape during a drag restores the selection from before it; a plain click on empty space clears it; none of this changes the project",
+      "ok": true,
+      "detail": {
+        "cleared0": 0,
+        "boxShown": 1,
+        "during": [
+          "clp_56b1c8c2c00",
+          "clp_56b1c8c2c01"
+        ],
+        "afterAB": [
+          "clp_56b1c8c2c00",
+          "clp_56b1c8c2c01"
+        ],
+        "afterAdd": [
+          "clp_56b1c8c2c00",
+          "clp_56b1c8c2c01",
+          "clp_56b1c8c2c02"
+        ],
+        "midEscape": [
+          "clp_56b1c8c2c01"
+        ],
+        "afterEscape": [
+          "clp_56b1c8c2c00",
+          "clp_56b1c8c2c01",
+          "clp_56b1c8c2c02"
+        ],
+        "afterEscapeUp": [
+          "clp_56b1c8c2c00",
+          "clp_56b1c8c2c01",
+          "clp_56b1c8c2c02"
+        ]
+      }
+    },
+    {
+      "name": "a Hebrew subtitle file saved as Windows-1255 is imported with its Hebrew text intact and the editor says it had to guess the encoding; a UTF-16 file with a byte-order mark is imported too, without that note",
+      "ok": true,
+      "detail": {
+        "note": "windows-1255",
+        "cues": [
+          "שלום עולם, מה נשמע?",
+          "PULSEFRAME 2026",
+          "עוד שורה בעברית",
+          "UTF-16 file"
+        ],
+        "noteAfterMarked": 0
+      }
+    },
+    {
+      "name": "download the project archive in the editor, import it back, and the editor opens a new project with the same content",
+      "ok": true,
+      "detail": {
+        "file": "interactions.pulseframe.tar",
+        "bytes": 2795008
+      }
+    },
+    {
+      "name": "no uncaught errors in the page during these interactions",
+      "ok": true,
+      "detail": []
+    },
+    {
       "name": "proof ran to completion",
       "ok": false,
-      "detail": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('snap-beats')\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" role=\"switch\" aria-checked=\"true\" data-testid=\"snap-beats\" aria-describedby=\"_r_1t_\" aria-label=\"הצמדה לפעימות\" class=\"pf-btn pf-btn-ghost pf-btn-sm tl-act tl-snap is-on\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b["
+      "detail": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('bar-delete')\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" tabindex=\"-1\" data-testid=\"bar-delete\" aria-describedby=\"_r_u_\" class=\"pf-btn pf-btn-danger-quiet pf-btn-sm ride-btn\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <span class=\"pf-btn-label\">…</span> from <d"
     }
   ]
 }
