@@ -30,8 +30,8 @@ describe('trip map web contract', () => {
     expect(tripMapLabel(map, 'he')).toBe('מפה: תל אביב ← אילת');
     expect(tripMapLabel(map, 'en')).toBe('Map: תל אביב → אילת');
   });
-  it('the panel is registered with the carrier; the entry is not offered until built', () => {
+  it('the panel is registered with the carrier; the entry is offered once the dialog is built', () => {
     expect(drawnPanel('map')).toBeTruthy();
-    expect(TRIPMAP_UI_BUILT).toBe(false);
+    expect(TRIPMAP_UI_BUILT).toBe(true);
   });
 });
