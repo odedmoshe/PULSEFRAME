@@ -5,7 +5,7 @@ export { grainOffset, COMPOSITE, REGION_COPY_SLOT, REGION_MASK_SLOT, regionBlurP
 export { resolveFollows, resolveRegions, WHOLE_BLUR_MIN_STRENGTH, type Follower, type LayerAt } from './follow.ts';
 export * from './audio.ts';
 export * from './stretch.ts';
-export { motionAt, musicHit, smoothNoise, hash32, unit32, initGpu, gpuStatus, isGpuEffect, isGpuTransition, GPU_EFFECTS, GPU_TRANSITIONS, transitionUniforms, digicamTick, digicamTone, crtMap, thinnedHits, type GpuStatus, type LutStrip, type TransitionState } from './gpu.ts';
+export { motionAt, musicHit, smoothNoise, hash32, unit32, initGpu, gpuStatus, isGpuEffect, isGpuTransition, GPU_EFFECTS, GPU_TRANSITIONS, transitionUniforms, digicamTick, digicamTone, crtMap, thinnedHits, GRADE_CURVES_PASS_NOT_BUILT, type GpuEffectExtra, type GpuStatus, type LutStrip, type TransitionState } from './gpu.ts';
 export { CANVAS_TRANSITIONS, CANVAS_KERNELS, CANVAS_TRANSITION_SLOT, type CanvasKernel, type CanvasTransitionArgs } from './canvasTransitions.ts';
 export { textAtRest, unitPose, unitProgress, type UnitPose } from './textAnimation.ts';
 export { flashSchedule, FlashGuard, SCREEN_FLASH_AHEAD_MAX, SCREEN_FLASH_GAP, SCREEN_FLASH_SEEN, SCREEN_FLASH_STEP, layerLights, screenLight, flashSince, flashGapFrames, lightKey, type FlashDecision, type FlashPainted, type FlashSchedule, type LightPlan } from './strobeSchedule.ts';
@@ -18,7 +18,7 @@ export { overlayParticles, speedLines, type Particle, type SpeedLine } from './o
 export { stampPolygons, STAMP_TEXT } from './stamp.ts';
 export { applyModulators } from './modulate.ts';
 export { VOICE_MEASURE_RATE, voiceMeter, recommendedStrength, type VoiceMeasureOptions, type VoiceMeasurement, type VoiceMeter } from './voiceMeasure.ts';
-export { GRADE_DEFAULTS, gradePixel, samplePicture, mergeSamples, pictureStats, statsDistance, fitGrade, balanceGrade, type GradeParams, type PictureSample, type PictureStats, type GradeFit } from './colourMatch.ts';
+export { GRADE_DEFAULTS, gradePixel, curvePixel, samplePicture, mergeSamples, pictureStats, statsDistance, fitGrade, balanceGrade, type GradeParams, type PictureSample, type PictureStats, type GradeFit } from './colourMatch.ts';
 // segmented export and render cache (ADR-0024): the frame key and the segment grid
 export * from './frameKey.ts';
 export * from './segmentGrid.ts';

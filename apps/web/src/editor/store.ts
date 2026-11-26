@@ -39,6 +39,7 @@ import type { StoryChip, StoryExclusion, StoryParams, StoryPick, StoryPlanView }
 import type { StoryChoices } from './story/story.logic.ts';
 import { pruneKeySel } from './keyStrip.math.ts';
 import { nextFromEvent, type LiveChange } from './sync.ts';
+import { gradePreviewDoc, type GradePreview } from './grade/gradePreview.ts';
 
 /**
  * The activity list after a live revision event: newest first, at most 50. An undo or redo marks the transaction it reversed
@@ -843,6 +844,19 @@ export class Editor {
       return [id, { ...seq, tracks: seq.tracks.map((t) => (t.clips.some((c) => c.id === clipId) ? { ...t, clips: t.clips.map((c) => (c.id === clipId && c.type === 'media' ? { ...c, stabilise: { ...value } } : c)) } : t)) }];
     }));
     this.player.setPictureDoc({ ...vd, sequences });
+  }
+  // ---------- live grade preview (wave 8 grade, verifier C3; the curve graph and the grade's sliders call it) ----------
+  /**
+   * Show the clip with a grade that is NOT committed (a curve point or a grade slider while it moves), the previewStabilise way: the
+   * player draws gradePreviewDoc(viewDoc, clipId, preview) through the same evaluate + compositor; nothing is saved or sent, sound is
+   * not restarted, and the player coalesces to the latest request. Callers send at most one per animation frame, commit once on
+   * release/keyup, then call previewGrade(clipId, null) after the commit resolves, which shows the document again.
+   */
+  previewGrade(clipId: string, preview: GradePreview | null): void {
+    const vd = this.viewDoc;
+    if (!vd || !this.player) return;
+    if (preview === null) { this.player.setPictureDoc(vd); return; }
+    this.player.setPictureDoc(gradePreviewDoc(vd, clipId, preview));
   }
   /** The tagged segment of the program track under the playhead. */
   multicamSegmentAtPlayhead() {

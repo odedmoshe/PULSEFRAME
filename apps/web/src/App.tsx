@@ -6,6 +6,7 @@ import './editor/timeline.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ToastProvider, useToasts, type ToastInput } from './ds/index.ts';
 import { CanvasHandles } from './editor/CanvasHandles.tsx';
+import { ExposureOverlay } from './editor/grade/ExposureOverlay.tsx';
 import { TrackPicker } from './editor/TrackPicker.tsx';
 import { CommandPalette } from './editor/CommandPalette.tsx';
 import { chordOf, Keymap } from './editor/commands.ts';
@@ -183,6 +184,8 @@ function Shell({ canvasRef, keymap }: { canvasRef: React.RefObject<HTMLCanvasEle
         <div className="canvas-wrap">
           <canvas ref={(el) => { (canvasRef as React.MutableRefObject<HTMLCanvasElement | null>).current = el; setCanvasEl(el); }} aria-label={t('preview')} data-testid="preview" />
           <CanvasHandles canvas={canvasEl} />
+          {/* zebra over the viewer (wave 8 grade, W3): renders nothing until ZEBRA_BUILT; never in a still or an export */}
+          <ExposureOverlay />
           <TrackPicker canvas={canvasEl} />
           <PreviewNotice />
           <Welcome />

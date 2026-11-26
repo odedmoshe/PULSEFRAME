@@ -102,6 +102,7 @@
     "proof:growing": "tsx packages/evals/src/growing-proof.ts",
     "proof:musicfit": "tsx packages/evals/src/musicfit-proof.ts",
     "proof:audiences": "tsx packages/evals/src/audiences-proof.ts",
+    "proof:grade": "tsx packages/evals/src/grade-proof.ts",
     "proof:search": "tsx packages/evals/src/footage-search-proof.ts",
     "proof:search-real": "tsx packages/evals/src/footage-search-real.ts",
     "proof:assistant-local": "tsx packages/evals/src/assistant-local-proof.ts",
