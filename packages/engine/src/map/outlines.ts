@@ -29,9 +29,87 @@ export class MapDataNotBuiltError extends Error {
   constructor(what: string) { super(`${what}: the trip map's outline reader is not built in this build yet`); }
 }
 
-/** Decode one group (format 1) at quantum q. W2. */
-export function decodeGroup(group: OutlineGroup, q: number): DecodedRing[] { throw new MapDataNotBuiltError(`decodeGroup(${group.rings} rings, q ${q})`); }
-/** The level a view uses (rule above). `view`: [minX, minY, maxX, maxY] in Mercator units; spanLatDeg the view's height in degrees of latitude at its centre. W2. */
-export function mapLevelFor(data: OutlineData, view: readonly [number, number, number, number], spanLatDeg: number): OutlineLevel { throw new MapDataNotBuiltError(`mapLevelFor(${data.levels.length} levels, ${view.join(',')}, ${spanLatDeg})`); }
+const R2D = 180 / Math.PI;
+/** Latitude in degrees → Mercator y (the outline data's unit). Used for box tests and the level rule only, never per vertex. */
+export const mercYOfLat = (lat: number): number => R2D * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+/** Mercator y → latitude in degrees (inverse of mercYOfLat). */
+export const latOfMercY = (y: number): number => 2 * R2D * Math.atan(Math.exp(y / R2D)) - 90;
+
+/** Reads unsigned LEB128 varints and zigzag integers from base64 bytes. */
+function reader(b64: string) {
+  const bin = atob(b64);
+  let i = 0;
+  const v = (): number => {
+    let x = 0, m = 1, c: number;
+    do {
+      if (i >= bin.length) throw new RangeError('outline group ends inside a varint');
+      c = bin.charCodeAt(i++);
+      x += (c & 127) * m; m *= 128;
+    } while (c & 128);
+    return x;
+  };
+  const z = (): number => { const u = v(); return u % 2 ? -(u + 1) / 2 : u / 2; };
+  return { v, z, done: () => i === bin.length };
+}
+
+/**
+ * Decode one group (format 1). The vertices come back in Mercator units (quanta × q); `cut[e]` is 1 when edge e (vertex e to
+ * vertex (e+1) mod n) is a cut edge, filled but never stroked. Throws on bytes that are not format 1 (a truncated or extra byte, a
+ * cut run past the ring's last edge, a ring of fewer than 3 vertices).
+ */
+export function decodeGroup(group: OutlineGroup, q: number): DecodedRing[] {
+  return decodeQuanta(group).map((r) => {
+    const xy = new Float64Array(r.xy.length);
+    for (let k = 0; k < xy.length; k++) xy[k] = r.xy[k]! * q;
+    return { xy, cut: r.cut };
+  });
+}
+/** The same rings in integer quanta (what the cached paths are built from: the quantum goes into the one transform per level). */
+export function decodeQuanta(group: OutlineGroup): { xy: Int32Array; cut: Uint8Array }[] {
+  const rd = reader(group.data);
+  const count = rd.v();
+  if (count !== group.rings) throw new RangeError(`outline group holds ${count} rings, its header says ${group.rings}`);
+  const out: { xy: Int32Array; cut: Uint8Array }[] = [];
+  for (let r = 0; r < count; r++) {
+    const n = rd.v();
+    if (n < 3) throw new RangeError(`outline ring of ${n} vertices`);
+    const xy = new Int32Array(2 * n);
+    xy[0] = rd.z(); xy[1] = rd.z();
+    for (let k = 1; k < n; k++) { xy[2 * k] = xy[2 * k - 2]! + rd.z(); xy[2 * k + 1] = xy[2 * k - 1]! + rd.z(); }
+    const cut = new Uint8Array(n);
+    const runs = rd.v();
+    let end = 0;
+    for (let k = 0; k < runs; k++) {
+      const s = end + rd.v(), len = rd.v();
+      if (len < 1 || s + len > n) throw new RangeError(`outline cut run ${s}+${len} outside a ring of ${n} edges`);
+      cut.fill(1, s, s + len);
+      end = s + len;
+    }
+    out.push({ xy, cut });
+  }
+  if (!rd.done()) throw new RangeError('outline group has bytes after its last ring');
+  return out;
+}
+
+/** Latitude span above which the coarse level is drawn, and below which the detail level may be (degrees). */
+export const MAP_COARSE_ABOVE_DEG = 30;
+export const MAP_DETAIL_BELOW_DEG = 8;
+/**
+ * The level a view uses: coarse when it spans more than 30° of latitude; detail only when it spans less than 8° AND lies wholly
+ * inside the detail level's box (a view touching or crossing the box edge draws world everywhere, so there is no seam); else world.
+ */
+export function mapLevelFor(data: OutlineData, view: readonly [number, number, number, number], spanLatDeg: number): OutlineLevel {
+  const level = (id: OutlineLevel['id']) => {
+    const l = data.levels.find((x) => x.id === id);
+    if (!l) throw new RangeError(`outline data has no ${id} level`);
+    return l;
+  };
+  if (spanLatDeg > MAP_COARSE_ABOVE_DEG) return level('coarse');
+  if (spanLatDeg < MAP_DETAIL_BELOW_DEG) {
+    const d = level('detail'), b = d.box;
+    if (b && view[0] > b.lonMin && view[2] < b.lonMax && view[1] > mercYOfLat(b.latMin) && view[3] < mercYOfLat(b.latMax)) return d;
+  }
+  return level('world');
+}
 /** Load the committed data lazily (a separate chunk in the web bundle). */
 export const loadOutlines = async (): Promise<OutlineData> => (await import('./outlines.data.ts')).default;

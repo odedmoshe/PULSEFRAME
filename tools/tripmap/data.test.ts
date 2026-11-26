@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { clipRing, DETAIL_BOX, encodeGroup, INPUTS, MAX_LAT, mercY, OUT, PLACE_MAX_SCALERANK, ringFromCoords, simplifyRing, SOURCE, buildPlaces } from './build-data.mjs';
 import OUTLINES from '../../packages/engine/src/map/outlines.data.ts';
 import PLACES from '../../apps/web/src/editor/tripMap/places.data.ts';
+import { referenceDecode } from './referenceDecoder.ts';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const file = (rel: string) => fs.readFileSync(path.join(repo, rel));
@@ -22,25 +23,8 @@ export const COMMITTED = {
 };
 export const DATA_CEILING = 200_000;
 
-/** REFERENCE decoder of format 1 (test-only; the engine's decodeGroup is W2's and must agree). */
-function decode(b64: string) {
-  const b = Buffer.from(b64, 'base64');
-  let i = 0;
-  const v = () => { let x = 0, m = 1, c; do { c = b[i++]!; x += (c & 127) * m; m *= 128; } while (c & 128); return x; };
-  const z = () => { const u = v(); return u % 2 ? -(u + 1) / 2 : u / 2; };
-  const rings: { xy: number[]; cut: boolean[] }[] = [];
-  const count = v();
-  for (let r = 0; r < count; r++) {
-    const n = v(); const xy = [z(), z()];
-    for (let k = 1; k < n; k++) { const px = xy[xy.length - 2]!, py = xy[xy.length - 1]!; xy.push(px + z(), py + z()); }
-    const cut = new Array<boolean>(n).fill(false);
-    const runs = v(); let end = 0;
-    for (let k = 0; k < runs; k++) { const s = end + v(), len = v(); for (let e = s; e < s + len; e++) { expect(e).toBeLessThan(n); cut[e] = true; } end = s + len; }
-    rings.push({ xy, cut });
-  }
-  expect(i).toBe(b.length);
-  return rings;
-}
+/** REFERENCE decoder of format 1 (test-only; referenceDecoder.ts; the engine's decodeGroup must agree with it). */
+const decode = referenceDecode;
 
 describe('the committed outline and place data', () => {
   it('stays under the ceiling and matches its pinned SHA-256', () => {
@@ -100,7 +84,7 @@ describe('the committed outline and place data', () => {
     });
     expect(cuts).toBeGreaterThan(0);
   });
-  it('the place list: [NE_ID, he, en, lon, lat] at 0.01°, sorted by id, unique; the asked-for places as they are spelled (אילת and פטרה are absent)', () => {
+  it('the place list: [NE_ID, he, en, lon, lat] at 0.01°, sorted by id, unique; the asked-for places as they are spelled (אילת and פטרה are absent: not in the Natural Earth file at all, rechecked by W2)', () => {
     expect(PLACES.length).toBe(588);
     const ids = PLACES.map((r) => r[0]);
     expect([...ids].sort((a, b) => a - b)).toEqual(ids);
