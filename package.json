@@ -107,6 +107,7 @@
     "proof:tripmap": "tsx packages/evals/src/tripmap-proof.ts",
     "proof:teach": "tsx packages/evals/src/teach-proof.ts",
     "proof:living": "tsx packages/evals/src/living-proof.ts",
+    "proof:ink": "tsx packages/evals/src/ink-proof.ts",
     "proof:search": "tsx packages/evals/src/footage-search-proof.ts",
     "proof:search-real": "tsx packages/evals/src/footage-search-real.ts",
     "proof:assistant-local": "tsx packages/evals/src/assistant-local-proof.ts",

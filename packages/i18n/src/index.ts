@@ -20,6 +20,7 @@ import { CRAFT_EN, CRAFT_HE } from './craft.ts';
 import { STABILISE_EN, STABILISE_HE } from './stabilise.ts';
 import { DRAWN_EN, DRAWN_HE } from './drawn.ts';
 import { TRIPMAP_EN, TRIPMAP_HE } from './tripMap.ts';
+import { INK_EN, INK_HE } from './ink.ts';
 import { PEARLS_EN, PEARLS_HE } from './pearls.ts';
 import { STORY_EN, STORY_HE } from './story.ts';
 import { GROWING_EN, GROWING_HE } from './growing.ts';
@@ -241,6 +242,7 @@ export const he = {
   ...STABILISE_HE,
   ...DRAWN_HE,
   ...TRIPMAP_HE,
+  ...INK_HE,
   ...PEARLS_HE,
   ...STORY_HE,
   ...GROWING_HE,
@@ -462,6 +464,7 @@ export const en: Record<keyof typeof he, string> = {
   ...STABILISE_EN,
   ...DRAWN_EN,
   ...TRIPMAP_EN,
+  ...INK_EN,
   ...PEARLS_EN,
   ...STORY_EN,
   ...GROWING_EN,
@@ -513,3 +516,4 @@ export * from './booth.ts';
 export * from './cover.ts';
 export * from './tripMap.ts';
 export * from './owntemplate.ts';
+export * from './ink.ts';

@@ -40,7 +40,7 @@ function edit() {
 describe('the registry decides what a document may hold', () => {
   it('without a registered kind a drawn clip cannot be parsed; with it, it can; an unknown kind or a bad payload is refused', () => {
     const { doc } = edit();
-    expect(drawnKinds()).toEqual(expect.arrayContaining(['test'])); // production kinds (map, ink) are registered on import of the index too
+    expect(drawnKinds()).toContain('test'); // production kinds (ink, map) are registered on import beside it
     expect(ProjectSchema.safeParse(doc).success).toBe(true);
     unregisterDrawnKind('test');
     try {

@@ -23,6 +23,7 @@ import { STABILISE_CHANGES_SELECTION, STABILISE_COMMANDS } from './stabilise/sta
 import { TEACH_CHANGES_SELECTION, TEACH_COMMANDS } from './teach/teach.commands.ts';
 import { PEARLS_COMMANDS } from './pearls/pearls.commands.ts';
 import { MUSICFIT_COMMANDS } from './musicfit/musicFit.commands.ts';
+import { INK_COMMANDS } from './ink/ink.commands.ts';
 
 export interface Command {
   id: string;
@@ -439,6 +440,8 @@ export const COMMANDS: Command[] = [
   { id: 'view.openStory', label: 'cmd.openStory', group: 'view', keys: [], enabled: (e) => !!e.doc && sourceFromSelection(e.doc, e.getState().selection).assetIds.length > 0, run: (e) => { if (e.doc) e.openStory(sourceFromSelection(e.doc, e.getState().selection)); } },
   // music that fits the film (wave 7 musicfit): mark the moment, moment to the beat / bar (musicfit/musicFit.commands.ts; disabled until builder C)
   ...MUSICFIT_COMMANDS,
+  // «ציור חי» (wave 8 ink): the mode's Shift+D, empty until W3 builds the mode
+  ...INK_COMMANDS,
   // «תא הבדיקה» (wave 8 booth): «פתיחת תא הבדיקה», owner's own session only (booth/booth.commands.ts; empty until builder W3)
   ...BOOTH_COMMANDS,
   // «שמירת הסרט כתבנית» (wave 8 owntemplate): owner's own session only (owntemplate/ownTemplate.commands.ts; empty until builder W3)

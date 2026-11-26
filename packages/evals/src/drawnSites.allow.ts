@@ -157,6 +157,7 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/evals/src/ops-fuzz.gen.ts", snippet: "> t.clips)).filter((c) => c.type === 'text');", class: 'proof', note: "proof reads the titles/tool text it made" },
   { file: "packages/evals/src/ops-fuzz.gen.ts", snippet: "s = clips.filter((x) => x.c.type === 'text' || x.c.type", class: 'wrong-placement', note: "fuzz followers: drawn added" },
   { file: "packages/evals/src/ops-fuzz.gen.ts", snippet: "les = clips.filter((c) => c.type === 'text') as Extract", class: 'proof', note: "proof reads the titles/tool text it made" },
+  { file: "packages/evals/src/ops-fuzz.gen.ts", snippet: "sq.tracks).filter((t) => t.kind === 'text');", class: 'placement', note: "ink fuzz (wave 8): a titles track for add_ink's trackId (track kind)" },
   { file: "packages/evals/src/packs-proof.ts", snippet: ".clips.filter((c: any) => c.type === 'text' || (c.type", class: 'proof', note: "proof reads the titles/tool text it made" },
   { file: "packages/evals/src/packs-proof.ts", snippet: "s as any[]).filter((x) => x.kind === 'text').map((x) =>", class: 'proof', note: "proof reads the titles/tool text it made" },
   { file: "packages/evals/src/packs-sheet.ts", snippet: "lips)).filter((c: any) => c.type === 'text');", class: 'proof', note: "proof reads the titles/tool text it made" },

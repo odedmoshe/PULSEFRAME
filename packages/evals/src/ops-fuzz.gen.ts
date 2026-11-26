@@ -617,6 +617,8 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ...(LESSON_OPS_BUILT && !opts.v1Replay ? [() => genLesson(doc)] : []),
       // «תמונה חיה» (wave 8 living): set_clip_depth always (lead-built), set_living_picture once W1 has built it (never in the v1 corpus)
       ...(opts.v1Replay ? [] : [() => genLiving(doc)]),
+      // «ציור חי» (wave 8 ink): add_ink and edit_ink (never in the v1 corpus)
+      ...(opts.v1Replay ? [] : [() => genInk(doc)]),
       // a held frame (add_clip freeze, wave 8 growing; never in the v1 corpus, which keyframe-replay and ripple-delete-golden pin): mostly a video picture right after a picture clip (where a dissolve out of it can
       // follow), now and then a still, linked sound, no duration or a picture past the end (each refused)
       ...(opts.v1Replay ? [] : [() => {
@@ -976,6 +978,37 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     return { op: 'set_living_picture', args: { clipId, ...(rnd() < 0.15 ? { remove: true as const } : { ...(rnd() < 0.7 ? { depth: depth() } : {}), ...(rnd() < 0.6 ? { move: pick(['push', 'slide'] as const) } : {}), ...(rnd() < 0.6 ? { amount: pick([0.1, 0.25, 0.5, 0.75, 1]) } : {}), ...(rnd() < 0.4 ? { curve: pick(['ease-in-out', 'linear', 'gentle'] as const) } : {}) }) } };
   };
   /**
+   * «ציור חי» (wave 8 ink). `genInk(doc)` returns a random add_ink (1–4 strokes of 1–40 points around the frame centre, every brush,
+   * mixed-case colours, sometimes a long one, a bad time list, uneven arrays, a point too far or a pause too long — each refused with
+   * its ink row; with and without duration and track) or edit_ink (play, speed, fadeOut on drawings mostly, sometimes on a title or
+   * an unknown clip, refused; sometimes nothing to change, refused).
+   */
+  const genInk = (doc: ProjectDocument): OpCall => {
+    const all = Object.values(doc.sequences).flatMap((sq) => sq.tracks.flatMap((t) => t.clips.map((c) => ({ c, t }))));
+    const inks = all.filter((x) => x.c.type === 'drawn' && x.c.drawn.kind === 'ink');
+    if (inks.length && rnd() < 0.35) {
+      const r = rnd();
+      const clipId = r < 0.85 ? pick(inks).c.id : r < 0.95 && all.length ? pick(all).c.id : 'clp_none';
+      const args: Record<string, unknown> = { clipId };
+      if (rnd() < 0.6) args.play = pick(['drawn', 'all'] as const);
+      if (rnd() < 0.3) args.speed = '1';
+      if (rnd() < 0.3) args.fadeOut = true;
+      return { op: 'edit_ink', args };
+    }
+    const stroke = () => {
+      const n = 1 + int(rnd() < 0.1 ? 400 : 40);
+      const x0 = int(16_000) - 8_000, y0 = int(9_000) - 4_500;
+      const x = Array.from({ length: n }, (_, j) => x0 + j * (int(60) - 30));
+      const y = Array.from({ length: n }, (_, j) => y0 + j * (int(60) - 30));
+      const t = Array.from({ length: n }, (_, j) => j * (1 + int(30)));
+      const bad = rnd();
+      if (bad < 0.03) t[0] = 5; else if (bad < 0.06 && n > 1) t[n - 1] = t[n - 1]! + 70_000; else if (bad < 0.08) x[0] = 40_000; else if (bad < 0.1) y.push(0);
+      return { brush: pick(['marker', 'highlighter', 'neon'] as const), color: pick(['#FFCC00', '#ff3366', '#00ffAA', '#FFFFFF']), width: pick([40, 80, 160, 240, 400]), at: int(3_000), x, y, t };
+    };
+    const texts = Object.values(doc.sequences).flatMap((sq) => sq.tracks).filter((t) => t.kind === 'text');
+    return { op: 'add_ink', args: { start: fr(), strokes: Array.from({ length: 1 + int(4) }, stroke), ...(rnd() < 0.4 ? { duration: f(1 + int(120)) } : {}), ...(texts.length && rnd() < 0.3 ? { trackId: pick(texts).id } : {}), ...(rnd() < 0.2 ? { play: 'all' as const } : {}) } };
+  };
+  /**
    * The next random call among the named operations: draws from the same menu until one of them comes up (the menu grows with every
    * feature, so a driver that is about a few operations would otherwise meet them too rarely to say anything about them).
    */
@@ -984,5 +1017,5 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
     for (let i = 0; i < 400 && !ops.includes(call.op); i++) call = gen(doc);
     return call;
   };
-  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genLesson, genTripMap };
+  return { rate, f, int, importOps, setup, aiSetup, setupInternal, gen, genFocused, genInternal, genLiving, genLife, genMusic, genPeople, genSequence, genKeyframes, genMulticam, genTake, genLibrary, genLibraryUse, genCraft, genCameraMotion, genStabilise, genPearls, genMusicFit, genAudience, genInk, genLesson, genTripMap };
 }

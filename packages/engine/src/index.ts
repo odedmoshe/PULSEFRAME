@@ -32,3 +32,5 @@ import './map/register.ts';
 export { paintMap, MAP_PAINTER_BUILT, MAP_NOT_BUILT_WHY } from './map/paintMap.ts';
 export { decodeGroup, mapLevelFor, loadOutlines, MapDataNotBuiltError, type OutlineData, type OutlineLevel, type OutlineGroup, type DecodedRing } from './map/outlines.ts';
 export { mapOutlines } from './map/register.ts';
+// «ציור חי» (wave 8 ink): the painter of the drawn kind `ink`; the rule and signatures are lead-built, the bodies W2's (registered once built)
+export * from './inkPainter.ts';

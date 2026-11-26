@@ -216,3 +216,8 @@ export * from './livingValidate.ts';
 export * from './depthGrid.ts';
 export * from './living.ts';
 export * from './livingOps.ts';
+// «ציור חי» (wave 8 ink track): the payload kind `ink` of the drawn clip (drawn.ts), registered on import; the contract, packing,
+// play rule and the two ops are lead-built; simplifyInkStroke is W1's (stub until then)
+export * from './inkContract.ts';
+export * from './inkOps.ts';
+export * from './inkSimplify.ts';

@@ -292,7 +292,11 @@ function extrude(ctx: Ctx2D, S: Buf, b: Box, ex: NonNullable<TextStyle['extrude'
   composite(ctx, C, b);
 }
 
-function glow(ctx: Ctx2D, S: Buf, b: Box, gl: NonNullable<TextStyle['glow']>, radiusPx: number) {
+/**
+ * The glow of a silhouette S (device space, any opaque colour) inside box b: S in `gl.color`, blurred three times and added. Exported
+ * unchanged for the neon brush of a drawing (inkPainter.ts), which passes its own silhouette; it writes TEXT_FX_SLOTS.work and work2 only.
+ */
+export function glow(ctx: Ctx2D, S: Buf, b: Box, gl: NonNullable<TextStyle['glow']>, radiusPx: number) {
   const W = S.canvas.width, H = S.canvas.height;
   const T = scratch(TEXT_FX_SLOTS.work, W, H);
   T.ctx.drawImage(S.canvas, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
