@@ -52,9 +52,14 @@ async function openRow(ctx: InstrumentsA11yCtx, standIn?: 'ready' | 'not_calibra
   await page.waitForFunction(() => !document.querySelector('[data-testid=instruments-state][data-state=checking]'), undefined, { timeout: 8000 }).catch(() => undefined);
   await row(page).locator(`[data-testid=${ID.choiceOption}][data-choice=recorded]`).click();
 }
+/** Leaves the page as the audit found it: no route, and the media rail on (the rail choice outlives a page load; the multicam path
+ * that runs later needs the media drawer: leaving the audio rail on broke it, found by bisecting the audit). */
 async function unroute(ctx: InstrumentsA11yCtx) {
   await ctx.page.unroute('**/api/v1/music/kits').catch(() => {});
   await ctx.page.unroute('**/api/v1/music/music.calm/audio**').catch(() => {});
+  const media = ctx.page.getByTestId('rail-media');
+  if (!/\bis-on\b/.test((await media.getAttribute('class').catch(() => null)) ?? '')) await media.click().catch(() => {});
+  await ctx.page.waitForTimeout(300);
 }
 const stateOf = (p: Page) => row(p).getByTestId(ID.state).getAttribute('data-state').catch(() => null);
 const radiogroup = async (p: Page) => (await row(p).getByTestId(ID.choice).getAttribute('role').catch(() => null)) === 'radiogroup';
@@ -67,6 +72,7 @@ export const instrumentsA11yScenarios: InstrumentsA11yScenario[] = [
       const st = await stateOf(ctx.page);
       return { shown: st === 'library_not_set' && await radiogroup(ctx.page), modal: false, detail: { kitState: st, answer: 'the audit server\'s own state (no library folder)' } };
     },
+    leave: unroute,
   },
   {
     id: 'instruments-not-calibrated',
