@@ -204,6 +204,11 @@ export interface AssistantSummary {
     id: string; trackId: string; type: string; start: T.RationalTime; duration: T.RationalTime;
     asset: string | null; assetKind: 'video' | 'image' | 'audio' | null; linked: boolean; gain: number | null; speed: number | null;
     transition: boolean; effects: number; text?: string; chars?: number; hasFields?: boolean;
+    /**
+     * A drawn clip (wave 8 carrier, drawn.ts): its kind and the kind's name always; the kind's own summary (drawnSummary) only
+     * with toggles.titlesAndMarkers, like a title's words (a map's stops are owner-typed names). Never the payload itself.
+     */
+    drawn?: { kind: string; name: { he: string; en: string } } & Record<string, unknown>;
   }[];
   folded: { trackId: string; clips: number }[] | null;
   music: { asset: string; beats: number; bpm: number | null }[];

@@ -7,12 +7,13 @@
 import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Activity, Blend as BlendIcon, Captions, ChevronRight, Contrast, Droplet, Ellipsis, Film, Gauge, Layers, Maximize2, Minimize2, Move, Music,
-  Scissors, SlidersHorizontal, Sparkles, Spline, SquareDashed, Timer, Trash2, Type, Volume2, type LucideProps,
+  Scissors, Shapes, SlidersHorizontal, Sparkles, Spline, SquareDashed, Timer, Trash2, Type, Volume2, type LucideProps,
 } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import type { Asset, Clip, OpCall, ProjectDocument } from '@pulseframe/core';
 import { assetDisplayName } from './assetLabel.ts';
-import { beatPositionAt, clipEnd, fieldsToDisplay, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
+import { beatPositionAt, clipEnd, drawnName, fieldsToDisplay, findClip, findEffect, fitScale, speedValue, TEXT_PRESETS, transitionDef } from '@pulseframe/core';
+import { drawnPanel } from './drawnPanels.tsx';
 import { beatFacts } from './analysis.logic.ts';
 import { effectParamLabel, type Key } from '@pulseframe/i18n';
 import { CurveChip } from './CurvePicker.tsx';
@@ -61,11 +62,11 @@ const ico = (Icon: (p: LucideProps) => ReactNode, size = 18) => <Icon size={size
 
 const TAB_ICON: Record<ObjectTab, (p: LucideProps) => ReactNode> = {
   project: Film, shared: Layers, basic: SlidersHorizontal, motion: Spline, speed: Gauge, colour: Contrast, effects: Sparkles, mask: SquareDashed, audio: Volume2,
-  text: Type, style: Droplet, anim: Spline, place: Move, cue: Captions, timing: Timer, soundfx: Sparkles, beat: Activity, range: SlidersHorizontal, cut: Scissors, transition: BlendIcon,
+  text: Type, drawn: Shapes, style: Droplet, anim: Spline, place: Move, cue: Captions, timing: Timer, soundfx: Sparkles, beat: Activity, range: SlidersHorizontal, cut: Scissors, transition: BlendIcon,
 };
 const TAB_LABEL: Record<ObjectTab, keyof typeof INSPECTOR_STRINGS.en> = {
   project: 'tabProject', shared: 'tabShared', basic: 'tabBasic', motion: 'tabMotion', speed: 'tabSpeed', colour: 'tabColour', effects: 'tabEffects', mask: 'tabMask', audio: 'tabAudio',
-  text: 'tabText', style: 'tabStyle', anim: 'tabAnim', place: 'tabPlace', cue: 'tabCue', timing: 'tabTiming', soundfx: 'tabSoundFx', beat: 'tabBeat', range: 'tabRange', cut: 'tabCut', transition: 'tabTransition',
+  text: 'tabText', drawn: 'tabDrawn', style: 'tabStyle', anim: 'tabAnim', place: 'tabPlace', cue: 'tabCue', timing: 'tabTiming', soundfx: 'tabSoundFx', beat: 'tabBeat', range: 'tabRange', cut: 'tabCut', transition: 'tabTransition',
 };
 
 /* ------------------------------------------------------------------ header ------------------------------------------------------------------ */
@@ -94,6 +95,7 @@ export function ObjectHeader({ kind, keymap }: { kind: ObjectKind; keymap: Keyma
       // the earlier clip first in reading order, the arrow pointing the way the edit runs (← in Hebrew, → in English)
       meta = <span dir={state.lang === 'he' ? 'rtl' : 'ltr'}><bdi dir="ltr">{names[0]}</bdi> {S.cutArrow} <bdi dir="ltr">{names[1]}</bdi></span>;
     } else if (c.type === 'text') { name = (c.fields ? fieldsToDisplay(state.lang, c.text, doc) : c.text).split('\n')[0] || S.kindText; tile = <span className="oh-abc" aria-hidden="true">אבג</span>; tone = 'text'; meta = <><span className="oh-part">{S.kindText} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
+    else if (c.type === 'drawn') { const kindName = drawnName(c.drawn)[state.lang]; name = kindName || S.kindDrawn; tile = ico(Shapes, 20); tone = 'text'; meta = <><span className="oh-part">{S.kindDrawn} · {sec(c.duration)}</span> · <span className="oh-part">{trackName}</span></>; }
     else if (c.type === 'caption') { name = c.text || S.kindCaption; tile = ico(Captions, 20); tone = 'caption'; meta = <>{S.kindCaption} · {sec(c.duration)}</>; }
     else if (c.type === 'adjustment') { name = c.label || S.kindAdjust; tile = ico(Layers, 20); tone = 'adjust'; meta = <>{S.kindAdjust} · {sec(c.duration)}</>; }
     else {
@@ -751,7 +753,7 @@ function EffectsTab({ clip, look }: PanelProps) {
     <div className="look-panel" data-testid="look-panel">
       <LookTarget look={look} />
       <Section id="look" title={S.secStack} summary={S.stackCount(n)} help><EffectsBlock look={look} /></Section>
-      {clip.type === 'text' && <Section id="blend-text" title={S.secBlend} defaultOpen={false}><BlendField clip={clip} /></Section>}
+      {(clip.type === 'text' || clip.type === 'drawn') && <Section id="blend-text" title={S.secBlend} defaultOpen={false}><BlendField clip={clip} /></Section>}
     </div>
   );
 }
@@ -904,6 +906,14 @@ function PlaceTab({ clip, viewClip, shown, keymap }: PanelProps) {
       <Section id="time" title={S.secTime} defaultOpen={false} summary={`${secondsText(T.toSeconds(clip.duration))} ${S.seconds}`}><TimeBlock clip={clip} keymap={keymap} /></Section>
     </>
   );
+}
+
+/** A drawn clip's own tab (wave 8 carrier): the panel its kind registers (drawnPanels.tsx), or a neutral note. Never a text control. */
+function DrawnTab({ clip }: PanelProps) {
+  const { state } = useEditorState();
+  if (clip.type !== 'drawn') return null;
+  const Panel = drawnPanel(clip.drawn.kind);
+  return Panel ? <Panel clip={clip} lang={state.lang} /> : <p className="muted" data-testid="drawn-no-panel">{INSPECTOR_STRINGS[state.lang].drawnNoPanel}</p>;
 }
 
 function CueTab({ clip, viewClip }: PanelProps) {
@@ -1067,6 +1077,7 @@ function ObjectTabBody({ id, kind, clip, viewClip, shown, keymap, trackKind, loo
     case 'style': return <StyleTab {...p} />;
     case 'anim': return <AnimTab {...p} />;
     case 'place': return <PlaceTab {...p} />;
+    case 'drawn': return <DrawnTab {...p} />;
     case 'cue': return <CueTab {...p} />;
     case 'timing': return <TimingTab {...p} />;
     case 'soundfx': return <SoundFxTab {...p} />;

@@ -34,7 +34,7 @@ export function pagesFor(workspace: Workspace, opts: { custom: readonly Inspecto
   return opts.waiting > 0 && !pages.includes('review') ? [...pages, 'review'] : pages;
 }
 
-export type ObjectKind = 'none' | 'multi' | 'video' | 'image' | 'text' | 'caption' | 'sound' | 'adjustment' | 'cut';
+export type ObjectKind = 'none' | 'multi' | 'video' | 'image' | 'text' | 'drawn' | 'caption' | 'sound' | 'adjustment' | 'cut';
 /** The clip actions the header's ⋯ menu and the inspector's footer offer. */
 export type ObjectAction = 'duplicate' | 'split' | 'delete';
 /**
@@ -49,7 +49,9 @@ export function objectActions(kind: ObjectKind): ObjectAction[] {
 }
 export type ObjectTab =
   | 'project' | 'shared' | 'basic' | 'motion' | 'speed' | 'colour' | 'effects' | 'mask' | 'audio'
-  | 'text' | 'style' | 'anim' | 'place' | 'cue' | 'timing' | 'soundfx' | 'beat' | 'range' | 'cut' | 'transition';
+  | 'text' | 'style' | 'anim' | 'place' | 'cue' | 'timing' | 'soundfx' | 'beat' | 'range' | 'cut' | 'transition'
+  /** a drawn clip's own panel (drawnPanels.tsx: the panel its kind registers) */
+  | 'drawn';
 
 /** What kind of object the selection is. A cut wins while one is chosen (it belongs to the single selected clip). */
 export function objectKind(doc: ProjectDocument | null, selection: readonly string[], cutClipId: string | null): ObjectKind {
@@ -59,6 +61,7 @@ export function objectKind(doc: ProjectDocument | null, selection: readonly stri
   if (!f) return 'none';
   if (cutClipId === f.clip.id && cutBefore(doc, f.clip.id)) return 'cut';
   if (f.clip.type === 'text') return 'text';
+  if (f.clip.type === 'drawn') return 'drawn'; // a drawing or a map (wave 8 carrier): placement like a title, no words
   if (f.clip.type === 'caption') return 'caption';
   if (f.clip.type === 'adjustment') return 'adjustment';
   if (f.track.kind === 'audio') return 'sound';
@@ -71,6 +74,7 @@ const TABS: Record<ObjectKind, readonly ObjectTab[]> = {
   video: ['basic', 'motion', 'speed', 'beat', 'colour', 'effects', 'mask', 'audio'], // 'beat': the impact controls (wave 7 musicfit; the moment is usually in the picture)
   image: ['basic', 'motion', 'colour', 'effects', 'mask'],
   text: ['text', 'style', 'anim', 'place', 'effects'],
+  drawn: ['drawn', 'place', 'effects'],
   caption: ['cue', 'timing'],
   sound: ['audio', 'soundfx', 'speed', 'beat'],
   adjustment: ['effects', 'colour', 'range'],

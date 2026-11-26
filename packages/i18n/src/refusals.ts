@@ -176,7 +176,7 @@ const HE_TRACKING: [RegExp, (m: RegExpExecArray) => string][] = [
   [/^filling in needs a usable sample before the stretch and another after it$/, () => 'כדי להשלים קטע צריך מיקום אמין לפניו ומיקום אמין אחריו. אפשר לסמן מיקום ביד בכל צד'],
   [/^(\d+) clip\(s\) follow this motion track or hide a region with it$/, (m) => `${m[1]} קליפים עוקבים אחרי מסלול המעקב הזה או מסתירים אזור בעזרתו; יש לנתק אותם קודם, או למחוק עם ניתוק`],
   [/^(\d+) clip\(s\) still follow a motion track of this file or hide a region with one$/, (m) => `${m[1]} קליפים עדיין עוקבים אחרי מסלול מעקב של הקובץ הזה או מסתירים אזור בעזרתו; יש לנתק אותם קודם`],
-  [/^only a title, or a picture on a video track, can follow a motion track$/, () => 'רק כותרת, או תמונה ברצועת וידאו, יכולות לעקוב אחרי מסלול מעקב'],
+  [/^only a title or a drawing, or a picture on a video track, can follow a motion track$/, () => 'רק כותרת או ציור, או תמונה ברצועת וידאו, יכולים לעקוב אחרי מסלול מעקב'],
   [/^a clip follows a picture on a video track; track \S+ is a \S+ track$/, () => 'קליפ עוקב אחרי תמונה ברצועת וידאו, והרצועה שנבחרה אינה רצועת וידאו'],
   [/^a clip cannot follow the picture on its own track$/, () => 'קליפ אינו יכול לעקוב אחרי התמונה שברצועה שלו עצמו; אפשר להעביר אותו לרצועה שמעליה'],
   [/^a clip with a time effect \(echo, time split, shutter or stutter\) cannot follow a motion track yet$/, () => `קליפ עם אפקט זמן ${TIME_EFFECTS_HE} עדיין אינו יכול לעקוב אחרי מסלול מעקב`],

@@ -3314,8 +3314,8 @@ defineOp({
   apply(d, a) {
     const f = mustClip(d, a.clipId);
     const { clip, track } = f;
-    if (!(clip.type === 'text' || (clip.type === 'media' && track.kind === 'video')))
-      throw new OpError('incompatible', 'only a title, or a picture on a video track, can follow a motion track', { clipId: clip.id, type: clip.type, trackKind: track.kind });
+    if (!(clip.type === 'text' || clip.type === 'drawn' || (clip.type === 'media' && track.kind === 'video')))
+      throw new OpError('incompatible', 'only a title or a drawing, or a picture on a video track, can follow a motion track', { clipId: clip.id, type: clip.type, trackKind: track.kind });
     const offset = () => { if (a.offset) clip.transform = { ...clip.transform, x: a.offset.x, y: a.offset.y }; };
     if (a.follow === null) {
       const had = !!clip.follow;

@@ -17,7 +17,7 @@
  */
 import * as T from '@pulseframe/time';
 import {
-  ASSISTANT_FOLD_SECONDS, ASSISTANT_SUMMARY_FIELDS, beatNumbers, clipEnd, parseFields, sequenceDuration, SUMMARY_MAX_BYTES,
+  ASSISTANT_FOLD_SECONDS, ASSISTANT_SUMMARY_FIELDS, beatNumbers, clipEnd, drawnName, drawnSummary, parseFields, sequenceDuration, SUMMARY_MAX_BYTES,
   type AssistantSummary, type AssistantToggles, type Clip, type ProjectDocument,
 } from '@pulseframe/core';
 import { ApiError } from '../store.ts';
@@ -83,6 +83,8 @@ export function assistantSummary(input: ProjectDocument, ctx: AssistantSummaryCo
         s.gain = c.gain;
         s.speed = c.speed ? c.speed.num / c.speed.den : 1;
         s.transition = c.transition !== undefined;
+      } else if (c.type === 'drawn') {
+        s.drawn = titles ? drawnSummary(c.drawn) : { kind: c.drawn.kind, name: drawnName(c.drawn) };
       } else if (c.type === 'text') {
         const w = titleText(c.text, c.fields === true);
         if (titles) s.text = w.text;

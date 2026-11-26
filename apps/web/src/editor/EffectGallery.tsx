@@ -14,7 +14,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import * as T from '@pulseframe/time';
-import { adjustmentRefusal, applyTransaction, COLOR_LOOKS, createProject, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument, switchFrame, TRANSITION_CATEGORIES, velocityNeeds } from '@pulseframe/core';
+import { adjustmentRefusal, applyTransaction, COLOR_LOOKS, createProject, drawnName, EFFECTS, findClip, MOTION_PRESETS, TEXT_PRESETS, TRANSITIONS, type Clip, type OpCall, type ProjectDocument, switchFrame, TRANSITION_CATEGORIES, velocityNeeds } from '@pulseframe/core';
 import { drawGraph, evaluate, FlashGuard, type FrameImage } from '@pulseframe/engine';
 import { fillIn, type Key } from '@pulseframe/i18n';
 import { ensureFonts } from '../fonts.ts';
@@ -219,12 +219,14 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
   const gpuOk = !!state.gpu?.available;
   const isText = clip.type === 'text';
   const media = clip.type === 'media' && trackKind === 'video';
+  // a drawn overlay (wave 8) takes effects, looks and motions like a picture, previewed on the frozen frame; no text styles, no transitions
+  const drawn = clip.type === 'drawn';
   // An adjustment clip (ADR-0016) takes effects and looks only; for a picture or a title, effects and looks may go on an
   // adjustment layer over the whole edit instead ("apply to").
   const adjustment = clip.type === 'adjustment';
   const [applyTo, setApplyToState] = useState<ApplyTo>(adjustment ? 'clip' : initialApplyTo);
   const setApplyTo = (v: ApplyTo) => { setApplyToState(v); onApplyTo?.(v); };
-  const tabs = useMemo<TabId[]>(() => [...(isText || media || adjustment ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media ? (['motion'] as TabId[]) : [])], [isText, media, adjustment]);
+  const tabs = useMemo<TabId[]>(() => [...(isText || media || drawn || adjustment ? (['effects', 'looks'] as TabId[]) : []), ...(media ? (['transitions'] as TabId[]) : []), ...(isText ? (['text'] as TabId[]) : []), ...(isText || media || drawn ? (['motion'] as TabId[]) : [])], [isText, media, drawn, adjustment]);
   const [tab, setTab] = useState<TabId>(() => (initialTab && tabs.includes(initialTab) ? initialTab : tabs[0] ?? 'effects'));
   const [query, setQuery] = useState('');
   const [snap, setSnap] = useState<{ bitmap: ImageBitmap; dim: ImageBitmap; w: number; h: number; key: string } | null | undefined>(undefined);
@@ -659,7 +661,7 @@ function EffectGallery({ clip, trackKind, onClose, applyTo: initialApplyTo, onAp
 
   // the cut the transition tiles are drawn on: "A ← B 0:08"
   const prevClip = (() => { const d = editor.doc; const f = d ? findClip(d, clip.id) : undefined; if (!d || !f || clip.type !== 'media') return null; const i = f.track.clips.findIndex((c) => c.id === clip.id); const p = i > 0 ? f.track.clips[i - 1] : null; return p && p.type === 'media' ? p : null; })();
-  const nameOfClip = (c: Clip) => (c.type === 'media' ? stripExt(editor.doc?.assets[c.assetId]?.name ?? c.id) : c.type === 'text' ? c.text.slice(0, 24) : c.id);
+  const nameOfClip = (c: Clip) => (c.type === 'media' ? stripExt(editor.doc?.assets[c.assetId]?.name ?? c.id) : c.type === 'text' ? c.text.slice(0, 24) : c.type === 'drawn' ? drawnName(c.drawn)[lang] : c.id);
   /** "previewed on the cut: A -> B 0:05": the arrow follows the reading direction (previous clip first), so it points at the clip that comes next */
   const Next = lang === 'he' ? ArrowLeft : ArrowRight;
   const chipBody = tab === 'transitions' && prevClip
