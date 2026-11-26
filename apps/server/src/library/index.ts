@@ -237,7 +237,11 @@ export class LibraryService {
     const db = new Database(tmp);
     let keep = false;
     try {
-      db.pragma('journal_mode = OFF');
+      // The rollback journal lives in memory: 'OFF' is refused by this SQLite build (the pragma answered 'delete'), and a journal FILE
+      // is created and deleted by NAME (<tmp>-journal). A build that was stopped while the next start's build already held that name
+      // deleted the new build's journal on its own rollback, the new build's COMMIT then failed (SQLITE_IOERR_DELETE_NOENT) and the
+      // previous index went on answering 'ready', one row short (lead, 2026-11-26). With no journal file, a build touches one name only.
+      if (db.pragma('journal_mode = MEMORY', { simple: true }) !== 'memory') throw new Error('the index build needs an in-memory journal');
       db.pragma('synchronous = OFF');
       db.exec(SCHEMA);
       const insItem = db.prepare('INSERT INTO items (key, kind, svg, credit, nc, bpm, dur, genre, mood, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');

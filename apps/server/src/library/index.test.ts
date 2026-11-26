@@ -156,6 +156,11 @@ describe('the index file: swapped whole, cancellable, rebuilt after a cut', () =
       services.push(b);
       await bParked;
       expect(fs.existsSync(path.join(dataDir, 'library-index.sqlite.tmp'))).toBe(true);
+      // neither build keeps a journal FILE, whose name the two would share: a stopped build deleted the next one's journal on its rollback and
+      // the next one's COMMIT failed (SQLITE_IOERR_DELETE_NOENT), which failed this test in 5 of 22 runs on a loaded machine before the journal
+      // moved to memory, and in 0 of 25 after. This line does not fail on the old code every time (the journal file appears only once a
+      // transaction has written a page), so the count above is the evidence, not this line alone.
+      expect(fs.readdirSync(dataDir).filter((f) => f.includes('journal') || f.endsWith('-wal'))).toEqual([]);
       // the stopped build now notices it was stopped and ends
       aOn.v = false;
       aAt.gate?.();
