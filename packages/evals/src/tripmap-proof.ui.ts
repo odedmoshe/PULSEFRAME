@@ -185,6 +185,8 @@ async function check15(): Promise<true | string> {
     await page.getByTestId(TID.create).focus();
     await page.keyboard.press('Enter');
     if (!(await until(async () => mapClips(await docOf(c, pid))[0]?.drawn.look === 'night'))) return 'saving did not change the look to night';
+    // the dialog closes after the server's answer reaches the page; while it is open (aria-modal) the editor's shortcuts do not act
+    await page.getByTestId(TID.dialog).waitFor({ state: 'detached', timeout: 10000 });
     await page.keyboard.press('Control+z');
     if (!(await until(async () => (await hash(c, pid)) === hashCreated))) return 'one undo did not restore the document before the edit';
     void hashBefore;

@@ -15,7 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import * as T from '@pulseframe/time';
-import { cameraAt, MAP_LOOK_COLOURS, MAX_PAN_RATE, MAX_ZOOM_RATE, progressAt, type MapLook, type MapPayload, type MapSize } from '@pulseframe/core';
+import { cameraAt, MAP_LABEL_FADE_SECONDS, MAP_LOOK_COLOURS, mapFrames, MAX_PAN_RATE, MAX_ZOOM_RATE, progressAt, type MapLook, type MapPayload, type MapSize } from '@pulseframe/core';
 import { mapLabelLayout, labelBoxAt, labelFont, stopPoints, toPixels } from '@pulseframe/engine/map/labels.ts';
 import { routeOf, routePointAt } from '@pulseframe/engine/map/route.ts';
 import { decodeQuanta } from '@pulseframe/engine/map/outlines.ts';
@@ -36,6 +36,8 @@ const isCol = (im: Img, x: number, y: number, c: readonly number[], tol: number)
 /** Any pixel of colour c within r px (square) of (x, y). */
 const near = (im: Img, x: number, y: number, c: readonly number[], r: number, tol = 10) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (isCol(im, Math.round(x) + dx, Math.round(y) + dy, c, tol)) return true; return false; };
 const r2 = (v: number) => Math.round(v * 100) / 100;
+/** PF_TRIPMAP_SHOTS=<dir>: keep some stills there for a person to look at (nothing is kept otherwise). */
+const keepShot = (name: string, png: Buffer) => { const dir = process.env.PF_TRIPMAP_SHOTS; if (dir) { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, name), png); } };
 
 const stop = (id: string, name: string, lon: number, lat: number, at: number, via?: 'road' | 'flight' | 'boat', hidden?: true) => ({ id, name, lon: Math.round(lon * 100) * 10_000, lat: Math.round(lat * 100) * 10_000, at, ...(via ? { via } : {}), ...(hidden ? { hidden } : {}) });
 
@@ -75,17 +77,17 @@ export async function runTripmapDraw(): Promise<DrawResult> {
     const call = (p: string, body?: unknown) => callOn(srv.url, p, body);
     const tx = async (pid: string, ops: unknown[]) => { const r = await call(`/projects/${pid}/transactions`, { ops }); if (r.status !== 200) throw Object.assign(new Error(`tx failed: ${JSON.stringify(r.body).slice(0, 400)}`), { body: r.body }); return r.body; };
     const waitJob = async (id: string) => { for (;;) { const j = (await call(`/jobs/${id}`)).body; if (['succeeded', 'failed', 'canceled'].includes(j.status)) return j; await sleep(200); } };
-    interface Proj { pid: string; clipId: string; w: number; h: number; rate: T.Rate; payload: MapPayload; start: number }
+    interface Proj { name: string; pid: string; clipId: string; w: number; h: number; rate: T.Rate; payload: MapPayload; start: number }
     const mapProject = async (name: string, stops: unknown[], o: { w?: number; h?: number; fps?: number; look?: MapLook; start?: number; frames?: number } = {}): Promise<Proj> => {
       const w = o.w ?? 1280, h = o.h ?? 720, rate = { num: o.fps ?? 30, den: 1 }, start = o.start ?? 0;
       const pid = (await call('/projects', { name, width: w, height: h, frameRate: rate })).body.project.id as string;
       const res = await tx(pid, [{ op: 'add_trip_map', args: { start: T.frameTime(start, rate), duration: T.frameTime(o.frames ?? 180, rate), stops, look: o.look ?? 'paper' } }]);
       const clipId = res.results[0].output.clipId as string;
-      return { pid, clipId, w, h, rate, start, payload: await payloadOf(pid, clipId) };
+      return { name, pid, clipId, w, h, rate, start, payload: await payloadOf(pid, clipId) };
     };
     const payloadOf = async (pid: string, clipId: string): Promise<MapPayload> => {
       const doc = (await call(`/projects/${pid}`)).body.project;
-      for (const seq of doc.sequences) for (const tr of seq.tracks) for (const c of tr.clips) if (c.id === clipId) return c.drawn as MapPayload;
+      for (const seq of Object.values(doc.sequences) as any[]) for (const tr of seq.tracks) for (const c of tr.clips) if (c.id === clipId) return c.drawn as MapPayload;
       throw new Error(`clip ${clipId} not found`);
     };
     const stillOn = async (base: string, p: { pid: string; w: number; h: number }, index: number) => {
@@ -93,7 +95,7 @@ export async function runTripmapDraw(): Promise<DrawResult> {
       if (r.status !== 200) throw Object.assign(new Error(`still ${index}: ${r.status} ${JSON.stringify(r.body).slice(0, 300)}`), { status: r.status, body: r.body });
       return { png: r.body as Buffer, img: pngToRgb(r.body, p.w, p.h) };
     };
-    const still = (p: Proj, index: number) => stillOn(srv.url, p, index);
+    const still = async (p: Proj, index: number) => { const r = await stillOn(srv.url, p, index); if (!/^tripmap-(order|time)/.test(p.name)) keepShot(`${p.name}-f${index}.png`, r.png); return r; };
     const size = (p: Proj): MapSize => ({ width: p.w, height: p.h });
     const predict = (p: Proj, localFrame: number, pt: { x: number; y: number }) => toPixels(pt, cameraAt(p.payload, localFrame, size(p)), size(p));
 
@@ -126,6 +128,10 @@ export async function runTripmapDraw(): Promise<DrawResult> {
 
     // ---------------------------------------------------------------- 3: the route drawn up to the marker, not after it
     {
+      // its own fixture (integration): the Israel fixture's first leg is about 70 px long at 1280×720, so after the marker and dot
+      // clearances only 3 of the 10 sampled points remained on each side; Tel Aviv → Eilat by road spans most of the frame height
+      const israel = await mapProject('tripmap-route', [stop('a', 'תל אביב', 34.78, 32.08, 30), stop('c', 'אילת', 34.95, 29.56, 120)]);
+      const route = routeOf(israel.payload);
       const s0 = israel.payload.stops[0]!.at, s1 = israel.payload.stops[1]!.at;
       let f = s0, best = Infinity;
       for (let k = s0; k <= s1; k++) { const d = Math.abs(progressAt(israel.payload, k).s - 0.5); if (progressAt(israel.payload, k).leg === 1 && d < best) { best = d; f = k; } }
@@ -203,17 +209,22 @@ export async function runTripmapDraw(): Promise<DrawResult> {
       // pixels: on frames after every arrival the label colour lies only in visible boxes (grown by the outline), and every visible box holds some
       const lc = hex(colours.label), px = layout.px, grow = 0.1 * px + 3;
       let stray = 0, emptyBoxes = 0;
-      for (const f of [130, 150, 179]) {
-        const { img } = await still(p9, p9.start + f);
+      const boxPixels: { frame: number; box: number; labelPixels: number }[] = [];
+      // the first still is the frame the last label's fade (MAP_LABEL_FADE_SECONDS from its stop's at) has ended: at frame 130 «אילת»
+      // (at 120) was still at alpha 10/12, so none of its pixels had the label colour (integration, 2026-11-26)
+      const settled = p9.payload.stops.at(-1)!.at + Math.max(1, mapFrames(MAP_LABEL_FADE_SECONDS, p9.rate));
+      for (const f of [settled, 150, 179]) {
+        const { img, png } = await still(p9, p9.start + f);
         const cam = cameraAt(p9.payload, f, size(p9));
         const boxes = p9.payload.stops.map((_, i) => labelBoxAt(layout, i, toPixels(pts[i]!, cam, size(p9)))).filter((b): b is NonNullable<typeof b> => !!b);
         const inBox = (x: number, y: number, g: number) => boxes.some((b) => x >= b.x - g && x <= b.x + b.w + g && y >= b.y - g && y <= b.y + b.h + g);
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (isCol(img, x, y, lc, 6) && !inBox(x + 0.5, y + 0.5, grow)) stray++;
-        for (const b of boxes) { let n = 0; for (let y = Math.floor(b.y); y < b.y + b.h; y++) for (let x = Math.floor(b.x); x < b.x + b.w; x++) if (isCol(img, x, y, lc, 6)) n++; if (n < 20) emptyBoxes++; }
+        boxes.forEach((b, i) => { let n = 0; for (let y = Math.floor(b.y); y < b.y + b.h; y++) for (let x = Math.floor(b.x); x < b.x + b.w; x++) if (isCol(img, x, y, lc, 6)) n++; boxPixels.push({ frame: f, box: i, labelPixels: n }); if (n < 20) emptyBoxes++; });
+        keepShot(`check9-f${f}.png`, png);
       }
       const jaffa = layout.placements.find((l) => l.stopId === 'j')!;
-      check(9, 'labels «תל אביב / יפו / אילת» (widths measured in the pinned Chromium, layout by the painter\'s function): on every frame no two visible boxes overlap, every visible box lies inside the 5 % inset and keeps its side; «יפו» is hidden; on 3 stills the label colour lies only inside the visible boxes and each holds some',
-        overlaps === 0 && outside === 0 && moved === 0 && jaffa.box === null && stray === 0 && emptyBoxes === 0, { widths: widths.map(r2), placements: layout.placements.map((l) => ({ stop: l.stopId, side: l.side, box: l.box && { x: r2(l.box.x), y: r2(l.box.y), w: r2(l.box.w), h: r2(l.box.h) } })), overlaps, outside, moved, strayLabelPixels: stray, emptyBoxes });
+      check(9, 'labels «תל אביב / יפו / אילת» (widths measured in the pinned Chromium, layout by the painter\'s function): on every frame no two visible boxes overlap, every visible box lies inside the 5 % inset and keeps its side; «יפו» is hidden; on 3 stills after every label has faded in, the label colour lies only inside the visible boxes and each holds some',
+        overlaps === 0 && outside === 0 && moved === 0 && jaffa.box === null && stray === 0 && emptyBoxes === 0, { widths: widths.map(r2), placements: layout.placements.map((l) => ({ stop: l.stopId, side: l.side, box: l.box && { x: r2(l.box.x), y: r2(l.box.y), w: r2(l.box.w), h: r2(l.box.h) } })), overlaps, outside, moved, strayLabelPixels: stray, emptyBoxes, boxPixels });
     }
 
     // ---------------------------------------------------------------- 10: a 9:16 frame shows every stop
@@ -234,11 +245,14 @@ export async function runTripmapDraw(): Promise<DrawResult> {
         ['north Greenland, lat 80', [stop('a', 'א', -45, 76.0, 30), stop('b', 'ב', -25, 79.9, 120)], 80],
       ] as const) {
         const p = await mapProject(`tripmap-c2-${lat}`, stops as unknown as unknown[]);
-        const f = 60, cam = cameraAt(p.payload, f, size(p)), y = Math.round(toPixels({ x: cam.cx, y: (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) }, cam, size(p)).y);
+        // the ±80° line is the camera's own limit: it lies on the frame's top row before the push-in and above the frame after it
+        // (at frame 60 of this fixture it is 10 px above the top), so the Greenland view is measured at stop 0's frame
+        const f = lat === 80 ? p.payload.stops[0]!.at : 60, cam = cameraAt(p.payload, f, size(p)), y = Math.round(toPixels({ x: cam.cx, y: (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) }, cam, size(p)).y);
         const { img } = await still(p, p.start + f);
         let landBelow = 0; for (let x = 0; x < img.w; x++) for (const yy of [y + 2, y + 3, y + 4]) if (isCol(img, x, yy, land, 6)) landBelow++;
-        const longest = y > 1 && y < img.h - 2 ? runOn(img, y, coast) : -1;
-        rows.push({ name, row: y, longestCoastRun: longest, landPixelsBelow: landBelow });
+        const longest = y >= 0 && y < img.h - 2 ? runOn(img, y, coast) : -1; // rows outside the image hold no colour (isCol)
+        keepShot(`check17-lat${lat}.png`, (await still(p, p.start + f)).png);
+        rows.push({ name, frame: f, row: y, longestCoastRun: longest, landPixelsBelow: landBelow });
         ok &&= longest >= 0 && longest <= 8 && landBelow > 50;
       }
       check(17, 'C2: on a view across the detail box edge (lat 36.5) and on a view of north Greenland (lat 80), the line rows hold no run of coast colour longer than 8 px (a stroked cut line would run along the land)', ok, rows);
@@ -318,6 +332,7 @@ export async function runTripmapDraw(): Promise<DrawResult> {
       const world = OUTLINES.levels.find((l) => l.id === 'world')!;
       const groups = world.land.filter((g) => g.bbox[2] * world.q > -12 && g.bbox[0] * world.q < 40 && g.bbox[3] * world.q > 30 && g.bbox[1] * world.q < 75).map((g) => decodeQuanta(g).map((r) => ({ xy: [...r.xy], cut: [...r.cut] })));
       const page = await browser.newPage();
+      await page.evaluate('window.__name = (f) => f'); // tsx compiles named inner functions with an __name() helper the page does not have
       const joins = await page.evaluate(({ groups, q }) => {
         const c = document.createElement('canvas'); c.width = 1920; c.height = 1080;
         const ctx = c.getContext('2d', { willReadFrequently: true })!;

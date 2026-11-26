@@ -1,0 +1,649 @@
+{
+  "proof": "proof:tripmap",
+  "ranAt": "2026-11-26T11:46:10.340Z",
+  "seconds": 225,
+  "note": "Measurements on synthetic fixtures in the pinned headless Chromium. Nobody here has looked at a map: no check says how a map looks.",
+  "passed": 18,
+  "gated": 18,
+  "failed": [],
+  "blocked": [],
+  "recordedOnly": [
+    19
+  ],
+  "checks": [
+    {
+      "id": 1,
+      "name": "add_trip_map with three stops makes exactly one drawn clip of kind map on a titles track, coordinates at 0.01°, even times; one undo restores the document hash",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "drawnClips": 1,
+        "kind": "map",
+        "track": "text",
+        "coords": [
+          [
+            34770000,
+            32080000
+          ],
+          [
+            35210000,
+            31780000
+          ],
+          [
+            -120000,
+            51500000
+          ]
+        ],
+        "times": [
+          30,
+          113,
+          195
+        ],
+        "wantTimes": [
+          30,
+          113,
+          195
+        ],
+        "undo": 200,
+        "hashRestored": true
+      }
+    },
+    {
+      "id": 2,
+      "name": "at each arrival frame the marker's centroid (its look colour, searched in a 24-px window) is within 1.5 px of the position Node predicts with cameraAt + mercator",
+      "ok": true,
+      "detail": [
+        {
+          "stop": 1,
+          "frame": 75,
+          "want": {
+            "x": 670.03,
+            "y": 206.09
+          },
+          "got": {
+            "x": 670,
+            "y": 206.06
+          },
+          "pixels": 190,
+          "offPx": 0.05
+        },
+        {
+          "stop": 2,
+          "frame": 120,
+          "want": {
+            "x": 633.38,
+            "y": 576
+          },
+          "got": {
+            "x": 633.42,
+            "y": 575.98
+          },
+          "pixels": 187,
+          "offPx": 0.05
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "at progress 0.5 of leg 1, the route colour is present at 10 sampled points of the predicted path before the marker and absent at 10 after it",
+      "ok": true,
+      "detail": {
+        "frame": 75,
+        "s": 0.5,
+        "before": 8,
+        "present": 8,
+        "after": 8,
+        "absent": 8
+      }
+    },
+    {
+      "id": 4,
+      "name": "a flight leg's midpoint lies on the lifted great circle (within 2 px) and not on the straight line",
+      "ok": true,
+      "detail": {
+        "arcMid": {
+          "x": 708.92,
+          "y": 260.27
+        },
+        "chordMid": {
+          "x": 640,
+          "y": 360
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "in the pinned Chromium only (not verified on the laptop: C12): the paused editor preview equals the server still byte for byte at 3 frames; an exported frame is within PSNR 40 dB of the still",
+      "ok": true,
+      "label": "pinned Chromium only, not verified on the laptop (C12)"
+    },
+    {
+      "id": 6,
+      "name": "stills of 20 frames rendered in shuffled order are byte-identical to the same frames rendered in order",
+      "ok": true,
+      "detail": {
+        "same": 20,
+        "of": 20
+      }
+    },
+    {
+      "id": 7,
+      "name": "trim the clip's start by 1 s and split it at its middle: stills at the same timeline times are byte-identical to before (nothing drawn reads the clip's start or length: C4)",
+      "ok": true,
+      "detail": {
+        "times": [
+          60,
+          75,
+          95,
+          120,
+          150,
+          181,
+          200,
+          230
+        ],
+        "sameAfterTrim": 8,
+        "sameAfterSplit": 8
+      }
+    },
+    {
+      "id": 8,
+      "name": "time_trip_map bars: each at is the nearest frame to its bar start of the analysed loop and |residual| ≤ half a frame (C3); with no music the op answers map_no_music with its Hebrew wording over REST",
+      "ok": true,
+      "detail": {
+        "analyse": 200,
+        "barsFound": 5,
+        "meter": 4,
+        "timed": 200,
+        "barsPerLeg": 1,
+        "rows": [
+          {
+            "at": 30,
+            "bar": 1.991,
+            "nearest": 30,
+            "residualMs": 9
+          },
+          {
+            "at": 90,
+            "bar": 3.988,
+            "nearest": 90,
+            "residualMs": 12
+          },
+          {
+            "at": 150,
+            "bar": 5.997,
+            "nearest": 150,
+            "residualMs": 3
+          }
+        ],
+        "noMusic": {
+          "status": 422,
+          "reason": "map_no_music",
+          "he": "אין מוזיקה מנותחת בתחילת המפה. שימו מוזיקה מנותחת מתחת לתחילת המפה, או השאירו תזמון שווה"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "name": "labels, fixture «תל אביב / יפו / אילת» (Jaffa 4 km away): on every frame no two visible label boxes overlap, every visible label lies inside the 5 % inset, «יפו» is reported hidden, and each label's side is the same on every frame",
+      "ok": true,
+      "detail": {
+        "widths": [
+          101.59,
+          37.96,
+          63.18
+        ],
+        "placements": [
+          {
+            "stop": "a",
+            "side": "end",
+            "box": {
+              "x": 509.34,
+              "y": 147.59,
+              "w": 101.59,
+              "h": 36
+            }
+          },
+          {
+            "stop": "j",
+            "side": null,
+            "box": null
+          },
+          {
+            "stop": "c",
+            "side": "end",
+            "box": {
+              "x": 570.27,
+              "y": 536.39,
+              "w": 63.18,
+              "h": 36
+            }
+          }
+        ],
+        "overlaps": 0,
+        "outside": 0,
+        "moved": 0,
+        "strayLabelPixels": 0,
+        "emptyBoxes": 0,
+        "boxPixels": [
+          {
+            "frame": 132,
+            "box": 0,
+            "labelPixels": 529
+          },
+          {
+            "frame": 132,
+            "box": 1,
+            "labelPixels": 354
+          },
+          {
+            "frame": 150,
+            "box": 0,
+            "labelPixels": 529
+          },
+          {
+            "frame": 150,
+            "box": 1,
+            "labelPixels": 354
+          },
+          {
+            "frame": 179,
+            "box": 0,
+            "labelPixels": 529
+          },
+          {
+            "frame": 179,
+            "box": 1,
+            "labelPixels": 354
+          }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "name": "the 9:16 format's last frame shows every stop marker inside its frame",
+      "ok": true,
+      "detail": [
+        {
+          "x": 303.73,
+          "y": 256,
+          "inside": true,
+          "dot": true
+        },
+        {
+          "x": 416.27,
+          "y": 351.58,
+          "inside": true,
+          "dot": true
+        },
+        {
+          "x": 348.22,
+          "y": 1024,
+          "inside": true,
+          "dot": true
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "flash gate per look (C6), paper and night: a scripted pan at MAX_PAN_RATE and a zoom at MAX_ZOOM_RATE over the densest region (the Aegean) at the widest and the narrowest level, labels and rings on, at 30 and 60 fps, through the painter on the render page: the analyser reports no failing stretch; plus the unit rule (fills < 0.1 apart through flashCells, coast step ≤ 0.35, no saturated red)",
+      "ok": true,
+      "detail": [
+        {
+          "look": "paper",
+          "fps": 30,
+          "region": "narrowest (world level): the Aegean",
+          "export": "succeeded",
+          "verdict": "pass",
+          "ranges": 0,
+          "areaPeak": {
+            "general": 1,
+            "red": 0
+          }
+        },
+        {
+          "look": "paper",
+          "fps": 30,
+          "region": "widest (coarse level): Athens, Moscow, Cairo",
+          "export": "succeeded",
+          "verdict": "pass",
+          "ranges": 0,
+          "areaPeak": {
+            "general": 1,
+            "red": 0
+          }
+        },
+        {
+          "look": "paper",
+          "fps": 60,
+          "region": "narrowest (world level): the Aegean",
+          "export": "succeeded",
+          "verdict": "pass",
+          "ranges": 0,
+          "areaPeak": {
+            "general": 1,
+            "red": 0
+          }
+        },
+        {
+          "look": "paper",
+          "fps": 60,
+          "region": "widest (coarse level): Athens, Moscow, Cairo",
+          "export": "succeeded",
+          "verdict": "pass",
+          "ranges": 0,
+          "areaPeak": {
+            "general": 1,
+            "red": 0
+          }
+        },
+        {
+          "look": "night",
+          "fps": 30,
+          "region": "narrowest (world level): the Aegean",
+          "export": "succeeded",
+          "verdict": "pass",
+          "ranges": 0,
+          "areaPeak": {
+            "general": 0.5,
+            "red": 0
+          }
+        },
+        {
+          "look": "night",
+          "fps": 30,
+          "region": "widest (coarse level): Athens, Moscow, Cairo",
+          "export": "succeeded",
+          "verdict": "pass",
+          "ranges": 0,
+          "areaPeak": {
+            "general": 1,
+            "red": 0
+          }
+        },
+        {
+          "look": "night",
+          "fps": 60,
+          "region": "narrowest (world level): the Aegean",
+          "export": "succeeded",
+          "verdict": "pass",
+          "ranges": 0,
+          "areaPeak": {
+            "general": 1,
+            "red": 0
+          }
+        },
+        {
+          "look": "night",
+          "fps": 60,
+          "region": "widest (coarse level): Athens, Moscow, Cairo",
+          "export": "succeeded",
+          "verdict": "pass",
+          "ranges": 0,
+          "areaPeak": {
+            "general": 1,
+            "red": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "refusals answer with their reason and Hebrew text over REST: 13 stops, a 41-letter name, latitude 81°, two identical stops in a row, legs under 1 s, a travel mode on stop 0; update_text and apply_text_preset on a map clip answer drawn_not_text",
+      "ok": true,
+      "detail": [
+        {
+          "name": "13 stops",
+          "status": 422,
+          "reason": "map_stop_count",
+          "he": "במפה יש בין 2 ל־12 עצירות. הוסיפו או הסירו עצירות",
+          "good": true
+        },
+        {
+          "name": "a 41-letter name",
+          "status": 422,
+          "reason": "map_stop_name",
+          "he": "לעצירה 2 אין שם, או שהשם ארוך מ־40 תווים. כתבו שם קצר יותר, או הסתירו את השם",
+          "good": true
+        },
+        {
+          "name": "latitude 81°",
+          "status": 422,
+          "reason": "map_stop_place",
+          "he": "עצירה 2 מחוץ למפה: קו רוחב בין ‎−80‎ ל־80. בחרו מקום קרוב יותר לקו המשווה",
+          "good": true
+        },
+        {
+          "name": "two identical stops in a row",
+          "status": 422,
+          "reason": "map_same_place",
+          "he": "עצירות 1 ו־2 באותו מקום. הסירו אחת מהן או הזיזו אותה",
+          "good": true
+        },
+        {
+          "name": "legs under 1 s",
+          "status": 422,
+          "reason": "map_too_short",
+          "he": "המפה קצרה מדי: לכל קטע דרך צריך לפחות שנייה. האריכו את המפה או הסירו עצירה",
+          "good": true
+        },
+        {
+          "name": "a travel mode on stop 0",
+          "status": 422,
+          "reason": "map_first_via",
+          "he": "לעצירה הראשונה אין דרך שמגיעה אליה, ולכן אין לה דרך נסיעה. בחרו את דרך הנסיעה בעצירה שאליה מגיעים",
+          "good": true
+        },
+        {
+          "name": "update_text",
+          "status": 422,
+          "code": "drawn_not_text",
+          "he": "הקליפ הזה הוא מפת טיול ולא כותרת: אין בה מילים או סגנון טקסט לשנות. כדי לשנות מילים בחרו כותרת; את המפה משנים בלחיצה על «עריכת המפה» בחלונית שלה",
+          "good": true
+        },
+        {
+          "name": "apply_text_preset",
+          "status": 422,
+          "code": "drawn_not_text",
+          "he": "הקליפ הזה הוא מפת טיול ולא כותרת: אין בה מילים או סגנון טקסט לשנות. כדי לשנות מילים בחרו כותרת; את המפה משנים בלחיצה על «עריכת המפה» בחלונית שלה",
+          "good": true
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "with the outline chunk made unloadable (test flag on the render page), a still is refused naming drawn.map with the reason; with it loadable the same still succeeds",
+      "ok": true,
+      "detail": {
+        "loadable": true,
+        "unloadable": {
+          "status": 503,
+          "text": "{\"error\":{\"code\":\"renderer_unavailable\",\"message\":\"the render worker could not produce the frame: render page failed: page.evaluate: Error: effect_unavailable: frame 0 cannot be drawn faithfully: drawn.map: drawn map data could not be loaded: Failed to fetch dynamically imported module: http://127\",\"details\":{}}}"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "name": "agent path: an edit-grant MCP client calls add_trip_map and get_timeline shows only the summary (stop count, modes, names, look, timing); a propose-mode client gets a proposal, not an edit; no route or tool named place exists",
+      "ok": true,
+      "detail": {
+        "added": true,
+        "summary": {
+          "stops": 3,
+          "modes": [
+            "road",
+            "flight"
+          ],
+          "names": [
+            "תל אביב",
+            "ירושלים",
+            "לונדון"
+          ],
+          "look": "paper",
+          "timing": "even",
+          "kind": "map",
+          "name": {
+            "he": "מפת טיול",
+            "en": "Trip map"
+          }
+        },
+        "summaryOnly": true,
+        "proposed": {
+          "isError": false,
+          "proposed": true,
+          "proposalId": "prp_PuFsTZHubeE",
+          "revisionMoved": 0
+        },
+        "placeTools": [],
+        "placesRoute": 404
+      }
+    },
+    {
+      "id": 15,
+      "name": "editor, keyboard only: Text rail → «מפת טיול חדשה» → type a listed name, Enter → type an unlisted name → the picker opens → arrows + Enter place it → «יצירה» → the clip is on the timeline at the playhead; «עריכת המפה» → change the look → one undo restores it",
+      "ok": true
+    },
+    {
+      "id": 16,
+      "name": "the web bundle holds the outline chunk; THIRD_PARTY_NOTICES.txt holds the Natural Earth block; nothing in the bundle's map data is a border (only land and lakes levels)",
+      "ok": true,
+      "detail": {
+        "chunk": "outlines.data-vDa0L0Uf.js",
+        "chunkBytes": 144379,
+        "notices": true,
+        "levels": [
+          {
+            "id": "coarse",
+            "keys": [
+              "id",
+              "lakes",
+              "land",
+              "q",
+              "use"
+            ]
+          },
+          {
+            "id": "world",
+            "keys": [
+              "id",
+              "lakes",
+              "land",
+              "q",
+              "use"
+            ]
+          },
+          {
+            "id": "detail",
+            "keys": [
+              "box",
+              "id",
+              "lakes",
+              "land",
+              "q",
+              "use"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 17,
+      "name": "C2: on a 9° view centred on the detail box edge (lat 36.5) and on a view of north Greenland (lat 80), no pixel of the coast colour lies on the crop or clip line",
+      "ok": true,
+      "detail": [
+        {
+          "name": "detail box edge, lat 36.5",
+          "frame": 60,
+          "row": 352,
+          "longestCoastRun": 4,
+          "landPixelsBelow": 2383
+        },
+        {
+          "name": "north Greenland, lat 80",
+          "frame": 30,
+          "row": 0,
+          "longestCoastRun": 2,
+          "landPixelsBelow": 2833
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "antimeridian: a flight Tokyo → Los Angeles shows land on both sides of ±180° on every sampled frame (world copies at ±360°)",
+      "ok": true,
+      "detail": [
+        {
+          "frame": 0,
+          "x180": 569.06,
+          "landWest": 40575,
+          "landEast": 40014
+        },
+        {
+          "frame": 90,
+          "x180": 565.22,
+          "landWest": 37307,
+          "landEast": 38111
+        },
+        {
+          "frame": 179,
+          "x180": 561.17,
+          "landWest": 33477,
+          "landEast": 36512
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "recorded, not gated: ms per frame of the painter at 1080p for an Israel view and a Europe view, round against bevel joins (one sample each)",
+      "ok": true,
+      "detail": {
+        "Israel view": {
+          "frames": 120,
+          "drawMsPerFrame": 1.28,
+          "export": "succeeded",
+          "note": "one sample, this container, the whole frame (sea, outlines, route, labels) at 1920×1080 with round joins"
+        },
+        "Europe view": {
+          "frames": 120,
+          "drawMsPerFrame": 2.55,
+          "export": "succeeded",
+          "note": "one sample, this container, the whole frame (sea, outlines, route, labels) at 1920×1080 with round joins"
+        },
+        "joins": {
+          "msPerDraw": {
+            "round": 8.61,
+            "bevel": 11.17
+          },
+          "groups": 5,
+          "vertices": 8083,
+          "note": "one sample each, this container: fill + stroke of the world level coasts of a Europe view, 1920×1080, 10 repeats averaged"
+        }
+      },
+      "label": "recorded, not gated (one sample each)"
+    }
+  ],
+  "measurements": {
+    "timing": {
+      "Israel view": {
+        "frames": 120,
+        "drawMsPerFrame": 1.28,
+        "export": "succeeded",
+        "note": "one sample, this container, the whole frame (sea, outlines, route, labels) at 1920×1080 with round joins"
+      },
+      "Europe view": {
+        "frames": 120,
+        "drawMsPerFrame": 2.55,
+        "export": "succeeded",
+        "note": "one sample, this container, the whole frame (sea, outlines, route, labels) at 1920×1080 with round joins"
+      },
+      "joins": {
+        "msPerDraw": {
+          "round": 8.61,
+          "bevel": 11.17
+        },
+        "groups": 5,
+        "vertices": 8083,
+        "note": "one sample each, this container: fill + stroke of the world level coasts of a Europe view, 1920×1080, 10 repeats averaged"
+      }
+    }
+  }
+}
