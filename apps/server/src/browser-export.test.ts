@@ -91,6 +91,18 @@ describe('browser export lease', () => {
     const out = t.store.getJob(s1.jobId).output;
     expect(out.photosensitivity).toMatchObject({ measuredBy: 'browser', verdict: 'fail', frames: 30, ranges: [range] });
     expect(out.photosensitivity.method).toMatch(/WCAG 2\.3\.1/);
+    // the rate over the failing area (a report that names its busiest cell): halves allowed; it must agree with the verdict
+    const s2 = (await t.start()).body;
+    const atLimit = await t.call(`/jobs/${s2.jobId}/complete`, body(s2.jobId, { verdict: 'fail', frames: 30, ranges: [{ ...range, flashesPerSecond: 3, busiestCellFlashesPerSecond: 14 }], areaPeak: { general: 3, red: 0 } }));
+    expect(atLimit.body.error.code).toBe('invalid_photosensitivity');
+    const cellBelowArea = await t.call(`/jobs/${s2.jobId}/complete`, body(s2.jobId, { verdict: 'fail', frames: 30, ranges: [{ ...range, flashesPerSecond: 5, busiestCellFlashesPerSecond: 4 }], areaPeak: { general: 5, red: 0 } }));
+    expect(cellBelowArea.body.error.code).toBe('invalid_photosensitivity');
+    const quarter = await t.call(`/jobs/${s2.jobId}/complete`, body(s2.jobId, { verdict: 'fail', frames: 30, ranges: [{ ...range, flashesPerSecond: 3.25, busiestCellFlashesPerSecond: 14 }] }));
+    expect(quarter.status).toBe(400); // only halves: a flash is two transitions
+    const area = { ...range, flashesPerSecond: 3.5, busiestCellFlashesPerSecond: 14 };
+    const ok2 = await t.call(`/jobs/${s2.jobId}/complete`, body(s2.jobId, { verdict: 'fail', frames: 30, ranges: [area], areaPeak: { general: 3.5, red: 0 } }));
+    expect(ok2.status).toBe(200);
+    expect(t.store.getJob(s2.jobId).output.photosensitivity).toMatchObject({ verdict: 'fail', ranges: [area], areaPeak: { general: 3.5, red: 0 } });
   });
 
   it('only the owning session AND actor may heartbeat, complete or abandon', async () => {

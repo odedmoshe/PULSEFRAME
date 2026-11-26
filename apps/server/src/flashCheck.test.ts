@@ -23,7 +23,8 @@ describe('photosensitivity check of an export', () => {
     expect(ra.ranges).toHaveLength(1);
     const range = ra.ranges[0]!;
     expect(range.kind).toBe('general');
-    expect(range.flashesPerSecond).toBeGreaterThanOrEqual(4);
+    expect(range.flashesPerSecond).toBe(5); // the whole frame flashes 5 times a second: the rate over the failing area
+    expect(range.busiestCellFlashesPerSecond).toBe(5);
     expect(T.toSeconds(range.from)).toBeGreaterThanOrEqual(10 + 1); // not before the flashing starts at timeline 12 s, less the one-second window
     expect(T.toSeconds(range.to)).toBeLessThanOrEqual(14 + 1);
     expect(range.area).toBe(1);

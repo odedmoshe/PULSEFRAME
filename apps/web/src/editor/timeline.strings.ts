@@ -40,7 +40,7 @@ const he = {
   seekBar: (n: number) => `מעבר לתיבה ${n}`,
   sceneCut: 'חיתוך שזוהה בצילום',
   flashLane: 'בדיקת הבהובים',
-  flashRisk: (from: string, to: string, perSecond: string) => `סיכון להבהוב ${from}–${to}: ${perSecond} הבזקים בשנייה, לפי הבדיקה של הייצוא האחרון`,
+  flashRisk: (from: string, to: string, perSecond: string) => `סיכון להבהוב ${from}–${to}: ${perSecond} הבזקים בשנייה על השטח המהבהב, לפי הבדיקה של הייצוא האחרון`,
   // clips
   clipEffects: (n: number) => `${n} אפקטים`, clipSpeed: 'מהירות', clipAi: 'נוצר בכלי AI', clipFreeze: 'פריים קפוא', clipReverse: 'מתנגן לאחור', clipRamp: 'מהירות משתנה',
   clipMissing: 'הקובץ לא נמצא', clipLinked: 'מקושר', clipOnBeat: 'אפקט שמגיב לפעימה',
@@ -118,7 +118,7 @@ const en: typeof he = {
   seekBar: (n: number) => `Go to bar ${n}`,
   sceneCut: 'A cut found in the footage',
   flashLane: 'Flash check',
-  flashRisk: (from: string, to: string, perSecond: string) => `Flash risk ${from}–${to}: ${perSecond} flashes per second, from the check of the last export`,
+  flashRisk: (from: string, to: string, perSecond: string) => `Flash risk ${from}–${to}: ${perSecond} flashes a second over the failing area, from the check of the last export`,
   clipEffects: (n: number) => (n === 1 ? '1 effect' : `${n} effects`), clipSpeed: 'Speed', clipAi: 'Made with an AI tool', clipFreeze: 'Freeze frame', clipReverse: 'Plays backwards', clipRamp: 'Changing speed',
   clipMissing: 'The file is missing', clipLinked: 'Linked', clipOnBeat: 'An effect that follows the beat',
   duckUnder: 'lowered under the voice',

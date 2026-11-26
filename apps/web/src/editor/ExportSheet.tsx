@@ -632,7 +632,7 @@ function FitLine({ fit, lang }: { fit: FitOutput; lang: 'he' | 'en' }) {
   );
 }
 
-interface FlashReport { verdict: 'pass' | 'fail'; ranges: { from: { value: string; timescale: number }; to: { value: string; timescale: number }; kind: 'general' | 'red'; flashesPerSecond: number; area: number }[] }
+interface FlashReport { verdict: 'pass' | 'fail'; ranges: { from: { value: string; timescale: number }; to: { value: string; timescale: number }; kind: 'general' | 'red'; flashesPerSecond: number; /** absent in reports made before the rate was taken over the failing area */ busiestCellFlashesPerSecond?: number; area: number }[] }
 /** The photosensitivity result of a saved export (ADR-0009): a quiet pass, or the stretches with a jump to each. */
 function FlashResult({ report, S, editor }: { report: FlashReport; S: ExportStrings; editor: Editor }) {
   const { state, t } = useEditorState();
@@ -651,7 +651,7 @@ function FlashResult({ report, S, editor }: { report: FlashReport; S: ExportStri
         <ul className="pf-xs-flash-list">
           {report.ranges.map((r, i) => (
             <li key={i} data-testid="export-flash-range">
-              <bdi dir="ltr" className="num">{clock(sec(r.from))}–{clock(sec(r.to))}</bdi> · {t(r.kind === 'red' ? 'flash.red' : 'flash.general')} <span className="num">{r.flashesPerSecond}</span> {t('flash.perSecond')} · <span className="num">{Math.round(r.area * 100)}%</span> {t('flash.area')}
+              <bdi dir="ltr" className="num">{clock(sec(r.from))}–{clock(sec(r.to))}</bdi> · {t(r.kind === 'red' ? 'flash.red' : 'flash.general')} <span className="num">{r.flashesPerSecond}</span> {t(r.busiestCellFlashesPerSecond === undefined ? 'flash.perSecond' : 'flash.perSecondArea')} · <span className="num">{Math.round(r.area * 100)}%</span> {t('flash.area')}
               {rate && <Button size="sm" variant="secondary" data-testid="export-flash-jump" onClick={() => { editor.seek(Math.floor((sec(r.from) * rate.num) / rate.den)); closeExportSheet(); }}>{S.jump}</Button>}
             </li>
           ))}

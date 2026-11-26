@@ -13,10 +13,17 @@ export interface PhotosensitivityReport {
   verdict: 'pass' | 'fail';
   /** Frames analysed (the export's frames, from its first frame on). */
   frames: number;
-  /** Failing stretches in timeline time (exact rationals), with the most flashes counted in one second and the share of the frame. */
-  ranges: { from: T.RationalTime; to: T.RationalTime; kind: 'general' | 'red'; flashesPerSecond: number; area: number }[];
+  /**
+   * Failing stretches in timeline time (exact rationals): `flashesPerSecond` is the rate over the failing area (the most
+   * flashes in one second that more than a quarter of one 10-degree window reached; always above 3 in a failing stretch,
+   * halves possible), `busiestCellFlashesPerSecond` the busiest single cell (one 24th of the width and height: too small
+   * to fail on its own), and `area` the share of the frame.
+   */
+  ranges: { from: T.RationalTime; to: T.RationalTime; kind: 'general' | 'red'; flashesPerSecond: number; busiestCellFlashesPerSecond: number; area: number }[];
+  /** The most flashes a second over the area anywhere in the export, passing or not (3 or less passes). */
+  areaPeak: { general: number; red: number };
 }
-export const PHOTOSENSITIVITY_METHOD = 'General and red flash thresholds of WCAG 2.3.1 (ITU-R BT.1702 family), approximated on 24 × 24 cells of the rendered frames: a stretch fails when more than a quarter of a 10-degree window (a third of the width and height) flashes more than three times in a second. A guide, not a certification.';
+export const PHOTOSENSITIVITY_METHOD = 'General and red flash thresholds of WCAG 2.3.1 (ITU-R BT.1702 family), approximated on 24 × 24 cells of the rendered frames: a stretch fails when more than a quarter of a 10-degree window (a third of the width and height) flashes more than three times in a second. The rate given per stretch is the rate over that failing area; the busiest single cell is given apart. A guide, not a certification.';
 
 export class FrameFlashCheck {
   private readonly analyser: FlashAnalyser;
@@ -49,7 +56,8 @@ function photosensitivityReport(r: FlashReport, rate: T.Rate, firstFrame: number
     method: PHOTOSENSITIVITY_METHOD,
     verdict: r.verdict,
     frames: r.frames,
-    ranges: r.ranges.map((x) => ({ from: at(x.from), to: at(x.to + 1), kind: x.kind, flashesPerSecond: x.flashesPerSecond, area: x.area })),
+    ranges: r.ranges.map((x) => ({ from: at(x.from), to: at(x.to + 1), kind: x.kind, flashesPerSecond: x.flashesPerSecond, busiestCellFlashesPerSecond: x.busiestCellFlashesPerSecond, area: x.area })),
+    areaPeak: r.areaPeak,
   };
 }
 /**

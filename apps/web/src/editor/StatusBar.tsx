@@ -58,7 +58,7 @@ export function StatusBar() {
 }
 
 /** The photosensitivity result of the last export (ADR-0009): a quiet status when it passed; otherwise the stretches, with jump-to. */
-function FlashResult({ report }: { report: { verdict: 'pass' | 'fail'; ranges: { from: { value: string; timescale: number }; to: { value: string; timescale: number }; kind: 'general' | 'red'; flashesPerSecond: number; area: number }[] } }) {
+function FlashResult({ report }: { report: { verdict: 'pass' | 'fail'; ranges: { from: { value: string; timescale: number }; to: { value: string; timescale: number }; kind: 'general' | 'red'; flashesPerSecond: number; busiestCellFlashesPerSecond?: number; area: number }[] } }) {
   const { editor, state, t } = useEditorState();
   const S = CHROME_STRINGS[state.lang];
   if (report.verdict === 'pass') return <span className="pf-status-flash is-ok" role="status" data-testid="flash-pass" title={t('flash.passTitle')}><ShieldCheck size={13} strokeWidth={1.75} aria-hidden="true" /><span>{S.flashChecked}</span><Check size={12} strokeWidth={2.25} aria-hidden="true" /></span>;
@@ -73,7 +73,7 @@ function FlashResult({ report }: { report: { verdict: 'pass' | 'fail'; ranges: {
         <ul>
           {report.ranges.map((r, i) => (
             <li key={i} data-testid="flash-range">
-              <bdi dir="ltr">{clock(sec(r.from))}–{clock(sec(r.to))}</bdi> · {t(r.kind === 'red' ? 'flash.red' : 'flash.general')} {r.flashesPerSecond} {t('flash.perSecond')} · {Math.round(r.area * 100)}% {t('flash.area')}
+              <bdi dir="ltr">{clock(sec(r.from))}–{clock(sec(r.to))}</bdi> · {t(r.kind === 'red' ? 'flash.red' : 'flash.general')} {r.flashesPerSecond} {t(r.busiestCellFlashesPerSecond === undefined ? 'flash.perSecond' : 'flash.perSecondArea')} · {Math.round(r.area * 100)}% {t('flash.area')}
               {rate && <button type="button" className="pf-status-jump" onClick={() => editor.seek(Math.floor((sec(r.from) * rate.num) / rate.den))} data-testid="flash-jump">{t('flash.jump')}</button>}
             </li>
           ))}
