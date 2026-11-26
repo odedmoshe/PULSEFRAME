@@ -4,6 +4,9 @@ Start of session: read `docs/PROGRESS.md` (state + next step), then `docs/CAPABI
 The governing spec is `docs/SPEC.md` (v3.0 + accepted amendments at the end; Amendment A1 full text in `docs/PULSEFRAME_FREEFIELD_INTEGRATION_ADDENDUM.md`). Do not paste the spec into prompts; cite sections.
 How work is split across agents and models: `docs/EXECUTION_POLICY.md`.
 
+## Product scope (owner, 2026-11-26)
+A general-purpose video editor for any creator's work (YouTube, short clips, social formats, tutorials, music clips, family films): do not narrow features, defaults or wording to one niche. The owner decides what tools may run on their computer; ask for a decision instead of excluding a tool (`docs/BLOCKERS.md`, owner decisions).
+
 ## Commands
 - `pnpm install` · `pnpm dev` (server :8787 + Vite :5173) · `pnpm build` · `pnpm start`
 - `pnpm typecheck` · `pnpm test` (Vitest) · `pnpm proof` (Phase 0 end-to-end; needs `pnpm build`) · `pnpm check` (all of these)
