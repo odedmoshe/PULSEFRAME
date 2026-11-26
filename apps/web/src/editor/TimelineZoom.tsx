@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import * as T from '@pulseframe/time';
 import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
-import { IconButton } from '../ds/index.ts';
+import { Button, IconButton } from '../ds/index.ts';
 import type { Lang } from '@pulseframe/i18n';
 import type { Editor } from './store.ts';
 import { useEditor } from './store.ts';
@@ -85,7 +85,8 @@ export const TimelineZoom = memo(function TimelineZoom({ pps, lang }: { pps: num
   const across = (() => { const sc = el(); const w = sc ? sc.clientWidth - gutterOf(sc) : 0; return w > 0 ? String(Math.round(w / pps)) : String(Math.round(1200 / pps)); })();
   return (
     <span ref={root} className="tl-zoom" role="group" aria-label={s.zoomGroup} dir="ltr" data-testid="tl-zoom">
-      <IconButton size="sm" className="tl-zoom-btn" data-testid="tl-zoom-fit" label={s.fit} keys={['Shift', 'Z']} icon={<Maximize2 size={15} strokeWidth={1.75} aria-hidden="true" />} onClick={fit} />
+      {/* the one zoom button with a word (DESIGN_REVIEW WP1): it shows the whole film */}
+      <Button size="sm" variant="ghost" className="tl-zoom-btn tl-act" data-testid="tl-zoom-fit" keys={['Shift', 'Z']} icon={<Maximize2 size={15} strokeWidth={1.75} aria-hidden="true" />} onClick={fit}>{s.fitWord}</Button>
       <IconButton size="sm" className="tl-zoom-btn" data-testid="tl-zoom-out" label={s.zoomOut} keys={['-']} icon={<ZoomOut size={15} strokeWidth={1.75} aria-hidden="true" />} onClick={() => zoomTo(editor, el(), pps / ZOOM_STEP)} />
       <input type="range" className="tl-zoom-slider" data-testid="tl-zoom-slider" min={0} max={SLIDER_MAX} step={1} value={Math.round(ppsToSlider(pps))} style={{ '--v': `${(ppsToSlider(pps) / SLIDER_MAX) * 100}%` } as React.CSSProperties}
         aria-label={s.zoomSlider} aria-valuetext={s.zoomValue(across)} onChange={(e) => zoomTo(editor, el(), sliderToPps(Number(e.target.value)))} />

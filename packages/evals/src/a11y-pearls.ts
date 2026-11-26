@@ -6,6 +6,7 @@
  * `shown: false`, which the audit reports as a finding, never as a pass. The empty list is audited first, then the pearl and the tag are made.
  * Synthetic data only: a scratch project of its own with one generated 2-second video (ffmpeg testsrc2) and an invented person «אלף».
  */
+import { openModes } from './editor-ui.ts';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -137,6 +138,7 @@ export const pearlsA11yScenarios: PearlsA11yScenario[] = [
       const m = await ranged(ctx);
       await ctx.page.getByTestId('rail-deliver').click().catch(() => undefined);
       const tab = ctx.page.locator('[data-testid="workspace-deliver"]');
+      await openModes(ctx.page).catch(() => undefined);
       await tab.click().catch(() => undefined);
       await ctx.page.getByTestId(ID.screenTime).scrollIntoViewIfNeeded().catch(() => undefined);
       await settle(ctx.page);

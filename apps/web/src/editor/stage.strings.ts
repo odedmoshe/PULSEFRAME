@@ -17,6 +17,7 @@ const he = {
   loupeHow: 'שני הפריימים מצוירים באותו מנוע שמייצא את הסרטון.',
   rollKeys: 'פריים', toBeat: 'לפעימה הקרובה', still: 'תמונה',
   noticeTitle: 'התצוגה שונה מהסרטון הסופי',
+  filmFacts: 'גודל הפריים ואורך הסרטון',
 } as const;
 const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => string ? (...a: A) => string : string } = {
   stageTools: 'Viewer tools', view: 'What is shown', program: 'Edit', source: 'Source', sourceNone: 'Select a video or sound clip to open its source file',
@@ -35,5 +36,6 @@ const en: { [K in keyof typeof he]: (typeof he)[K] extends (...a: infer A) => st
   loupeHow: 'Both frames are drawn by the engine that exports the video.',
   rollKeys: 'frame', toBeat: 'to the nearest beat', still: 'Image',
   noticeTitle: 'The preview differs from the final video',
+  filmFacts: 'Frame size and film length',
 };
 export const STAGE_STRINGS = { he, en } as const;

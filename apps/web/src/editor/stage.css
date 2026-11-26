@@ -11,9 +11,9 @@
 .stage { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
 .canvas-wrap { min-height: 0; display: flex; align-items: center; justify-content: center; padding: var(--pf-s-4); }
 .canvas-wrap { position: relative; }
-.app > .stage { --pf-ar: 1.777778; position: relative; margin: 4px; border-radius: var(--pf-r-lg, 14px); background: var(--pf-stage); box-shadow: var(--pf-e1); color: var(--pf-text); }
+.app > .stage { --pf-ar: 1.777778; position: relative; margin: 4px; border-radius: var(--pf-r-xl, 20px); background: var(--pf-stage); box-shadow: var(--pf-e1); color: var(--pf-text); }
 .app > .stage > .stage-head { grid-row: 1; grid-column: 1 / -1; }
-.app > .stage > .canvas-wrap { grid-row: 2; grid-column: 1; padding: var(--pf-sp-4) var(--pf-sp-6); container-type: size; }
+.app > .stage > .canvas-wrap { grid-row: 2; grid-column: 1; padding: var(--pf-sp-4) var(--pf-sp-6) var(--pf-sp-1); container-type: size; }
 .app > .stage > .stage-loupe, .app > .stage > .stage-over { grid-row: 2; grid-column: 1; }
 .app > .stage > .stage-side { grid-row: 2; grid-column: 2; }
 .app > .stage > .transport { grid-row: 3; grid-column: 1 / -1; }
@@ -58,10 +58,13 @@
   --pf-hilite: inset 0 1px 0 color-mix(in srgb, var(--pf-on-plate) 5%, transparent);
 }
 
-/* ---------- header ---------- */
-.stage-head { display: flex; align-items: center; gap: var(--pf-sp-4); min-block-size: 44px; padding: var(--pf-sp-3) var(--pf-sp-5) 0; min-inline-size: 0; container-type: inline-size; }
-.stage-head-space { flex: 1; }
+/* ---------- the viewer's tools: at the end of the transport bar (StageHeader.tsx StageTools); no row above the picture ---------- */
+.stage-head { display: flex; align-items: center; justify-content: flex-end; gap: var(--pf-sp-3); min-inline-size: 0; }
 .stage-head .stage-view { flex: none; }
+.stage-quality select { block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-3); border: 0; border-radius: var(--pf-r-pill); background: var(--pf-surface-3); color: var(--pf-text-2); font: var(--pf-fs-xs) var(--pf-font); cursor: pointer; }
+.stage-quality select:hover { color: var(--pf-text); }
+.stage-quality select:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; }
+.transport .tp-facts { flex: none; color: var(--pf-text-3); font-size: var(--pf-fs-digits); white-space: nowrap; }
 .stage-btn { flex: none; display: grid; place-items: center; inline-size: var(--pf-h-sm); block-size: var(--pf-h-sm); padding: 0; border: 0; border-radius: var(--pf-r-sm); background: transparent; box-shadow: none; color: var(--pf-text-2); cursor: pointer; }
 .stage-btn:hover { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
 .stage-btn[aria-pressed='true'] { background: var(--pf-frame-soft); color: var(--pf-frame); }
@@ -82,9 +85,10 @@
 .prism-dot { position: absolute; inset-block-start: 3px; inset-inline-start: 4px; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--pf-pulse); box-shadow: var(--pf-glow-pulse); }
 .prism-add { flex: none; display: grid; place-items: center; inline-size: var(--pf-h-sm); block-size: var(--pf-h-sm); padding: 0; border: 0; border-radius: var(--pf-r-sm); background: transparent; box-shadow: none; color: var(--pf-text-2); cursor: pointer; }
 .prism-add:hover, .prism-add[aria-expanded='true'] { background: var(--pf-surface-3); color: var(--pf-text); border: 0; }
-/* a narrow stage keeps the prism only */
-@container (max-width: 520px) { .stage-head .stage-view, .stage-toggle-label { display: none; } }
-@container (max-width: 380px) { .stage-head .stage-btn, .stage-toggle { display: none; } }
+/* a narrow transport keeps the prism and full screen; the frame size goes first (container: the transport) */
+@container (max-width: 760px) { .transport .tp-facts { display: none; } }
+@container (max-width: 520px) { .stage-head .stage-view, .stage-toggle, .stage-quality { display: none; } }
+@container (max-width: 380px) { .stage-head .stage-btn { display: none; } }
 
 /* ---------- over the viewer ---------- */
 .stage-over { position: relative; z-index: 3; pointer-events: none; display: grid; justify-items: center; align-content: space-between; padding: var(--pf-sp-5); min-block-size: 0; }
@@ -157,13 +161,15 @@
 .pf-insp .insp-scopes .scopes > :is(dl, p) { grid-column: 1 / -1; }
 .pf-insp .insp-scopes .pf-section:not([data-help='open']) .scope-stats { display: none; }
 
-/* ---------- transport: 52px, left to right in every language ----------
+/* ---------- transport: 48px, left to right in every language ----------
    Each part keeps its own column (time, keys, end), so the keys stay in the middle whatever is hidden. The timecode never
-   shrinks under its digits and its column is never narrower than it; the total sits after it and, where the column has no
-   room for both on one line, goes under it, so the two never overlap (1024 to 1440 px, both languages, every mode). */
-.transport.pf-ds { display: grid; grid-template-columns: minmax(min-content, 1fr) auto minmax(min-content, 1fr); align-items: center; gap: var(--pf-sp-5); min-block-size: 52px; padding: 0 var(--pf-sp-6) var(--pf-sp-2); border: 0; background: none; container-type: inline-size; }
+   shrinks under its digits and its column is never narrower than it; the total sits after it on the same line and is left
+   out where the transport is narrower than 820 px, so the two never overlap or wrap (1024 to 1908 px, both languages, every mode). */
+.transport.pf-ds { display: grid; grid-template-columns: minmax(min-content, 1fr) auto minmax(min-content, 1fr); align-items: center; gap: var(--pf-sp-5); min-block-size: 48px; padding: 0 var(--pf-sp-5) var(--pf-sp-1); border: 0; background: none; container-type: inline-size; }
 .transport > .tp-time { grid-column: 1; } .transport > .tp-keys { grid-column: 2; } .transport > .tp-end { grid-column: 3; }
-.transport .tp-time { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--pf-sp-4); row-gap: var(--pf-sp-1); min-inline-size: 0; }
+.transport .tp-time { display: flex; flex-wrap: nowrap; align-items: baseline; column-gap: var(--pf-sp-4); min-inline-size: 0; }
+/* the total never goes under the timecode (it wrapped at 1366×650, DESIGN_REVIEW D8): below 820 px of transport it is left out */
+@container (max-width: 820px) { .transport .tp-total { display: none; } }
 .transport .timecode { flex: none; white-space: nowrap; min-inline-size: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--pf-text); font: var(--pf-fw-medium) var(--pf-fs-timecode)/1 var(--pf-font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; text-align: start; }
 .transport .tp-total { flex: none; color: var(--pf-text-3); font-size: var(--pf-fs-digits); white-space: nowrap; }
 .transport .tp-keys { display: flex; align-items: center; gap: var(--pf-sp-3); }
@@ -189,7 +195,12 @@
 @container (max-width: 520px) { .transport .tp-total, .transport .tp-outer, .tp-beat-word { display: none; } }
 @container (max-width: 340px) { .transport .tp-btn, .transport .tp-end { display: none; } }
 @container (max-width: 220px) { .transport .tp-time { display: none; } }
-@media (max-height: 780px) { .transport.pf-ds { min-block-size: 46px; } .transport .tp-play { inline-size: 38px; block-size: 38px; min-inline-size: 38px; min-block-size: 38px; } .stage-head { min-block-size: 38px; } }
+/* a short window (125 % scaling and below): every pixel of chrome goes to the picture (DESIGN_REVIEW §6: ≥ 360 px at 1528×704, ≥ 320 at 1366×650) */
+@media (max-height: 780px) {
+  .transport.pf-ds { min-block-size: 42px; padding-block-end: 0; } .transport .tp-play { inline-size: 36px; block-size: 36px; min-inline-size: 36px; min-block-size: 36px; }
+  .app > .stage { margin-block: 2px; }
+  .app > .stage > .canvas-wrap { padding-block: var(--pf-sp-3) 0; }
+}
 
 /* ---------- source viewer (the dialog the "source" side of the stage opens) ---------- */
 .source-viewer .source-canvas { inline-size: 100%; max-block-size: 46vh; object-fit: contain; background: var(--pf-stage); border-radius: var(--pf-r-sm); }

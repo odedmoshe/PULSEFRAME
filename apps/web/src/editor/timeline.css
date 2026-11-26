@@ -30,7 +30,7 @@
   --tl-mode: var(--pf-m-edit);
   position: relative; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
   margin-inline: var(--pf-gutter); margin-block-end: var(--pf-sp-2);
-  background: var(--pf-surface-1); border: 0; border-radius: var(--pf-r-lg); box-shadow: var(--pf-e1), var(--pf-hilite);
+  background: var(--pf-surface-1); border: 0; border-radius: var(--pf-r-xl); box-shadow: var(--pf-e1), var(--pf-hilite);
   color: var(--pf-text); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs);
 }
 .timeline.pf-ds[data-mode='look'] { --tl-mode: var(--pf-m-look); }
@@ -41,11 +41,31 @@
 .timeline.pf-ds :where(button:not(.pf-btn, .pf-seg-btn)) { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; color: inherit; font: inherit; gap: 0; min-width: 0; min-height: 0; transition: none; }
 .timeline.pf-ds button:disabled { opacity: 1; }
 
-/* ---------- toolbar (44px): tools · the ride bar · ruler mode and zoom ---------- */
-.timeline.pf-ds .tl-bar { flex: none; display: flex; align-items: center; gap: var(--pf-sp-5); block-size: 44px; padding-inline: var(--pf-sp-5); border-block-end: 1px solid var(--pf-line); }
+/* ---------- toolbar (40px, TimelineToolbar.tsx): worded actions · the ride bar · «עוד» and zoom ---------- */
+.timeline.pf-ds .tl-bar { flex: none; display: flex; align-items: center; gap: var(--pf-sp-4); block-size: 40px; padding-inline: var(--pf-sp-4); border-block-end: 1px solid var(--pf-line); }
+.timeline.pf-ds .tl-group { display: inline-flex; align-items: center; gap: var(--pf-sp-1); }
+/* a worded toolbar button: a pill with its icon and word */
+.timeline.pf-ds .tl-act { gap: var(--pf-sp-2); padding-inline: var(--pf-sp-3) var(--pf-sp-4); border-radius: var(--pf-r-pill); white-space: nowrap; box-shadow: none; }
+.timeline.pf-ds .tl-act.is-disabled { color: var(--pf-text-disabled); background: transparent; box-shadow: none; }
+.timeline.pf-ds .tl-act .lucide, .timeline.pf-ds .tl-act .pf-ico { flex: none; }
+.timeline.pf-ds .tl-more { position: relative; }
+.timeline.pf-ds .tl-more-btn[aria-expanded='true'] { background: var(--pf-surface-3); color: var(--pf-text); }
+.timeline.pf-ds .tl-more-panel { position: absolute; inset-block-start: calc(100% + 6px); inset-inline-end: 0; z-index: 9; display: grid; gap: var(--pf-sp-3); min-inline-size: 280px; padding: var(--pf-sp-4);
+  border-radius: var(--pf-r-lg); background: var(--pf-surface-2); box-shadow: var(--pf-e2), 0 0 0 1px var(--pf-line-strong); }
+.timeline.pf-ds .tl-more-panel[hidden] { display: none; }
+.timeline.pf-ds .tl-more-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-sp-2) var(--pf-sp-3); }
+.timeline.pf-ds .tl-more-word { min-inline-size: 72px; color: var(--pf-text-2); font-size: var(--pf-fs-xs); }
+.timeline.pf-ds .tl-more-narrow { display: none; }
+/* narrow windows: the range buttons and «שכפול» move into «עוד» first, then undo and redo keep their icons only */
+@media (max-width: 1366px) {
+  .timeline.pf-ds .tl-bar .tl-range, .timeline.pf-ds .tl-bar .tl-tools .tl-dup { display: none; }
+  .timeline.pf-ds .tl-more-narrow { display: flex; }
+  .timeline.pf-ds .tl-hist .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .timeline.pf-ds .tl-hist { inline-size: var(--pf-h-sm); padding-inline: 0; justify-content: center; }
+}
 .timeline.pf-ds .tl-tools, .timeline.pf-ds .tl-view { flex: none; display: flex; align-items: center; gap: var(--pf-sp-2); }
-.timeline.pf-ds .tl-view { gap: var(--pf-sp-5); }
-.timeline.pf-ds .tl-sep { inline-size: 1px; block-size: 18px; margin-inline: var(--pf-sp-3); background: var(--pf-line-strong); }
+.timeline.pf-ds .tl-view { gap: var(--pf-sp-3); }
+.timeline.pf-ds .tl-sep { flex: none; inline-size: 1px; block-size: 18px; margin-inline: var(--pf-sp-2); background: var(--pf-line-strong); }
 .timeline.pf-ds .tl-bar .pf-seg { background: var(--pf-surface-2); }
 .timeline.pf-ds .tl-tool .pf-seg-btn { inline-size: var(--pf-h-sm); padding-inline: 0; }
 .timeline.pf-ds .tl-tool .pf-seg-btn.is-on { color: var(--pf-frame); }
@@ -55,6 +75,21 @@
 .timeline.pf-ds .tl-magnet.is-on, .timeline.pf-ds .tl-ripple.is-on { background: var(--pf-frame-soft); color: var(--pf-frame); box-shadow: 0 0 0 1px color-mix(in srgb, var(--pf-frame) 40%, transparent); }
 .timeline.pf-ds .tl-snap.is-on { background: var(--pf-pulse-soft); color: var(--pf-pulse); box-shadow: 0 0 0 1px color-mix(in srgb, var(--pf-pulse) 45%, transparent); }
 .timeline.pf-ds[data-tool='blade'] .clip { cursor: crosshair; }
+/* until the beat is analysed the action sits on the toolbar, at a full control height, with its word */
+.timeline.pf-ds .tl-view button.tempo-run { block-size: var(--pf-h-sm); padding-inline: var(--pf-sp-4); border-radius: var(--pf-r-sm); }
+.timeline.pf-ds .tl-empty-lanes { gap: var(--pf-sp-3); white-space: nowrap; }
+
+/* ---------- the picture's room (DESIGN_REVIEW §6) ----------
+   An empty lane is a thin strip in its colour (view state; Timeline.tsx laneCollapsed): its name is the strip's tooltip and a
+   click opens it. Its header stays in the page (its buttons keep their ids) but shows only the colour bar. */
+.timeline.pf-ds .track.is-collapsed { cursor: pointer; overflow: clip; }
+.timeline.pf-ds .track.is-collapsed > .track-head { overflow: clip; padding-block: 0; }
+.timeline.pf-ds .track.is-collapsed > .track-head > :not(.track-bar) { visibility: hidden; }
+.timeline.pf-ds .track.is-collapsed > .track-lane { background: color-mix(in srgb, var(--k) 10%, transparent); }
+.timeline.pf-ds .track.is-collapsed:hover > .track-lane { background: color-mix(in srgb, var(--k) 22%, transparent); }
+/* without an analysed beat the Pulse Strip has no row: the ruler is the first row under the toolbar */
+.timeline.pf-ds .tl-top[data-beats='none'] .pulse-strip { display: none; }
+.timeline.pf-ds .tl-top[data-beats='none'] .tl-corner { grid-template-rows: var(--pf-lane-ruler) var(--pf-lane-flash); }
 
 /* the ride bar */
 .timeline.pf-ds .tl-ride-zone { flex: 1 1 0; min-inline-size: 0; position: relative; align-self: stretch; }
@@ -76,6 +111,10 @@
 .timeline.pf-ds .ride-btn.ride-beat.is-on { background: var(--pf-pulse-soft); color: var(--pf-pulse); }
 .timeline.pf-ds .ride-sep { inline-size: 1px; block-size: 16px; margin-inline: var(--pf-sp-2); background: var(--pf-line-strong); }
 .timeline.pf-ds .ride-word { color: var(--pf-text-2); font-size: var(--pf-fs-xs); padding-inline: var(--pf-sp-1); }
+/* the ride bar where its words do not fit between the toolbar's two ends (RideBar.tsx is-tight): icons only, like a narrow window */
+.timeline.pf-ds .ride.is-tight .ride-btn:not(.keeps-label) .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.timeline.pf-ds .ride.is-tight .ride-btn:not(.keeps-label) { inline-size: var(--pf-h-sm); padding-inline: 0; }
+.timeline.pf-ds .ride.is-tight .ride-word { display: none; }
 /* a narrow window: the ride bar is icons only (each keeps its name and its tooltip) */
 @media (max-width: 1366px) {
   .timeline.pf-ds .ride-btn:not(.keeps-label) .pf-btn-label { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -100,7 +139,7 @@
 .timeline.pf-ds button.tempo-run:hover:not(:disabled) { background: var(--pf-surface-3); color: var(--pf-text); }
 .timeline.pf-ds button.tempo-run:disabled { color: var(--pf-text-3); cursor: default; }
 .timeline.pf-ds .tl-add-track { position: static; display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--pf-sp-1); padding: 0; background: none; opacity: 1; color: var(--pf-text-3); }
-.timeline.pf-ds button.tl-add { display: inline-grid; place-items: center; inline-size: 24px; block-size: 22px; border-radius: var(--pf-r-xs); color: var(--pf-text-3); cursor: pointer; }
+.timeline.pf-ds button.tl-add { display: inline-grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: var(--pf-r-xs); color: var(--pf-text-3); cursor: pointer; }
 .timeline.pf-ds button.tl-add:hover:not(:disabled) { background: var(--pf-surface-3); color: var(--pf-text); }
 .timeline.pf-ds button.tl-add:disabled { color: var(--pf-text-disabled); cursor: not-allowed; }
 

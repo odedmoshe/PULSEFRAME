@@ -1,5 +1,13 @@
-/** Nothing is selected: the inspector shows the project itself (UX_REDESIGN §4.6): format, frame rate, length, loudness target and the last flash check. */
+/**
+ * Nothing is selected: the inspector shows the project itself (UX_REDESIGN §4.6): format, frame rate, length, loudness target
+ * and the last flash check; under it how to work (DESIGN_REVIEW WP1): the most used keys, read from the command registry, and
+ * «כל הקיצורים», which opens the palette's list of every key.
+ */
 import * as T from '@pulseframe/time';
+import { Kbd } from '../ds/index.ts';
+import { COMMANDS, chordLabel } from './commands.ts';
+import { CHROME_STRINGS } from './chrome.strings.ts';
+import { setPaletteView } from './chromeState.ts';
 import { useEditorState } from './store.ts';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { secondsText } from './inspector.model.ts';
@@ -26,6 +34,38 @@ export function ProjectPanel() {
         <dt>{S.formats}</dt><dd>{variants.length === 0 ? S.none : variants.map((v) => <bdi key={v.id} className="num insp-fmt">{v.width}×{v.height}</bdi>)}</dd>
       </dl>
       <p className="muted insp-note">{S.nothingHint}</p>
+      <KeyList />
     </div>
+  );
+}
+
+/** The keys of a command as the palette shows them (its first chord), or null when the command is not registered. */
+const keyOf = (id: string): string | null => { const k = COMMANDS.find((c) => c.id === id)?.keys[0]; return k ? chordLabel(k) : null; };
+
+/** The most used keys. Each row comes from a registered command; a row whose command is not registered (yet) is left out. */
+function KeyList() {
+  const { editor, state } = useEditorState();
+  const K = CHROME_STRINGS[state.lang].keys;
+  const both = (a: string | null, b: string | null) => (a && b ? `${a} / ${b}` : null);
+  const rows: [string, string | null][] = [
+    [K.play, keyOf('transport.toggle')],
+    [K.split, keyOf('edit.split')],
+    [K.delete, keyOf('edit.delete')],
+    [K.undo, keyOf('history.undo')],
+    [K.range, both(keyOf('range.in'), keyOf('range.out'))],
+    [K.frames, both(keyOf('transport.prevFrame'), keyOf('transport.nextFrame'))],
+    [K.palette, keyOf('view.palette')],
+    [K.modes, 'Shift+1…7'],
+  ];
+  return (
+    <section className="insp-keys" aria-labelledby="insp-keys-title" data-testid="insp-keys">
+      <h3 id="insp-keys-title" className="insp-keys-title">{K.title}</h3>
+      <dl className="insp-facts">
+        {rows.filter((r): r is [string, string] => !!r[1]).map(([what, keys]) => (
+          <div key={what} style={{ display: 'contents' }}><dt>{what}</dt><dd><bdi dir="ltr">{keys.split(' / ').map((chord, i) => <span key={i}>{i > 0 && ' / '}{chord.split('+').map((k, j) => <span key={j}>{j > 0 && '+'}<Kbd k={k} /></span>)}</span>)}</bdi></dd></div>
+        ))}
+      </dl>
+      <button type="button" className="pf-btn pf-btn-ghost pf-btn-sm insp-keys-all" data-testid="insp-keys-all" aria-haspopup="dialog" onClick={() => { setPaletteView('shortcuts'); editor.set({ paletteOpen: true }); }}>{K.all}</button>
+    </section>
   );
 }

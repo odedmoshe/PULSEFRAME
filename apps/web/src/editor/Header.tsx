@@ -1,18 +1,19 @@
 /**
  * The top bar (docs/design/UX_REDESIGN.md §4.2): one row with fixed slots that never wraps.
  * From the start edge: logo, the project name (opens the projects dialog) over the save line, the mode bar, the command bar
- * (opens the palette), presence (the owner and the agent, whose menu holds "pause"), undo and redo, language, the export
+ * (opens the palette), presence (the owner and the agent, whose menu holds "pause"), language, the export
  * state and the primary Export button. Export always opens the export sheet (ExportSheet.tsx, owner decision); its progress
  * is a ring chip here, a button that reopens the sheet, never a text run in the bar. Cancel, retry, the finished file and the
  * flash check live in the sheet; the flash check also stays in the status bar (StatusBar.tsx). The format switch and the
- * safe-area guide live in the stage header (StageHeader.tsx, FormatPrism.tsx). Styles: ds/chrome.css (everything under .pf-ds).
+ * safe-area guide live at the end of the transport (StageHeader.tsx StageTools); undo and redo, with their words, at the start of
+ * the timeline's toolbar (TimelineToolbar.tsx; same test ids, same keys). Styles: ds/chrome.css (everything under .pf-ds).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, CircleAlert, CloudOff, Pencil, Search, TriangleAlert, User } from 'lucide-react';
 import * as T from '@pulseframe/time';
 import { LOGO_SVG } from '@pulseframe/brand';
 import type { Key } from '@pulseframe/i18n';
-import { IconButton, ModeBar, Ring, Tooltip, type SegOption } from '../ds/index.ts';
+import { ModeBar, Ring, Tooltip, type SegOption } from '../ds/index.ts';
 import { chordLabel, editEnd } from './commands.ts';
 import { CHROME_STRINGS } from './chrome.strings.ts';
 import { onMenuKeyDown } from './menuKeys.ts';
@@ -20,7 +21,7 @@ import { InlineRename } from './InlineRename.tsx';
 import { openExportSheet, useExportSheet } from './ExportSheet.tsx';
 import { describeExport, isActiveJob, jobFraction, overallFraction } from './exportSheet.logic.ts';
 import { ProjectsDialog } from './ProjectsDialog.tsx';
-import { IconExport, IconRedo, IconUndo } from './icons.tsx';
+import { IconExport } from './icons.tsx';
 import { WORKSPACES, useEditorState, type Workspace } from './store.ts';
 import { CraftHost } from './craft/CraftHost.tsx';
 import { TeachHost } from './teach/TeachHost.tsx';
@@ -93,30 +94,25 @@ export function Header() {
         <span className={`pf-top-save ${saveTone}`} role="status" data-testid="save-state">
           <SaveIcon size={12} strokeWidth={2} aria-hidden="true" />
           <span className="pf-top-saveWord">{saveWord}</span>
-          {doc && save === 'save.saved' && <span className="num pf-top-meta" dir="ltr">{doc.settings.width}×{doc.settings.height} · {clock}</span>}
+          {/* the frame size and the length are at the end of the transport (Transport.tsx) and in the status bar; here, only the word */}
+          {doc && save === 'save.saved' && <span className="pf-sr">{doc.settings.width}×{doc.settings.height} · {clock}</span>}
           {/* the revision number only for tools and tests: hidden from sight and from assistive technology (it is not owner language) */}
           <span className="pf-top-rev" data-testid="revision" aria-hidden="true"><bdi>{revision}</bdi></span>
         </span>
       </div>
 
-      <div className="pf-top-modes" data-testid="workspace-switch">
-        <ModeBar<Workspace> options={modeOptions} value={shownMode} onChange={(v) => editor.setWorkspace(v)} label={S.modeLabel} />
-      </div>
+      <ModeMenu options={modeOptions} value={shownMode} />
 
       <button type="button" className="pf-top-cmd" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog" aria-label={S.cmdOpen}>
         <span className="pf-top-cmdInner">
           <kbd className="pf-top-cmdKeys" dir="ltr"><span>{chordLabel('Mod+KeyK').split('+')[0]}</span><span>K</span></kbd>
-          <span className="pf-top-cmdText">{S.cmdPlaceholder}</span>
+          <span className="pf-top-cmdText">{S.cmdShort}</span>
           <Search size={16} strokeWidth={1.75} aria-hidden="true" />
         </span>
       </button>
 
       <div className="pf-top-end">
         <Presence />
-        <div className="pf-top-hist">
-          <IconButton label={S.undoTip} keys={[chordLabel('Mod+KeyZ').split('+')[0]!, 'Z']} size="md" disabled={!doc} onClick={() => void editor.history('undo')} data-testid="undo" icon={<IconUndo className="pf-ico-flip" />} />
-          <IconButton label={S.redoTip} keys={[chordLabel('Mod+KeyZ').split('+')[0]!, 'Shift', 'Z']} size="md" disabled={!doc} onClick={() => void editor.history('redo')} data-testid="redo" icon={<IconRedo className="pf-ico-flip" />} />
-        </div>
         <Tooltip label={S.language}>
           <button type="button" className="pf-top-lang" onClick={() => editor.setLang(lang === 'he' ? 'en' : 'he')} aria-label={t('lang.label')} data-testid="lang-toggle">{t('lang.toggle')}</button>
         </Tooltip>
@@ -133,6 +129,43 @@ export function Header() {
       {/* «למדו אותי פעם אחת» (wave 8 teach): the dialog «החילו גם על…» while it is open (teach/TeachHost.tsx; nothing until W3) */}
       <TeachHost />
     </header>
+  );
+}
+
+/**
+ * The modes (DESIGN_REVIEW WP1 "a calm top bar"): one button «מצב: עריכה ▾» with the mode's glyph and tint; it opens the
+ * seven modes as one row with their words (the ModeBar, keys Shift+1…7 unchanged, palette «מצב …»). The row is always in the
+ * page and hidden while closed, so it keeps the ids workspace-switch and workspace-<mode>. Choosing a mode, Escape, Tab out or
+ * a click outside closes it; the focus returns to the button.
+ */
+function ModeMenu({ options, value }: { options: SegOption<Workspace>[]; value: Workspace }) {
+  const { editor, state } = useEditorState();
+  const S = CHROME_STRINGS[state.lang];
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null), btn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); btn.current?.focus(); } };
+    document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', esc, true);
+    // the chosen mode's radio takes the focus, so the arrows move between the modes at once
+    requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('.pf-top-modes [aria-checked=true]')?.focus());
+    return () => { document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', esc, true); };
+  }, [open]);
+  const i = MODES.indexOf(value);
+  const name = S.modes[value as keyof typeof S.modes];
+  return (
+    <div className="pf-top-mode" ref={root} style={{ '--pf-mode-tint': TINT[value] } as React.CSSProperties}>
+      <Tooltip label={S.modeLabel} keys={['Shift', String(i + 1)]}>
+        <button ref={btn} type="button" className="pf-top-modeBtn" data-testid="workspace-menu" aria-haspopup="true" aria-expanded={open} aria-controls="pf-top-modes" onClick={() => setOpen((o) => !o)}>
+          <ModeGlyph id={value} /><span className="pf-top-modeWord">{S.modeIs(name)}</span><ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      </Tooltip>
+      <div id="pf-top-modes" className="pf-top-modes" data-testid="workspace-switch" hidden={!open}
+        onKeyDown={(e) => { if (e.key === 'Tab') setOpen(false); }}>
+        <ModeBar<Workspace> options={options} value={value} onChange={(v) => { editor.setWorkspace(v); setOpen(false); btn.current?.focus(); }} label={S.modeLabel} />
+      </div>
+    </div>
   );
 }
 

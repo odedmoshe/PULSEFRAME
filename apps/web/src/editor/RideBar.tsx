@@ -70,18 +70,27 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
   const cutOf = useSelectedCut();
   const root = useRef<HTMLDivElement>(null);
   const [left, setLeft] = useState<number | null>(null);
+  // the worded bar's own width: when it is wider than the room between the toolbar's two ends, the bar shows icons only
+  // (every action keeps its name for assistive technology and in its tooltip; the toolbar beside it carries the words)
+  const [tight, setTight] = useState(false);
+  const natural = useRef(0);
   const sel = state.selection;
   const clips = useMemo(() => (doc ? sel.map((id) => findClip(doc, id)).filter((f): f is NonNullable<typeof f> => !!f) : []), [doc, sel]);
   const one = clips.length === 1 ? clips[0]! : null;
   const cut = one && cutOf === one.clip.id && one.clip.type === 'media' && one.track.kind === 'video' ? one : null;
   const mode: 'cut' | 'clip' | 'many' | 'none' = cut ? 'cut' : clips.length > 1 ? 'many' : one ? 'clip' : 'none';
 
+  // other actions: measure their worded width again
+  useLayoutEffect(() => { setTight(false); }, [mode, state.lang, sel.length, one?.clip.id]);
   // centred on the selection, clamped to the room the toolbar leaves between its two ends
   useLayoutEffect(() => {
     const el = root.current, zone = el?.parentElement;
     if (!el || !zone) return;
     const place = () => {
       const z = zone.getBoundingClientRect(), tl = zone.closest('.timeline')?.getBoundingClientRect(), w = el.offsetWidth;
+      if (!el.classList.contains('is-tight')) natural.current = w;
+      const wantTight = natural.current > z.width;
+      setTight((was) => (was === wantTight ? was : wantTight));
       const want = anchor === null || !tl ? z.width / 2 : anchor + tl.left - z.left;
       setLeft(Math.round(Math.max(0, Math.min(Math.max(0, z.width - w), want - w / 2))));
     };
@@ -89,7 +98,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     const ro = new ResizeObserver(place);
     ro.observe(zone); ro.observe(el);
     return () => ro.disconnect();
-  }, [anchor, mode, state.lang, sel.length, one?.clip.id]);
+  }, [anchor, mode, state.lang, sel.length, one?.clip.id, tight]);
 
   // one tab stop: Tab enters the bar at the action that last had the focus (the first one otherwise); the arrows move inside
   const stop = useRef(0);
@@ -198,7 +207,7 @@ export function RideBar({ anchor, grid }: { /** centre of the selection, in pixe
     );
   }
   return (
-    <div ref={root} className={`ride${none ? ' is-idle' : ''}`} role="toolbar" aria-label={s.ride} aria-orientation="horizontal" data-testid="timeline-actions" data-mode={mode} dir={state.lang === 'he' ? 'rtl' : 'ltr'}
+    <div ref={root} className={`ride${none ? ' is-idle' : ''}${tight ? ' is-tight' : ''}`} role="toolbar" aria-label={s.ride} aria-orientation="horizontal" data-testid="timeline-actions" data-mode={mode} dir={state.lang === 'he' ? 'rtl' : 'ltr'}
       style={left === null ? { visibility: 'hidden' } : { left }} onKeyDown={onKey}
       onFocusCapture={(e) => { const i = [...(root.current?.querySelectorAll<HTMLElement>('button') ?? [])].indexOf(e.target as HTMLElement); if (i >= 0) { stop.current = i; rove(); } }}>
       {chip}
