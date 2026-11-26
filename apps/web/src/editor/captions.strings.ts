@@ -11,6 +11,12 @@ export const CAP_STRINGS = {
     empty: 'עוד אין תמלול. ייבאו קובץ כתוביות או זהו את הדיבור אוטומטית.',
     makeCaptions: 'יצירת כתוביות', clickToSeek: 'לחיצה על מילה קופצת אליה בציר הזמן',
     wordsHint: 'לחיצה על מילה מעבירה את הסמן אליה; Shift מרחיב בחירה',
+    // where the captions come from (owner report 2026-11-26): a caption track made before the transcript showed nothing
+    unlinked: 'רצועת הכתוביות לא מחוברת לתמלול, ולכן שום כתובית לא מוצגת על הסרטון.',
+    showTranscript: 'הצגת התמלול ככתוביות', showOnVideo: 'הצגה ככתוביות על הסרטון',
+    hidden: 'רצועת הכתוביות מוסתרת בציר הזמן, ולכן שום כתובית לא מוצגת על הסרטון.', showHidden: 'הצגת הכתוביות',
+    locked: 'רצועת הכתוביות נעולה, ולכן אי אפשר לחבר אותה לתמלול. פתחו את הנעילה בראש הרצועה בציר הזמן ולחצו שוב.',
+    sourceTranscript: 'מקור: התמלול', sourceManual: (n: number) => `מקור: כתוביות שנכתבו ביד (${n})`,
   },
   en: {
     title: 'Transcript', phrases: (n: number) => `${n} phrases`, search: 'Find a word in the transcript', searchLabel: 'Find a word in the transcript',
@@ -23,5 +29,10 @@ export const CAP_STRINGS = {
     empty: 'No transcript yet. Import a subtitle file or recognise the speech automatically.',
     makeCaptions: 'Make captions', clickToSeek: 'Clicking a word jumps to it on the timeline',
     wordsHint: 'Clicking a word moves the playhead to it; Shift extends the selection',
+    unlinked: 'The caption track is not connected to the transcript, so no caption is shown on the video.',
+    showTranscript: 'Show the transcript as captions', showOnVideo: 'Show as captions on the video',
+    hidden: 'The caption track is hidden on the timeline, so no caption is shown on the video.', showHidden: 'Show the captions',
+    locked: 'The caption track is locked, so it cannot be connected to the transcript. Unlock it at the head of the track on the timeline and press again.',
+    sourceTranscript: 'Source: the transcript', sourceManual: (n: number) => `Source: captions written by hand (${n})`,
   },
 } as const;
