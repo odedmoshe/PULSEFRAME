@@ -538,11 +538,12 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/analysis/loudness', async (c) => {
     const p = need(c, 'observe');
     const b = await c.req.json().catch(() => ({}));
-    // { sequenceId } measures that sequence (a short) as it exports (ADR-0018); absent = the main edit
-    const sequenceId = b && typeof b === 'object' && typeof (b as { sequenceId?: unknown }).sequenceId === 'string' ? (b as { sequenceId: string }).sequenceId : undefined;
-    if (sequenceId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, { sequenceId }); // 404 before any job exists
-    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', sequenceId !== undefined ? { sequenceId } : {}); return c.json({ jobId: j.id, status: j.status }, 202); }
-    return c.json(await programmeLoudness(store, c.req.param('id'), sequenceId));
+    // { sequenceId } measures that sequence (a short) as it exports (ADR-0018); { variantId } that linked format or audience version
+    // (wave 8 qc, verifier C2); both together the version of the short; absent = the main edit
+    const t = loudnessTargetOf(b);
+    if (t.sequenceId !== undefined || t.variantId !== undefined) outputDoc(store.getProject(c.req.param('id')).doc, t); // 404 before any job exists
+    if (b && typeof b === 'object' && (b as { background?: unknown }).background === true) { const j = startMeasurementJob(store, p, c.req.param('id'), 'loudness', { ...t }); return c.json({ jobId: j.id, status: j.status }, 202); }
+    return c.json(await programmeLoudness(store, c.req.param('id'), t));
   });
   // loudness of single clips (wave 7 send): read-only; the match is committed separately with match_clip_loudness and expectedRevision
   app.post('/api/v1/projects/:id/analysis/clip-loudness', async (c) => {
@@ -1242,6 +1243,11 @@ export const catalog = () => ({
 /** Moved to programmeLoudness.ts (wave 7 send pre-pass; worker A's file); re-exported so REST, MCP and tests keep one import. */
 export { programmeLoudness } from './programmeLoudness.ts';
 import { programmeLoudness } from './programmeLoudness.ts';
+/** The output a loudness body names (REST body or a job's stored options): string sequenceId / variantId, anything else ignored as before. */
+function loudnessTargetOf(b: unknown): { sequenceId?: string; variantId?: string } {
+  const o = b && typeof b === 'object' ? b as { sequenceId?: unknown; variantId?: unknown } : {};
+  return { ...(typeof o.sequenceId === 'string' ? { sequenceId: o.sequenceId } : {}), ...(typeof o.variantId === 'string' ? { variantId: o.variantId } : {}) };
+}
 
 export const SfxBody = z.object({ sfxId: z.string(), start: RationalTimeSchema.optional().describe('Place it on the timeline at this frame-aligned time (omit to only add it to the media library)'), trackId: z.string().optional() }).strict();
 /** Synthesise a built-in sound effect, attach it as a normal asset, and optionally place it. Goes through governance like any edit. */
@@ -1440,7 +1446,7 @@ async function runAnalysisJob(store: Store, jobId: string) {
     if (j.input.kind === 'silences' || j.input.kind === 'loudness' || j.input.kind === 'voice' || j.input.kind === 'colour' || j.input.kind === SHORTS_MEASUREMENT_KIND || j.input.kind === 'clip-loudness') {
       const kind = j.input.kind as MeasurementKind;
       const result = kind === 'silences' ? await findSilences(store, j.projectId, j.input.options)
-        : kind === 'loudness' ? await programmeLoudness(store, j.projectId, typeof j.input.options?.sequenceId === 'string' ? j.input.options.sequenceId : undefined)
+        : kind === 'loudness' ? await programmeLoudness(store, j.projectId, loudnessTargetOf(j.input.options))
         // shorts (ADR-0018): measure the audio features that are missing, then rank; stops between windows once cancel is requested
         : kind === SHORTS_MEASUREMENT_KIND ? await withShortsErrors(() => findShortCandidates(store, j.projectId, FindShortsBodySchema.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested'))
         : kind === 'clip-loudness' ? await measureClipLoudness(store, j.projectId, ClipLoudnessBody.parse(j.input.options), () => store.getJob(jobId).status === 'cancel-requested')

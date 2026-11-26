@@ -397,7 +397,7 @@ export function SoundPanel() {
   const shortId = isShortActive(state.rawDoc, state.activeSequenceId) ? state.activeSequenceId : undefined;
   const measure = async () => {
     setBusy(true); setErr(null);
-    try { setRes(await api.measureLoudness(doc.id, shortId)); setResRev(state.revision); }
+    try { setRes(await api.measureLoudness(doc.id, { sequenceId: shortId })); setResRev(state.revision); }
     catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };

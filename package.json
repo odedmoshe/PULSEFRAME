@@ -115,6 +115,7 @@
     "proof:assistant-local-model": "tsx packages/evals/src/assistant-local-model-proof.ts",
     "proof:instruments": "tsx packages/evals/src/instruments-proof.ts",
     "proof:booth": "tsx packages/evals/src/booth-proof.ts",
+    "proof:qc": "tsx packages/evals/src/qc-proof.ts",
     "booth:ingest": "tsx tools/booth/ingest.ts",
     "proof:stills": "tsx packages/evals/src/stills-proof.ts",
     "proof:owntemplate": "tsx packages/evals/src/owntemplate-proof.ts",

@@ -131,6 +131,9 @@ export * from './loudnessMatch.ts';
 export * from './sendOps.ts';
 export * from './sizeFit.ts';
 export * from './exportChecks.ts';
+// «בדיקה לפני ייצוא» (wave 8 qc): the contract is the lead's; the rules and the explanation pass are B1's (qcChecks.ts)
+export * from './qcContract.ts';
+export * from './qcChecks.ts';
 // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover, version 1): the contract is lead-built; stillsRank is W1's, printFit and
 // stillDocument W2's (stubs until then)
 export * from './stillsContract.ts';

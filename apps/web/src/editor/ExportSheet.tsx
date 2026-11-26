@@ -19,7 +19,7 @@ import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore 
 import { Check, Download, MessageCircle, MonitorPlay, Play, ShieldCheck, SlidersHorizontal, Smartphone, HardDriveDownload, TriangleAlert, Upload } from 'lucide-react';
 import { Badge, Button, Dialog, ProgressBar } from '../ds/index.ts';
 import { isolate } from '../ds/util.tsx';
-import type { ExportChecks } from '@pulseframe/core';
+import type { ExportChecks, SoundChecks } from '@pulseframe/core';
 import { translateRefusal, dictionaries, jobStageLabel } from '@pulseframe/i18n';
 import * as T from '@pulseframe/time';
 import { api, ApiFailure, type PreflightIssue, type PreflightReport } from '../api.ts';
@@ -30,11 +30,14 @@ import {
   parseStage, scaledSize, shortSideLabel, STAGE_ORDER, type Destination, type ExportCaptions, type ExportChoices, type ExportQuality, type ExportScale, type ExportTarget,
   fixLabel as fixLabelOf, isFitStage, sendBlock,
 } from './exportSheet.logic.ts';
+import { loudnessCheckOf } from './exportSheet.logic.ts';
 import './exportSheet.css';
 import { CacheDoneLine, CacheFailure, cacheStageLabel, ExportReuseLine } from './ExportReuseLine.tsx';
 import { cacheText } from './renderCache.strings.ts';
 import { SendSize } from './send/SendSize.tsx';
 import { ChecksResult } from './send/ChecksResult.tsx';
+import { PreflightSummary } from './qc/PreflightSummary.tsx';
+import { PreflightSound } from './qc/PreflightSound.tsx';
 import { SEND_TESTIDS as SEND_ID } from './send/send.testids.ts';
 import { SEND_STRINGS } from './send/send.strings.ts';
 import { fitLineParts, frameAt, readFitPlan, type FitView } from './send/send.logic.ts';
@@ -284,7 +287,7 @@ function Settings({ editor, S }: { editor: Editor; S: ExportStrings }) {
           <p className="pf-xs-note">{S.savedIn} · {S.nameNote}</p>
         </section>
 
-        <Checks editor={editor} S={S} lead={lead} />
+        <Checks editor={editor} S={S} lead={lead} chosen={chosen.length} />
       </div>
 
       <Preview doc-id={doc.id} lead={lead} S={S} lang={lang} frame={editor.frame} revision={state.revision} sec={sec} frames={frames} choices={p.choices} />
@@ -366,14 +369,17 @@ const FORMAT_SAFE = (profileId: string | null) => {
 };
 
 // ---------------------------------------------------------------- the checks before export
-function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: ExportTarget }) {
+function Checks({ editor, S, lead, chosen }: { editor: Editor; S: ExportStrings; lead: ExportTarget; chosen: number }) {
   const { state } = useEditorState();
   const doc = state.doc!;
   const [rep, setRep] = useState<PreflightReport | null>(null);
   const [busy, setBusy] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [loud, setLoud] = useState<{ lufs: number | null } | 'measuring' | 'none'>('measuring');
+  const [loud, setLoud] = useState<{ lufs: number | null; target: number | null } | 'measuring' | 'none'>('measuring');
+  const [sound, setSound] = useState<SoundChecks | null | 'measuring'>('measuring'); // the same measurement's sound checks (wave 8 qc)
   const variantId = lead.variantId;
+  // the loudness row measures the CHOSEN output (verifier C2): the short on screen and the lead format or version, with its own target
+  const lc = loudnessCheckOf(state.rawDoc, state.activeSequenceId, variantId);
   const run = async () => {
     setBusy(true); setFailed(false);
     try { setRep(await api.preflight(doc.id, variantId, state.rawDoc && state.activeSequenceId !== state.rawDoc.mainSequenceId ? state.activeSequenceId : null)); } catch { setFailed(true); } finally { setBusy(false); }
@@ -381,12 +387,12 @@ function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: E
   useEffect(() => { void run(); }, [state.revision, variantId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let dead = false;
-    setLoud('measuring');
-    api.measureLoudness(doc.id).then((r) => { if (!dead) setLoud(r.integratedLufs == null ? 'none' : { lufs: r.integratedLufs }); }).catch(() => { if (!dead) setLoud('none'); });
+    setLoud('measuring'); setSound('measuring');
+    api.measureLoudness(doc.id, { sequenceId: lc.sequenceId, variantId: lc.variantId }).then((r) => { if (!dead) { setLoud(r.integratedLufs == null ? 'none' : { lufs: r.integratedLufs, target: r.target?.target ?? null }); setSound(r.soundChecks ?? null); } }).catch(() => { if (!dead) { setLoud('none'); setSound(null); } });
     return () => { dead = true; };
-  }, [state.revision, doc.id]);
+  }, [state.revision, doc.id, lc.sequenceId, lc.variantId]);
   const fix = async (i: PreflightIssue) => { if (i.fix && (await editor.commit(i.fix.ops, 'Preflight fix'))) await run(); };
-  const target = doc.settings.loudness?.target ?? null;
+  const target = typeof loud === 'object' ? loud.target : null; // the measured output's own target (a short's, else the project's)
   const lufs = typeof loud === 'object' ? loud.lufs : null;
   const loudBad = lufs != null && target !== -14 && Math.abs(lufs + 14) > 2;
   const fmt = (v: number) => v.toFixed(1).replace('-', '−');
@@ -395,6 +401,7 @@ function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: E
   return (
     <section aria-labelledby="xs-pre" data-testid="export-preflight">
       <h3 id="xs-pre">{S.preflight}</h3>
+      <PreflightSummary lang={state.lang} report={rep} sound={sound} />
       <ul className="pf-xs-checks" aria-busy={busy}>
         {busy && !rep && <li className="pf-xs-check"><span>{S.checking}</span></li>}
         {failed && <li className="pf-xs-check is-warn"><span><b>{S.preflightFail}</b></span><Button size="sm" variant="secondary" onClick={() => void run()}>{S.retry}</Button></li>}
@@ -411,9 +418,10 @@ function Checks({ editor, S, lead }: { editor: Editor; S: ExportStrings; lead: E
         })}
         <li className={`pf-xs-check ${loudBad ? 'is-warn' : ''}`} data-testid="export-loudness">
           {loudBad ? <TriangleAlert size={16} aria-hidden="true" /> : <ShieldCheck size={16} aria-hidden="true" />}
-          <span><b>{S.loud}</b><small>{loud === 'measuring' ? S.loudMeasuring : loud === 'none' || lufs == null ? S.loudNone : loudBad ? (lufs < -14 ? S.loudLow(fmt(lufs)) : S.loudHigh(fmt(lufs))) : S.loudOk(fmt(lufs))}</small></span>
-          {loudBad && <Button size="sm" variant="secondary" onClick={() => void editor.commit([{ op: 'set_loudness_target', args: { target: -14 } }], 'Loudness target')}>{S.loudSet}</Button>}
+          <span><b>{S.loud}</b><small>{loud === 'measuring' ? S.loudMeasuring : loud === 'none' || lufs == null ? S.loudNone : loudBad ? (lufs < -14 ? S.loudLow(fmt(lufs)) : S.loudHigh(fmt(lufs))) : S.loudOk(fmt(lufs))}</small>{chosen > 1 && <small data-testid="export-loudness-lead-only">{S.loudLeadOnly} {isolate(lead.name[state.lang])}</small>}</span>
+          {loudBad && <Button size="sm" variant="secondary" onClick={() => void editor.commit(lc.fix(-14), 'Loudness target')}>{S.loudSet}</Button>}
         </li>
+        <PreflightSound lang={state.lang} sound={sound === 'measuring' ? null : sound} rate={doc.settings.frameRate} onJump={(frame) => { editor.seek(frame); closeExportSheet(); }} />
         <li className="pf-xs-check" data-testid="export-flash-pending">
           <ShieldCheck size={16} aria-hidden="true" />
           <span><b>{S.flashRow}</b><small>{S.flashPending}</small></span>

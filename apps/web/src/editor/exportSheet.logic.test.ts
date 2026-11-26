@@ -117,3 +117,18 @@ describe('the sheet opened from the chip shows the export the chip follows', () 
     expect(isFitStage(null)).toBe(false);
   });
 });
+
+describe('the loudness row measures the chosen output (wave 8 qc, verifier C2)', () => {
+  it('on a short it measures that short and its fix sets the short\'s own target, not the project\'s', async () => {
+    const { loudnessCheckOf } = await import('./exportSheet.logic.ts');
+    const raw = createProject({ id: 'prj_lc', name: 'LC' });
+    const main = loudnessCheckOf(raw, raw.mainSequenceId, null);
+    expect(main).toMatchObject({ sequenceId: null, variantId: null });
+    expect(main.fix(-14)).toEqual([{ op: 'set_loudness_target', args: { target: -14 } }]);
+    const doc = structuredClone(raw);
+    doc.sequences.seq_s = { id: 'seq_s', name: 'S', format: { width: 720, height: 1280, fit: 'cover', profileId: null, safeArea: null, loudness: { target: -16, truePeak: -2 } }, tracks: [] };
+    const short = loudnessCheckOf(doc, 'seq_s', 'var_x');
+    expect(short).toMatchObject({ sequenceId: 'seq_s', variantId: 'var_x' });
+    expect(short.fix(-14)).toEqual([{ op: 'update_sequence', args: { sequenceId: 'seq_s', format: { width: 720, height: 1280, fit: 'cover', profileId: null, safeArea: null, loudness: { target: -14, truePeak: -2 } } } }]);
+  });
+});

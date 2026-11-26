@@ -35,6 +35,7 @@ import { OWNTEMPLATE_EN, OWNTEMPLATE_HE } from './owntemplate.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
 import { PICMODELS_EN, PICMODELS_HE } from './picmodels.ts';
 import { BOOTH_EN, BOOTH_HE } from './booth.ts';
+import { QC_EN, QC_HE } from './qc.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -258,6 +259,7 @@ export const he = {
   ...COVER_HE,
   ...OWNTEMPLATE_HE,
   ...GRADE_HE,
+  ...QC_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -481,6 +483,7 @@ export const en: Record<keyof typeof he, string> = {
   ...COVER_EN,
   ...OWNTEMPLATE_EN,
   ...GRADE_EN,
+  ...QC_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
