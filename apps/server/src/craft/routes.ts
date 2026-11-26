@@ -11,6 +11,7 @@ import { ApiError } from '../store.ts';
 import { craftError, mayWriteVersions, type CraftApp, type CraftEnv, type CraftRouteDeps } from './contract.ts';
 import { findTextFor } from './findText.ts';
 import { deleteVersion, diffVersions, listVersions, renameVersion, restoreVersion, saveVersion, versionStill } from './versions.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 async function bodyOf<S extends z.ZodType>(c: Context<CraftEnv>, schema: S): Promise<z.infer<S>> {
   let raw: unknown;
@@ -22,7 +23,7 @@ async function bodyOf<S extends z.ZodType>(c: Context<CraftEnv>, schema: S): Pro
 
 export function registerCraftRoutes(app: CraftApp, deps: CraftRouteDeps): void {
   const { store, gov, exporter, need } = deps;
-  const owner = (p: ReturnType<typeof need>) => { if (!isOwnerSession(p)) throw craftError('ownerOnly'); return p; };
+  const owner = (p: ReturnType<typeof need>) => { if (!actsAsOwner(p)) throw craftError('ownerOnly'); return p; };
   const P = '/api/v1/projects/:id';
   const project = (id: string) => store.getProject(id);
 

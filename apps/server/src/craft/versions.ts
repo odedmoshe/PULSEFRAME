@@ -27,6 +27,7 @@ import { docForPrincipal } from '../peoplePrivacy.ts';
 import { assertStorageRoom } from '../storage.ts';
 import { ApiError, type Store } from '../store.ts';
 import { craftError, mayWriteVersions, VERSIONS_TABLE } from './contract.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 export interface RestoreResult { revision: number; transactionId: string | null; summary: string; diff: DiffSummary }
 
@@ -38,7 +39,7 @@ export interface RestoreResult { revision: number; transactionId: string | null;
  * brings back) a picture that a later region hides or a person removed since.
  */
 export function mayReadVersionContent(p: Principal, versionDigest: string, currentDigest: string): boolean {
-  return isOwnerSession(p) || versionDigest === currentDigest;
+  return actsAsOwner(p) || versionDigest === currentDigest;
 }
 
 interface Row { id: string; project_id: string; name: string; revision: number; transaction_id: string | null; doc: string; doc_hash: string; bytes: number; frames: number; actor: string; privacy_digest: string; created_at: string }
@@ -87,7 +88,7 @@ export function saveVersion(store: Store, gov: Governance, p: Principal, project
     const pr = store.db.prepare('SELECT doc, revision FROM projects WHERE id = ?').get(projectId) as { doc: string; revision: number };
     const count = (store.db.prepare(`SELECT COUNT(*) AS n FROM ${VERSIONS_TABLE} WHERE project_id = ?`).get(projectId) as { n: number }).n;
     if (count >= CRAFT_LIMITS.versions) throw craftError('versionLimit', { limit: CRAFT_LIMITS.versions }, CRAFT_LIMITS.versions);
-    if (p.kind === 'agent') {
+    if (!actsAsOwner(p)) {
       const agents = (store.db.prepare(`SELECT COUNT(*) AS n FROM ${VERSIONS_TABLE} WHERE project_id = ? AND actor LIKE 'agent:%'`).get(projectId) as { n: number }).n;
       if (agents >= CRAFT_LIMITS.agentVersions) throw craftError('agentVersionLimit', { limit: CRAFT_LIMITS.agentVersions }, CRAFT_LIMITS.agentVersions);
     }
@@ -110,14 +111,14 @@ export function listVersions(store: Store, p: Principal, projectId: string): Ver
 }
 
 export function renameVersion(store: Store, p: Principal, projectId: string, versionId: string, name: string): VersionInfo {
-  if (!isOwnerSession(p)) throw craftError('ownerOnly');
+  if (!actsAsOwner(p)) throw craftError('ownerOnly');
   rowOf(store, projectId, versionId);
   store.db.prepare(`UPDATE ${VERSIONS_TABLE} SET name = ? WHERE id = ?`).run(name, versionId);
   return info(rowOf(store, projectId, versionId), currentOf(store, projectId));
 }
 
 export function deleteVersion(store: Store, p: Principal, projectId: string, versionId: string): { deleted: string } {
-  if (!isOwnerSession(p)) throw craftError('ownerOnly');
+  if (!actsAsOwner(p)) throw craftError('ownerOnly');
   rowOf(store, projectId, versionId);
   // erased from the file, not only from the table (secure_delete, the log folded in): the copy may hold what was removed since
   store.erasing(() => store.db.prepare(`DELETE FROM ${VERSIONS_TABLE} WHERE id = ?`).run(versionId));

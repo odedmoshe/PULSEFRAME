@@ -21,6 +21,8 @@ export interface RunRequest {
   projectId: string; capabilityId: string; params: Record<string, unknown>; actor: string; principal?: Principal;
   idempotencyKey?: string; attach?: { start: unknown; duration?: unknown; trackId?: string }; dependsOn?: string[];
   source?: RunSource; apply?: ApplyMode; confirmLongRun?: boolean;
+  /** Autonomy: the caller was stamped open (autonomy.ts), recorded at admission so the agent caps never return for it. */
+  open?: boolean;
 }
 export type SetupCode = 'ready' | 'provider_not_configured' | 'provider_unreachable' | 'engine_not_configured' | 'engine_not_working'
   | 'engine_unverified' | 'model_missing' | 'licence_blocked' | 'host_not_allowed' | 'disk_insufficient';

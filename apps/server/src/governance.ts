@@ -11,6 +11,7 @@ import { ApiError, type CommitRequest, type CommitResult, type Store } from './s
 import { assertMayWritePeople, assertOwnerTagsPeople, docForPrincipal, docForReader, PEOPLE_ACCESS, type PeopleAccess } from './peoplePrivacy.ts';
 import { assertMayReleaseBudget } from './assistant/visibility.ts';
 import { assertOwnerAppliesLessons } from './lessons/guard.ts';
+import { actsAsOwner, isOwnerFloor, OPEN_AGENTS_LEDGER, ownerKeeps } from './autonomy.ts';
 
 export type Mode = 'observe' | 'propose' | 'edit' | 'autopilot';
 export const GrantInput = z
@@ -29,7 +30,7 @@ export const GrantInput = z
   })
   .strict();
 export interface Grant { id: string; name: string; mode: Mode; projectIds: string[] | null; trackIds: string[] | null; range: { start: T.RationalTime; end: T.RationalTime } | null; budgetCents: number; requestsPerMinute: number | null; exportsPerDay: number | null; /** What it reads about people (peoplePrivacy.ts); a grant stored before this existed is 'names'. */ people: PeopleAccess; expiresAt: string | null; revokedAt: string | null; createdAt: string; createdBy: string }
-export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: ('observe' | 'edit')[]; mode?: Mode; grant?: Grant }
+export interface Principal { actor: string; kind: 'user' | 'agent'; scopes: ('observe' | 'edit')[]; mode?: Mode; grant?: Grant; /** Stamped by Auth.authenticate when the server is in open mode (autonomy.ts stampOpen); never set from a request. */ open?: true }
 
 const now = () => new Date().toISOString();
 const rid = (p: string) => `${p}_${randomBytes(8).toString('base64url').replace(/[-_]/g, 'x')}`;
@@ -56,7 +57,7 @@ export class Governance {
   private grantRow = (r: any): Grant => ({ id: r.id, name: r.name, mode: r.mode, requestsPerMinute: null, exportsPerDay: null, people: 'names', ...JSON.parse(r.constraints), budgetCents: r.budget_cents, expiresAt: r.expires_at, revokedAt: r.revoked_at, createdAt: r.created_at, createdBy: r.created_by });
   /** The token is returned once and only its hash is stored. */
   createGrant(raw: unknown, by: Principal): { grant: Grant; token: string } {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can create agent grants');
+    if (!isOwnerFloor(by)) throw new ApiError(403, 'owner_required', 'only the project owner can create agent grants'); // FLOOR (autonomy.ts FLOOR_SITES)
     const p = GrantInput.safeParse(raw);
     if (!p.success) throw new ApiError(400, 'invalid_request', z.prettifyError(p.error), { issues: p.error.issues });
     const g = p.data;
@@ -79,7 +80,7 @@ export class Governance {
     return (this.store.db.prepare('SELECT * FROM grants ORDER BY created_at').all() as any[]).map((r) => ({ ...this.grantRow(r), ...this.spend(r.id) }));
   }
   revokeGrant(id: string, by: Principal): Grant {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can revoke grants');
+    if (!isOwnerFloor(by)) throw new ApiError(403, 'owner_required', 'only the project owner can revoke grants'); // FLOOR
     this.getGrant(id);
     this.store.db.prepare('UPDATE grants SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?').run(now(), id);
     return this.getGrant(id);
@@ -128,7 +129,7 @@ export class Governance {
   }
   /** Suspends every agent's ability to mutate this project. Running jobs are reported, not killed: their results become proposals. */
   setPaused(projectId: string, paused: boolean, by: Principal) {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can pause or resume agents');
+    if (!ownerKeeps(by)) throw new ApiError(403, 'owner_required', 'only the project owner can pause or resume agents'); // the owner's brake, kept in both modes (A6)
     this.store.getProject(projectId);
     this.store.db.prepare('INSERT INTO project_controls (project_id, agents_paused, changed_at, changed_by) VALUES (?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET agents_paused = excluded.agents_paused, changed_at = excluded.changed_at, changed_by = excluded.changed_by').run(projectId, paused ? 1 : 0, now(), by.actor);
     const jobs = (this.store.db.prepare("SELECT id, type, actor, status FROM jobs WHERE project_id = ? AND actor LIKE 'agent:%' AND status IN ('queued','running','cancel-requested')").all(projectId) as any[]);
@@ -189,9 +190,9 @@ export class Governance {
     return this.store.commit({ ...req, actor: p.actor, guard: this.scopeGuard(p) });
   }
   undoAs(p: Principal, projectId: string, mode: 'undo' | 'redo', transactionId?: string): CommitResult {
-    if (p.kind === 'agent') this.assertMayAct(p, projectId, 'edit');
-    // Agents may only reverse their own transactions, also when naming one by id; the owner may reverse anyone's.
-    return this.store.undo(projectId, p.actor, mode, transactionId, p.kind === 'agent' ? this.scopeGuard(p) : undefined, p.kind !== 'agent');
+    if (!ownerKeeps(p)) this.assertMayAct(p, projectId, 'edit'); // paused (the owner's brake) and project limits, for every agent
+    // Agents may only reverse their own transactions, also when naming one by id; the owner (and, in open mode, an open agent: A9) may reverse anyone's.
+    return this.store.undo(projectId, p.actor, mode, transactionId, ownerKeeps(p) ? undefined : this.scopeGuard(p), actsAsOwner(p));
   }
 
   // ---------- proposals ----------
@@ -247,7 +248,7 @@ export class Governance {
    * stale with the conflict list and nothing is applied.
    */
   decide(id: string, decision: 'accept' | 'reject', by: Principal) {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'only the project owner can decide on proposals');
+    if (!ownerKeeps(by)) throw new ApiError(403, 'owner_required', 'only the project owner can decide on proposals'); // B2: a proposal accepted by its author is not one
     const pr = this.getProposal(id);
     if (pr.status !== 'open') throw new ApiError(409, 'proposal_closed', `proposal is already ${pr.status}`, { status: pr.status });
     const set = (status: string, extra: { rev?: number; conflicts?: unknown } = {}) => {
@@ -295,7 +296,7 @@ export class Governance {
   }
   /** Only an authenticated human; an agent can never approve its own (or anyone's) request. */
   decideApproval(id: string, decision: 'approve' | 'reject', by: Principal) {
-    if (by.kind !== 'user') throw new ApiError(403, 'owner_required', 'approvals can only be given by the project owner');
+    if (!ownerKeeps(by)) throw new ApiError(403, 'owner_required', 'approvals can only be given by the project owner'); // B3: kept; open agents need none
     const a = this.getApproval(id);
     if (a.status !== 'pending') throw new ApiError(409, 'approval_closed', `approval is ${a.status}`, { status: a.status });
     this.store.db.prepare("UPDATE approvals SET status = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'pending'").run(decision === 'approve' ? 'approved' : 'rejected', by.actor, now(), id);
@@ -321,12 +322,25 @@ export class Governance {
   reserve(p: Principal, jobId: string, cents: number) {
     if (cents <= 0) return;
     if (p.kind === 'user') return; // the owner spends their own money; grants limit agents
+    // B5/I3 (autonomy.ts): an open agent without a budget of its own spends from ONE owner-wide agent budget (C13), unlimited
+    // unless the owner set one (PUT /api/v1/autonomy agentBudgetCents); a grant with its own budget keeps it
+    if (actsAsOwner(p) && !(p.grant && p.grant.budgetCents > 0)) return this.reserveOpen(jobId, cents);
     if (modeOf(p) !== 'autopilot' || !p.grant) throw new ApiError(403, 'insufficient_scope', 'paid work needs an Autopilot grant with a budget', { mode: modeOf(p) });
     const g = p.grant;
     this.store.db.transaction(() => {
       const { spentCents, reservedCents } = this.spend(g.id);
       if (spentCents + reservedCents + cents > g.budgetCents) throw new ApiError(402, 'budget_exceeded', `this would exceed the grant's budget`, { budgetCents: g.budgetCents, spentCents, reservedCents, requestedCents: cents }, 'Ask the owner for a larger budget or an approval.');
       this.store.db.prepare('INSERT INTO budget_ledger (job_id, grant_id, reserved_cents, state, created_at, updated_at) VALUES (?,?,?,?,?,?)').run(jobId, g.id, cents, 'reserved', now(), now());
+    }).immediate();
+  }
+  /** The owner-wide budget open agents spend from (autonomy.ts AutonomySettings.agentBudgetCents; null = no ceiling). */
+  openAgentBudgetCents: () => number | null = () => null;
+  private reserveOpen(jobId: string, cents: number) {
+    const budget = this.openAgentBudgetCents();
+    this.store.db.transaction(() => {
+      const { spentCents, reservedCents } = this.spend(OPEN_AGENTS_LEDGER);
+      if (budget !== null && spentCents + reservedCents + cents > budget) throw new ApiError(402, 'budget_exceeded', 'this would exceed the owner\'s budget for agents', { budgetCents: budget, spentCents, reservedCents, requestedCents: cents }, 'The owner raises the agents\' budget in Settings › Access, or clears it.');
+      this.store.db.prepare('INSERT INTO budget_ledger (job_id, grant_id, reserved_cents, state, created_at, updated_at) VALUES (?,?,?,?,?,?)').run(jobId, OPEN_AGENTS_LEDGER, cents, 'reserved', now(), now());
     }).immediate();
   }
   // ---------- the command bar's assistant (ADR-0027): the owner's money, spent by a propose-only principal ----------

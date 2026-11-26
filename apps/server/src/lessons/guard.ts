@@ -9,6 +9,7 @@
 import { LESSON_API_REFUSALS, LESSON_OP } from '@pulseframe/core';
 import type { Principal } from '../governance.ts';
 import { ApiError } from '../store.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 /** True when `ops` (an op list, at any depth) holds a call of apply_lesson. */
@@ -27,6 +28,6 @@ export function holdsLessonCall(ops: unknown): boolean {
 export const lessonAgentRefusal = () => { const r = LESSON_API_REFUSALS.agentRefused; return new ApiError(r.status, r.code, r.message(), { op: LESSON_OP }, r.hint); };
 /** Governance.commitAs and Governance.propose call this first for every agent principal. */
 export function assertOwnerAppliesLessons(p: Principal, ops: unknown): void {
-  if (p.kind === 'user') return;
+  if (actsAsOwner(p)) return;
   if (holdsLessonCall(ops)) throw lessonAgentRefusal();
 }

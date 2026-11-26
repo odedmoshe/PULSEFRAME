@@ -25,6 +25,7 @@ import { PEARLS_EN, PEARLS_HE } from './pearls.ts';
 import { STORY_EN, STORY_HE } from './story.ts';
 import { GROWING_EN, GROWING_HE } from './growing.ts';
 import { TEACH_EN, TEACH_HE } from './teach.ts';
+import { AUTONOMY_EN, AUTONOMY_HE } from './autonomy.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
 import { AUDIENCES_EN, AUDIENCES_HE } from './audiences.ts';
 import { LIVING_EN, LIVING_HE } from './living.ts';
@@ -251,6 +252,7 @@ export const he = {
   ...STORY_HE,
   ...GROWING_HE,
   ...TEACH_HE,
+  ...AUTONOMY_HE,
   ...MUSICFIT_HE,
   ...AUDIENCES_HE,
   ...LIVING_HE,
@@ -477,6 +479,7 @@ export const en: Record<keyof typeof he, string> = {
   ...STORY_EN,
   ...GROWING_EN,
   ...TEACH_EN,
+  ...AUTONOMY_EN,
   ...MUSICFIT_EN,
   ...AUDIENCES_EN,
   ...LIVING_EN,
