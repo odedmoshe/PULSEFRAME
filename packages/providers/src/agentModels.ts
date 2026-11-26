@@ -1,7 +1,7 @@
 /**
  * The model table of the in-editor agent (wave 8 autonomy Part 2, lead decision 2): DATA, not code. Every row is copied from
  * .artifacts/wave8/providers-research.md as the providers' own pages printed it on the date in `readAt`; nothing here is a claim
- * about quality. The owner may edit it (PUT /api/v1/agent/models stores his rows in <dataDir>/agent/models.json, which replace a
+ * about quality. The owner may edit it (PUT /api/v1/agent/models stores the owner's rows in <dataDir>/agent-models.json, which the backup copies; they replace a
  * built-in row of the same provider+id and add the rest); the connect card shows the rows with their date. Prices are US dollars per
  * million tokens (in / out); null = not printed (the run then counts tokens, never a guessed price). Local servers have no fixed ids.
  */

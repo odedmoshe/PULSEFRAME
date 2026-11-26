@@ -100,12 +100,14 @@ describe('contract pieces', () => {
 describe('routes and MCP tools: honest until built', () => {
   const fill = (p: string) => p.replace(':id', pid).replace(':runId', 'run_abcdefgh').replace(':providerId', 'anthropic');
   const bodyFor = (p: string) => (p.endsWith('/agent/runs') ? { goal: 'תחתכו את השקטים' } : p.endsWith('/undo-actor') ? { actor: 'agent:local' } : p.endsWith('/models') ? { rows: [] } : {});
-  it('every AGENT_ROUTES route answers 501 agent_not_built to the owner; the owner floor answers 403 to an agent; run routes add no gate', async () => {
+  it('every run route answers 501 agent_not_built until the loop is bound; the owner floor answers 403 to an agent; run routes add no gate', async () => {
     for (const r of AGENT_ROUTES) {
+      const provider = r.path.startsWith('/api/v1/agent/'); // built by W2: agentKeys.test.ts
+      const a = await rest(r.method, fill(r.path), agentH(), r.method === 'GET' || r.method === 'DELETE' ? undefined : bodyFor(r.path));
+      expect([r.path, a.status]).toEqual([r.path, r.who === 'owner-floor' ? 403 : provider ? 200 : 501]);
+      if (provider) continue;
       const o = await rest(r.method, fill(r.path), ownerH(), r.method === 'GET' || r.method === 'DELETE' ? undefined : bodyFor(r.path));
       expect([r.path, o.status, o.body?.error?.code]).toEqual([r.path, 501, 'agent_not_built']);
-      const a = await rest(r.method, fill(r.path), agentH(), r.method === 'GET' || r.method === 'DELETE' ? undefined : bodyFor(r.path));
-      expect([r.path, a.status]).toEqual([r.path, r.who === 'owner-floor' ? 403 : 501]);
     }
   });
   it('a body that does not parse is 400 before 501; an unknown provider is 404', async () => {
@@ -207,7 +209,4 @@ describe('to build (W1 loop, recovery, undo-all; W2 adapters and keys)', () => {
   it.todo('W1 C8: killed after a step started, restarted: no duplicate transaction, no second export job');
   it.todo('W1 C16: 423 paused → waiting without burning steps; step limit → stopped_at_limit, continue finishes');
   it.todo('W1: run answers pass forPrincipal for the reader (rows-scrubbed)');
-  it.todo('W2: toAnthropicRequest / fromAnthropicResponse against the research\'s quoted example; tool_result blocks first; no temperature');
-  it.todo('W2: toOpenAIChatRequest puts stills in a following user message, arguments as a JSON string, role tool');
-  it.todo('W2: key file 0600, absent from a backup, in no route answer or log line; base URL http on the LAN stored and flagged unencrypted');
 });
