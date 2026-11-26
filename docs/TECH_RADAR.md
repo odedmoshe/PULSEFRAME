@@ -40,6 +40,33 @@ Licence column: SPDX identifier read from the package's `package.json` where the
 | Animation | Lottie renderer | Not pinned | Not determined | https://lottiefiles.com | Not evaluated | candidate |
 | Hosted persistence | PostgreSQL + object storage | Not pinned | Not determined | https://www.postgresql.org | Not evaluated | candidate |
 
+## Radar pass of 2026-11-26 (the lead's standing duty; nothing below is installed, run or measured)
+
+Full tables with a source and a read date per row: `docs/design/TOOL_RADAR_ENGINES_2026-11-26.md` (about 190 engines and libraries)
+and `docs/design/TOOL_RADAR_AI_2026-11-26.md` (models, cloud services, agent ecosystem, competitor gaps). Read by two research
+workers from registries, licence files and official pages; Hebrew quality and fit on a 4 GB GPU are unmeasured for every model.
+Where each find goes (state `candidate` for all; the track's designer reads the licence at source again before anything is pinned):
+
+| Track | Finds assigned to it |
+|---|---|
+| Code-made clips (pages) | D3 / Observable Plot / Chart.js, Mermaid, KaTeX, Shiki, dotLottie / lottie-web, three postprocessing, troika-three-text, PixiJS + pixi-filters |
+| Engines (free-running, logged) | auto-editor, ffmpeg-normalize + libebur128, PySceneDetect then TransNetV2, Silero VAD, WhisperX, Demucs, DeepFilterNet, Typst, OpenColorIO, libass / pysubs2 |
+| Transitions | gl-transitions (about 100 GLSL transitions; MIT per npm) through the existing GPU pass contract |
+| Interchange (new track) | OpenTimelineIO + plugins (EDL, FCP7 XML, AAF); whether Resolve or Premiere open the results is not confirmed |
+| Capture (new track) | FFmpeg ddagrab, obs-websocket-js; a cursor and click log for automatic zoom (pattern seen in OpenScreen, MIT) ; teleprompter |
+| Understand footage (new track) | shot list, small local vision model for keyframe captions (Qwen3-VL 2B/4B, SmolVLM2), Gemini video understanding on the owner's key, Tesseract heb / RapidOCR, TwelveLabs; feeds search by words, picture and on-screen text, highlight finding, automatic B-roll |
+| Generate | Runway API (routes to several video models), Gemini Omni 1.2 Flash, an image adapter (FLUX, gpt-image, Nano Banana 2), ElevenLabs (speech, effects, music, dubbing), ACE-Step 1.5 local music, BFL erase / deblur / upscale |
+| Speech | Hebrew speech trials ZONOS3-Mini and VoxCPM2 (Apache-2.0, cards list Hebrew), MADLAD-400 3B for translation |
+| In-editor agent and skills | Agent Skills `SKILL.md` as the saved-skill format, Playwright MCP / Chrome DevTools MCP, an own edit-eval set after Timeline-Bench / AgenticVBench with a state-diff checker |
+| Publish | YouTube upload connector with the AI-disclosure field |
+| People & subject | MuseTalk 1.5 lip sync (after cloud dubbing), avatars (HeyGen / Synthesia) |
+
+Licence notes read on that date: GSAP's standard licence has a prohibited-use clause (tools that let users build visual animations
+without code in competition with Webflow) — quoted in the NOTICE row, as decided; Pedalboard and DawDreamer are GPL-3.0 (separate
+program only); LYGIA shaders and madmom's models are non-commercial (out); the open video generators read are 18 GB or more and
+several exclude regions (out for this laptop). Reported by the research, not checked by the lead: OpenAI's Videos API (Sora 2) closed
+on 2026-09-24 and Veo 3.1 preview left the Gemini API.
+
 ## Network constraints observed in the development environment
 
 - `download.pytorch.org` is blocked by the network policy. PyTorch was installed from PyPI instead.
