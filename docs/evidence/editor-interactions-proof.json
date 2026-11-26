@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-25T23:26:22.888Z",
-  "result": "PASSED",
+  "ranAt": "2026-11-26T02:50:50.476Z",
+  "result": "FAILED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -8,7 +8,7 @@
     "gpu": "none"
   },
   "scope": "Browser interactions previously listed as unverified. Headless Chromium only. Audible fades and ducking during live playback are still not measured.",
-  "passed": 145,
+  "passed": 144,
   "total": 145,
   "checks": [
     {
@@ -384,9 +384,9 @@
       "detail": {
         "sh0": "",
         "sh1": "▶▶ ×2",
-        "fwd2": 2.02,
+        "fwd2": 1.98,
         "sh2": "◀◀ ×1",
-        "back1": -0.93,
+        "back1": -0.99,
         "sh3": "◀◀ ×2",
         "sh4": "",
         "still": true,
@@ -400,9 +400,9 @@
       "ok": true,
       "detail": {
         "keptPlaying": true,
-        "playSpeed": 1,
+        "playSpeed": 0.99,
         "keptShuttle": "▶▶ ×2",
-        "shuttleSpeed": 1.98,
+        "shuttleSpeed": 2.13,
         "staysPaused": true
       }
     },
@@ -430,30 +430,30 @@
         "cleared0": 0,
         "boxShown": 1,
         "during": [
-          "clp_3d606440c70",
-          "clp_3d606440c71"
+          "clp_7516921a460",
+          "clp_7516921a461"
         ],
         "afterAB": [
-          "clp_3d606440c70",
-          "clp_3d606440c71"
+          "clp_7516921a460",
+          "clp_7516921a461"
         ],
         "afterAdd": [
-          "clp_3d606440c70",
-          "clp_3d606440c71",
-          "clp_3d606440c72"
+          "clp_7516921a460",
+          "clp_7516921a461",
+          "clp_7516921a462"
         ],
         "midEscape": [
-          "clp_3d606440c71"
+          "clp_7516921a461"
         ],
         "afterEscape": [
-          "clp_3d606440c70",
-          "clp_3d606440c71",
-          "clp_3d606440c72"
+          "clp_7516921a460",
+          "clp_7516921a461",
+          "clp_7516921a462"
         ],
         "afterEscapeUp": [
-          "clp_3d606440c70",
-          "clp_3d606440c71",
-          "clp_3d606440c72"
+          "clp_7516921a460",
+          "clp_7516921a461",
+          "clp_7516921a462"
         ]
       }
     },
@@ -519,7 +519,7 @@
         "wantRefusal": "בטקסט של חותמת התאריך מותרים רק ספרות, רווחים והסימנים ⁦. : ' / -⁩, עד 20 תווים",
         "invalid": "true",
         "kept": true,
-        "today": "'26 11 25",
+        "today": "'26 11 26",
         "todaySet": true,
         "refusalGone": true
       }
@@ -615,7 +615,7 @@
           1
         ],
         "role": "progressbar",
-        "valueText": "עוקב קדימה 18/1799",
+        "valueText": "עוקב קדימה 25/1799",
         "jobStatus": "canceled",
         "samples": 1
       }
@@ -896,27 +896,27 @@
     },
     {
       "name": "keyboard only, in Hebrew: a card opens the template dialog (focus inside), Escape closes it and the focus is back on the card; then pick → leave the video out and move a picture earlier → music → a Hebrew text (its counter counts it) → plan (a polite live region, nothing blocking) → Use adds exactly 1 revision (apply_template) with that text on a title, and the post-apply bar appears",
-      "ok": true,
+      "ok": false,
       "detail": {
         "template": "tpl.travel-montage",
         "order0": [
-          "ast_d4454debff0",
-          "ast_d0fc8bc6db0",
-          "ast_229d767c860",
-          "ast_75975819080",
-          "ast_32fbd267770"
+          "ast_4c3bb3e8810",
+          "ast_4653e804800",
+          "ast_dbf471c63f0",
+          "ast_4af521570a0",
+          "ast_82a1fc62a70"
         ],
         "order1": [
-          "ast_d4454debff0",
-          "ast_75975819080",
-          "ast_d0fc8bc6db0",
-          "ast_229d767c860",
-          "ast_32fbd267770"
+          "ast_4c3bb3e8810",
+          "ast_4af521570a0",
+          "ast_4653e804800",
+          "ast_dbf471c63f0",
+          "ast_82a1fc62a70"
         ],
         "videoOut": true,
         "musicChosen": true,
         "textKey": "place",
-        "counted": "13",
+        "counted": "12",
         "planned": {
           "summary": 1,
           "blocking": 0,
@@ -928,14 +928,14 @@
             "apply_template"
           ]
         ],
-        "hebrewOnTitle": true,
+        "hebrewOnTitle": false,
         "beats": {
           "method": "spectral-flux onsets + dynamic-programming beat tracking (no model); assumes a steady pulse; no regular bar accent found",
           "params": {
             "sampleRate": 22050,
             "hop": 256
           },
-          "createdAt": "2026-11-25T23:21:49.103Z",
+          "createdAt": "2026-11-26T02:46:09.556Z",
           "createdBy": "agent:local",
           "edited": false,
           "bpm": 120.19,
@@ -1130,7 +1130,7 @@
       "ok": true,
       "detail": {
         "slots": 11,
-        "victim": "clp_790224d9420",
+        "victim": "clp_c266b027970",
         "deleted": true,
         "offered": {
           "count": 1,
@@ -1255,8 +1255,8 @@
         "dialog": true,
         "planOps": 4,
         "newIds": [
-          "seq_428accbd9e0",
-          "seq_428accbd9e7"
+          "seq_245c3e665e0",
+          "seq_245c3e665e7"
         ],
         "revisions": 1,
         "transactions": [
@@ -1266,7 +1266,7 @@
         ],
         "focused": {
           "id": "sequence-tab",
-          "seq": "seq_428accbd9e0",
+          "seq": "seq_245c3e665e0",
           "selected": "true"
         }
       }
@@ -1297,9 +1297,9 @@
         },
         "forward": {
           "id": "sequence-tab",
-          "seq": "seq_428accbd9e0"
+          "seq": "seq_245c3e665e0"
         },
-        "secondTab": "seq_428accbd9e0",
+        "secondTab": "seq_245c3e665e0",
         "byArrow": {
           "id": "sequence-tab-main",
           "seq": "seq_main"
@@ -1604,7 +1604,7 @@
       "detail": {
         "marked": true,
         "he": {
-          "id": "prj_qUAt2IRnh5U",
+          "id": "prj_5BXJbwvxOUI",
           "count": 1,
           "title": "הארכיון יובא",
           "body": "סימון «נבדק» של תרגום לא עובר בייבוא ארכיון: הוא ניתן במחשב אחר או בידי מישהו אחר. התרגום «English» מסומן שוב «תרגום מכונה · לא נבדק», והנוסח שלו נשמר. אפשר לעבור עליו בלוח «תמלול» ולבחור «סמן כנבדק».",
@@ -1614,7 +1614,7 @@
           "badge": 1
         },
         "en": {
-          "id": "prj_mWmJudxHm10",
+          "id": "prj_PYmxuS40xSc",
           "count": 1,
           "title": "The archive was imported",
           "body": "A translation's \"Reviewed\" mark does not carry over in an archive import: it was given on another computer or by someone else. The translation «English» needs review again; its wording is kept. Go through it in the \"Transcript\" panel and choose \"Mark as reviewed\".",
@@ -1801,11 +1801,11 @@
       "detail": {
         "planRows": [
           {
-            "id": "clp_e45c4120fc0",
+            "id": "clp_d07480c2cc0",
             "text": "send-quiet.wav · +9.1 dB"
           },
           {
-            "id": "clp_a9c03f4f1a0",
+            "id": "clp_cda3fc11500",
             "text": "send-loud.wav · −9.1 dB"
           }
         ],
@@ -1818,11 +1818,11 @@
       "detail": {
         "resRows": [
           {
-            "id": "clp_e45c4120fc0",
+            "id": "clp_d07480c2cc0",
             "by": ""
           },
           {
-            "id": "clp_a9c03f4f1a0",
+            "id": "clp_cda3fc11500",
             "by": ""
           }
         ],
@@ -1948,7 +1948,7 @@
       "ok": true,
       "detail": {
         "empty": 1,
-        "row": "גרסה לבדיקה 25.11.2026, 23:25 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
+        "row": "גרסה לבדיקה 26.11.2026, 2:50 · אני · 100 פריימים · 2 KB · המדיה לא מועתקת זהה למצב הנוכחי השוואה שינוי שם מחיקה"
       }
     },
     {
@@ -2037,14 +2037,14 @@
       "ok": true,
       "detail": {
         "first": [
-          "ast_e12b676dda0",
-          "ast_bf44bf60560",
-          "ast_2d28207c0e0"
+          "ast_8a17b20f460",
+          "ast_743e8e05f10",
+          "ast_2b0585cea30"
         ],
         "moved": [
-          "ast_bf44bf60560",
-          "ast_e12b676dda0",
-          "ast_2d28207c0e0"
+          "ast_743e8e05f10",
+          "ast_8a17b20f460",
+          "ast_2b0585cea30"
         ]
       }
     },
@@ -2129,7 +2129,7 @@
       "ok": true,
       "detail": {
         "n": 1,
-        "asset": "ast_6ba62d8e5e0",
+        "asset": "ast_db4d8236b90",
         "start": "1/2",
         "end": "1/1",
         "sources": "transcript"

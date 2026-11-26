@@ -1,7 +1,7 @@
 {
   "proof": "instruments",
-  "ranAt": "2026-11-26T00:14:37.420Z",
-  "seconds": 45,
+  "ranAt": "2026-11-26T01:19:13.243Z",
+  "seconds": 43,
   "note": "SYNTHETIC test kit and test bank only, written by code; never a real sample set. Nobody here can listen: every check is a measurement. Timing figures are one sample each.",
   "passed": 22,
   "failed": 0,

@@ -1,5 +1,5 @@
 {
- "when": "2026-11-25T20:43:03.132Z",
+ "when": "2026-11-26T01:18:12.554Z",
  "aBuilt": true,
  "evidence": {
   "core": "builder A (real)",
@@ -27,12 +27,12 @@
      "samples": 4
     },
     {
-     "file": "colours.mp4",
-     "samples": 12
-    },
-    {
      "file": "VID_20241226_183000.mp4",
      "samples": 4
+    },
+    {
+     "file": "colours.mp4",
+     "samples": 12
     }
    ],
    "barcodesRead": 20,
@@ -60,7 +60,7 @@
   },
   "S8": {
    "canceledAfterBatches": 1,
-   "exportMs": 1500,
+   "exportMs": 1501,
    "batchesAfterExport": 1
   },
   "S11": {
@@ -112,9 +112,9 @@
   },
   "S15": {
    "scanLabels": [
-    "local.search.picture scan prj_cSpyoSOvfng"
+    "local.search.picture scan prj_wxfMigFbBII"
    ],
-   "toolMs": 358,
+   "toolMs": 352,
    "queryDuringScan": "busy"
   },
   "S16": {

@@ -1,5 +1,5 @@
 {
- "when": "2026-11-25T22:53:27.164Z",
+ "when": "2026-11-26T01:17:29.549Z",
  "web": true,
  "pageErrors": [],
  "evidence": {
@@ -89,7 +89,7 @@
   "impact.en.1440.line": "The moment is 10 frames after the beat",
   "impact.en.1440.after": "The moment is on the beat's frame",
   "heard.he": {
-   "made": "ast_762b4675a90",
+   "made": "ast_a36bfaab1e0",
    "unheard": "חיבור אוטומטי — עוד לא הושמע",
    "playPressed": true,
    "heardEnabledAfterPlay": true,
@@ -99,7 +99,7 @@
     "chipHeard": true,
     "revisions": 1,
     "marked": true,
-    "chip": "החיבור נשמע (2026-11-25)"
+    "chip": "החיבור נשמע (2026-11-26)"
    }
   },
   "videoBeat.he": {
@@ -107,7 +107,7 @@
    "state": "unmarked"
   },
   "heard.en": {
-   "made": "ast_f52d11cd630",
+   "made": "ast_4d15c5d9c10",
    "unheard": "Automatic join — not heard yet",
    "playPressed": true,
    "heardEnabledAfterPlay": true,
@@ -117,7 +117,7 @@
     "chipHeard": true,
     "revisions": 1,
     "marked": true,
-    "chip": "The join was heard (2026-11-25)"
+    "chip": "The join was heard (2026-11-26)"
    }
   },
   "videoBeat.en": {
