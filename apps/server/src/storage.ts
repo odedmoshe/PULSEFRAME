@@ -11,6 +11,7 @@ import path from 'node:path';
 import type { RenderCacheStatus } from '@pulseframe/core';
 import type { Principal } from './auth.ts';
 import { ApiError, type Store } from './store.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 /**
  * Derived data in the data directory that can give room back on demand (the render cache, ADR-0024). Registered once per store
@@ -48,7 +49,7 @@ function searchIndexMaybeGone(store: Store, hashes: string[]): void {
   try { searchHooksOf.get(store)?.hashesMaybeGone(hashes); } catch (e) { console.error('the search index purge failed', e); }
 }
 
-const ownerOnly = (p: Principal, what: string) => { if (p.kind !== 'user') throw new ApiError(403, 'owner_required', `only the owner can ${what}`); };
+const ownerOnly = (p: Principal, what: string) => { if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', `only the owner can ${what}`); };
 const GRACE_MS = 10 * 60_000;
 
 export function deleteProject(store: Store, by: Principal, projectId: string, confirmName: string) {

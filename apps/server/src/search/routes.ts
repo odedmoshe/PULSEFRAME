@@ -12,6 +12,7 @@ import { isOwnerSession } from '../assistant/contract.ts';
 import type { Principal } from '../governance.ts';
 import { ApiError } from '../store.ts';
 import { searchError, type SearchApp, type SearchEnv, type SearchRouteDeps } from './contract.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 async function bodyOf<S extends z.ZodType>(c: Context<SearchEnv>, schema: S): Promise<z.infer<S>> {
   let raw: unknown;
@@ -29,7 +30,7 @@ export function assertSearchUnrestricted(p: Principal): void {
 }
 /** The owner's own session, or 403 owner_required before anything is read. */
 export function searchOwner(p: Principal): Principal {
-  if (!isOwnerSession(p)) throw searchError('ownerOnly');
+  if (!actsAsOwner(p)) throw searchError('ownerOnly');
   return p;
 }
 

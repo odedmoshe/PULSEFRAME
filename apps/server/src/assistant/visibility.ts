@@ -29,6 +29,7 @@ import { ASSISTANT_ACTOR, ASSISTANT_JOB_TYPE, type AssistantPublicStatus, type A
 import type { Principal } from '../governance.ts';
 import { ApiError, type JobRow } from '../store.ts';
 import { isOwnerSession } from './contract.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 /** All that a principal other than the owner's session reads of an assistant job. */
 export interface AssistantJobStub { id: string; projectId: string; type: typeof ASSISTANT_JOB_TYPE; actor: typeof ASSISTANT_ACTOR; status: string; createdAt: string; updatedAt: string }
@@ -72,5 +73,5 @@ export const budgetReleaseRefusal = (jobId: string) => new ApiError(403, 'owner_
   'a reserved amount is released from the owner\'s own session only, so an agent credential cannot release it', { jobId },
   'Ask the owner to release it after checking the service\'s billing: for a language-assistant request, «שחרור הסכום השמור» (Release the held amount) in the editor\'s command bar or in Settings; for any job, POST /api/v1/jobs/{jobId}/budget/release from the owner\'s session. Until then the amount stays counted.');
 export function assertMayReleaseBudget(p: Principal, jobId: string): void {
-  if (!isOwnerSession(p)) throw budgetReleaseRefusal(jobId);
+  if (!actsAsOwner(p)) throw budgetReleaseRefusal(jobId);
 }

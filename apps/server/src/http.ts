@@ -141,7 +141,7 @@ export async function requestModelDownload(capabilities: Capabilities, gov: Gove
 /** The translation review mark (ADR-0017): only the owner's own session may set it; an agent credential is refused. */
 export const ReviewBody = z.object({ review: z.enum(['reviewed', 'needed']) }).strict();
 export function reviewTranslation(gov: Governance, p: Principal, projectId: string, variantId: string, review: 'reviewed' | 'needed') {
-  if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'only the project owner can mark a translation reviewed or not, from their own session', { variantId }, 'Tell the owner which phrases to read; they mark it in the editor.');
+  if (!actsAsOwner(p)) throw new ApiError(403, 'human_approval_required', 'only the project owner can mark a translation reviewed or not, from their own session', { variantId }, 'Tell the owner which phrases to read; they mark it in the editor.');
   return gov.commitAs(p, { projectId, allowInternal: true, label: review === 'reviewed' ? 'Translation reviewed' : 'Translation needs review', ops: [{ op: 'review_translation', args: { variantId, review, at: new Date().toISOString() } }] });
 }
 const ImportBody = z.object({ id: z.string().regex(/^[a-z0-9]+(\.[a-z0-9-]+)+$/), title: z.string().min(1).max(120), graph: z.unknown() }).strict();
@@ -281,7 +281,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // ledger row stays counted), so releasing it must not need the job row. Any other credential gets 404 as for every missing job.
   const jobScope = async (c: Context<Env>, next: () => Promise<void>) => {
     const jobId = c.req.param('jobId')!;
-    const orphanRelease = c.req.method === 'POST' && c.req.path.endsWith('/budget/release') && isOwnerSession(c.var.principal) && gov.ledgerFor(jobId) !== null;
+    const orphanRelease = c.req.method === 'POST' && c.req.path.endsWith('/budget/release') && actsAsOwner(c.var.principal) && gov.ledgerFor(jobId) !== null;
     if (!orphanRelease) gov.assertMayAct(c.var.principal, store.getJob(jobId).projectId, 'observe');
     await next();
   };
@@ -310,7 +310,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // Automatic backups: status for anyone who may observe; running one now is the owner's action (it writes outside the data directory).
   app.get('/api/v1/backup', (c) => { need(c, 'observe'); return c.json(backup?.status() ?? { enabled: false, everyHours: 0, keep: 0, lastAt: null, lastOk: null, lastError: null, nextAt: null, snapshots: 0, running: false }); });
   app.post('/api/v1/backup', async (c) => {
-    if (need(c, 'observe').kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+    if (!actsAsOwner(need(c, 'observe'))) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
     if (!cfg.backupDir || !backup) throw new ApiError(409, 'backup_not_configured', 'no backup destination is configured; set PF_BACKUP_DIR and restart the server');
     await backup.runNow();
     const st = backup.status();
@@ -338,7 +338,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // What the archive «בלי פרטי משפחה» would change, for the dialog before the download: titles whose words change inside them
   // (frozen at their first value) and titles whose people field has no words. The owner's own session only.
   app.get('/api/v1/projects/:id/archive/family-check', (c) => {
-    if (need(c, 'observe').kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+    if (!actsAsOwner(need(c, 'observe'))) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
     const { varying, empty } = withoutFamily(store.wholeProject(c.req.param('id')).doc);
     return c.json({ varying, empty });
   });
@@ -695,7 +695,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   /** Mark a machine translation reviewed (or back to needs review): the owner's own session only (ADR-0017); agents get 403. */
   app.post('/api/v1/projects/:id/variants/:variantId/translation/review', async (c) => {
     const p = need(c, 'edit');
-    if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'only the project owner can mark a translation reviewed or not, from their own session', { variantId: c.req.param('variantId') }, 'Tell the owner which phrases to read; they mark it in the editor.');
+    if (!actsAsOwner(p)) throw new ApiError(403, 'human_approval_required', 'only the project owner can mark a translation reviewed or not, from their own session', { variantId: c.req.param('variantId') }, 'Tell the owner which phrases to read; they mark it in the editor.');
     const b = await body(c, ReviewBody);
     return c.json(reviewTranslation(gov, p, c.req.param('id'), c.req.param('variantId'), b.review));
   });
@@ -768,7 +768,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // Across every project, so it answers the owner's own session only. The browser gives its local day; the server's clock is not used.
   app.get('/api/v1/on-this-day', (c) => {
     const p = need(c, 'observe');
-    if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+    if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
     const date = c.req.query('date') ?? '';
     if (!WALL_DATE.test(date) || !isRealWallDate(date)) throw new ApiError(400, 'invalid_request', 'date must be a real day written YYYY-MM-DD (the day on the viewer\'s own clock)', { date: date.slice(0, 32) });
     return c.json({ items: onThisDayFor(store, p, date) });
@@ -777,7 +777,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // every project and with birth dates, so it answers the owner's own session only, never a token or a grant.
   app.get('/api/v1/people-suggestions', (c) => {
     const p = need(c, 'observe');
-    if (p.kind !== 'user') throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
+    if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'this action needs the project owner\'s own session');
     return c.json({ people: peopleSuggestions(store, p) });
   });
   app.post('/api/v1/projects/:id/sfx', async (c) => {
@@ -823,7 +823,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.get('/api/v1/music/kits', async (c) => { need(c, 'observe'); return c.json(await listMusicKits(cfg, musicOpts.kits)); });
   app.post('/api/v1/music/kits/:kitId/heard', async (c) => {
     const p = need(c, 'observe');
-    if (!isOwnerSession(p)) throw instrumentsError('ownerOnly', {}); // before the body is read: an agent learns nothing else
+    if (!actsAsOwner(p)) throw instrumentsError('ownerOnly', {}); // before the body is read: an agent learns nothing else
     return c.json(markKitHeard(cfg.dataDir, p, c.req.param('kitId'), (await body(c, z.object({ heard: z.boolean() }).strict())).heard, new Date().toISOString(), musicOpts.kits));
   });
   // As for templates: the credential's own mode decides (addMusic refuses observe and propose modes with the reason).
@@ -980,7 +980,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   registerBoothRoutes(app, { cfg, store, gov, need, exporter, renderHost: extras.renderHost ?? null, speech, assistant, search: searchRuntime, door: extras.door ?? null, ...(extras.musicKits ? { musicKits: extras.musicKits } : {}) });
   const assistantOwner = (c: Context<Env>) => {
     const p = need(c, 'observe');
-    if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
+    if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
     return p;
   };
   app.get('/api/v1/assistant/status', async (c) => c.json(await assistant.status(need(c, 'observe'))));
@@ -1030,7 +1030,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   // Model downloads are a deliberate human action: not exposed as an MCP tool, and bound to the exact byte count shown.
   app.post('/api/v1/projects/:id/capabilities/:capabilityId/models/download', async (c) => {
     const p = need(c, 'edit');
-    if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
+    if (!actsAsOwner(p)) throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
     const b = await body(c, z.object({ confirmBytes: z.number().int().positive() }).strict());
     const job = await capabilities.startDownload(c.req.param('id'), c.req.param('capabilityId'), b.confirmBytes, p.actor);
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
@@ -1049,7 +1049,7 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   });
   app.post('/api/v1/projects/:id/speech/models/:modelId/download', async (c) => {
     const p = need(c, 'edit');
-    if (p.kind !== 'user') throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
+    if (!actsAsOwner(p)) throw new ApiError(403, 'human_approval_required', 'model downloads must be started from the owner\'s own session, not by an agent credential');
     const b = await body(c, z.object({ confirmBytes: z.number().int().positive() }).strict());
     const job = await speech.startDownload(c.req.param('id'), c.req.param('modelId'), b.confirmBytes, p.actor);
     return c.json({ jobId: job.id, status: job.status, type: job.type }, 202);
@@ -1508,9 +1508,10 @@ export function assertMayTakeJobOutput(p: Principal, job: JobRow, what: string):
  */
 export function assertMayCancel(gov: Governance, p: Principal, job: JobRow) {
   // the speech engine install runs software on the owner's computer: only the owner's own session stops it (REST and MCP alike)
-  if (job.type === SPEECH_ENGINE_JOB_TYPE && !isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the speech engine install is stopped only from the owner\'s own editor window', { jobId: job.id }, 'Ask the owner to cancel it in the speech panel.');
-  if (p.kind !== 'agent') return;
-  gov.assertMayAct(p, job.projectId, 'job');
+  if (job.type === SPEECH_ENGINE_JOB_TYPE && !actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'the speech engine install is stopped only from the owner\'s own editor window', { jobId: job.id }, 'Ask the owner to cancel it in the speech panel.');
+  if (ownerKeeps(p)) return;
+  gov.assertMayAct(p, job.projectId, 'job'); // paused (the owner's brake) and project limits hold for open agents too
+  if (actsAsOwner(p)) return; // A10/A22: an open agent cancels any job, the assistant's included
   if (job.type === ASSISTANT_JOB_TYPE) throw assistantCancelRefusal(job.id);
   if (job.actor === p.actor) return;
   if (job.type === 'export' && job.input?.route === 'browser' && !job.actor.startsWith('agent:')) { gov.assertUnrestricted(p, 'stop an export of the whole project'); return; }

@@ -56,7 +56,7 @@ const assertKeyOwner = (p: Principal) => {
   if (!isOwnerFloor(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
 };
 const owner = (p: Principal) => {
-  if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
+  if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'the language assistant is set up and used from the owner\'s own session only', undefined, 'The owner sets it up in Settings.');
 };
 
 export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHandlers & AssistantJobControls {
@@ -95,7 +95,7 @@ export function createAssistantHandlers(ctx: AssistantRouteContext): AssistantHa
     putKey: (p, key) => { assertKeyOwner(p); return rt.files.writeKey(key); },
     deleteKey: (p) => { assertKeyOwner(p); return rt.files.deleteKey(); },
     request: (p, projectId, body) => { owner(p); return jobs.start(p, projectId, body); },
-    cancel: (p, jobId) => { if (!isOwnerSession(p)) throw assistantCancelRefusal(jobId); return jobs.cancel(jobId, p.actor); },
+    cancel: (p, jobId) => { if (!actsAsOwner(p)) throw assistantCancelRefusal(jobId); return jobs.cancel(jobId, p.actor); },
     done: (jobId) => jobs.done(jobId),
     // wave 7, the LOCAL assistant (assistant-decisions.md §4): the owner check comes first, before anything is looked up
     localCheck: async (p) => {

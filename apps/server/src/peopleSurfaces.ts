@@ -78,6 +78,8 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'GET /api/v1/grants': ['owner-only'],
   'POST /api/v1/grants': ['owner-only'],
   'POST /api/v1/grants/:grantId/revoke': ['owner-only'],
+  'GET /api/v1/autonomy': ['no-document'],
+  'PUT /api/v1/autonomy': ['owner-only'],
   // owner-only reads across projects
   'GET /api/v1/on-this-day': ['owner-only'],
   'GET /api/v1/people-suggestions': ['owner-only'],

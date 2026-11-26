@@ -18,6 +18,7 @@ import { commitJoinHeard } from './heard.ts';
 import { renderJoinPreview } from './joinPreview.ts';
 import { prepareMusicFit } from './plan.ts';
 import { applyMusicFit } from './apply.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 /**
  * True once plan and apply answer: builder B built them (musicfit/plan.ts, apply.ts) and integration wired builder A's join search
@@ -81,7 +82,7 @@ export async function musicJoinPreviewFor(store: Store, gov: Governance, princip
  * grant, is refused before anything else; there is no MCP tool and the op is internal (apply_transaction refuses it).
  */
 export function refuseHeardByAgent(principal: Principal, assetId: string): void {
-  if (principal.kind !== 'user') throw musicFitApiError('notOwner', { assetId });
+  if (!actsAsOwner(principal)) throw musicFitApiError('notOwner', { assetId });
 }
 export function markJoinHeardFor(store: Store, gov: Governance, principal: Principal, projectId: string, assetId: string, heard: boolean): unknown {
   refuseHeardByAgent(principal, assetId);

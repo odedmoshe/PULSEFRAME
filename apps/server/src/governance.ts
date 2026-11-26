@@ -190,9 +190,9 @@ export class Governance {
     return this.store.commit({ ...req, actor: p.actor, guard: this.scopeGuard(p) });
   }
   undoAs(p: Principal, projectId: string, mode: 'undo' | 'redo', transactionId?: string): CommitResult {
-    if (p.kind === 'agent') this.assertMayAct(p, projectId, 'edit');
-    // Agents may only reverse their own transactions, also when naming one by id; the owner may reverse anyone's.
-    return this.store.undo(projectId, p.actor, mode, transactionId, p.kind === 'agent' ? this.scopeGuard(p) : undefined, p.kind !== 'agent');
+    if (!ownerKeeps(p)) this.assertMayAct(p, projectId, 'edit'); // paused (the owner's brake) and project limits, for every agent
+    // Agents may only reverse their own transactions, also when naming one by id; the owner (and, in open mode, an open agent: A9) may reverse anyone's.
+    return this.store.undo(projectId, p.actor, mode, transactionId, ownerKeeps(p) ? undefined : this.scopeGuard(p), actsAsOwner(p));
   }
 
   // ---------- proposals ----------

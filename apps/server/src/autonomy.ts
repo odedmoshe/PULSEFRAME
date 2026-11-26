@@ -29,7 +29,9 @@ import { parseMode, type ServerMode } from './autonomy-mode.ts';
 export { DEFAULT_SERVER_MODE, parseMode, SERVER_MODES, type ServerMode } from './autonomy-mode.ts';
 
 /** THE policy predicate: the owner's own session, or an agent the open server stamped. Never used at a floor site. */
-export const actsAsOwner = (p: Pick<Principal, 'kind'> & { open?: true }): boolean => p.open === true || p.kind === 'user';
+/** The owner's own browser session is the one user principal auth.ts issues (`user:local`); a phone's import principal or a
+ *  hand-made `user:*` principal is not it (the stricter of the two checks the sites read before, so guarded refuses no less). */
+export const actsAsOwner = (p: Pick<Principal, 'kind' | 'actor'> & { open?: true }): boolean => p.open === true || (p.kind === 'user' && p.actor === 'user:local');
 /** The FLOOR predicate: the owner's own session only, in both modes. It never reads `open`; only FLOOR_SITES call it. */
 export const isOwnerFloor = (p: Pick<Principal, 'kind'>): boolean => p.kind === 'user';
 /** Owner switches kept in both modes by decision (A6 pause, B2 proposal decide, B3 approval decide): the owner's brake. */
@@ -131,4 +133,44 @@ export function registerAutonomyRoutes(app: RouteApp, deps: { autonomy: Autonomy
   app.get('/api/v1/autonomy', (c) => { deps.need(c, 'observe'); return c.json(autonomyAnswer(deps.autonomy)); });
   app.put('/api/v1/autonomy', async (c) => { const p = deps.need(c, 'observe'); const body = await c.req.json().catch(() => undefined); deps.autonomy.set(p, body); return c.json(autonomyAnswer(deps.autonomy)); });
 }
-export const OPEN_GATES: readonly OpenGate[] = [];
+export const OPEN_GATES: readonly OpenGate[] = [
+  { id: 'A9', file: 'governance.ts', needle: 'transactionId, ownerKeeps(p) ? undefined : this.scopeGuard(p), actsAsOwner(p));', decision: 'O' },
+  { id: 'A10', file: 'http.ts', needle: 'if (actsAsOwner(p)) return; // A10/A22', decision: 'O' },
+  { id: 'A11', file: 'http.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'human_approval_required\', \'only the project owner can mark a translation reviewed or not, from their own session\', { variantId },', decision: 'O' },
+  { id: 'A11', file: 'http.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'human_approval_required\', \'only the project owner can mark a translation reviewed or not, from their own session\', { variantId: c.req', decision: 'O' },
+  { id: 'A12', file: 'export.ts', needle: 'if (!still || actsAsOwner(p)) return;', decision: 'O' },
+  { id: 'A13', file: 'lessons/guard.ts', needle: 'if (actsAsOwner(p)) return;', decision: 'O' },
+  { id: 'A13', file: 'lessons/routes.ts', needle: 'if (!actsAsOwner(principal)) throw lessonApiError(\'ownerRequired\');', decision: 'O' },
+  { id: 'A14', file: 'craft/versions.ts', needle: 'if (!actsAsOwner(p)) throw craftError(\'ownerOnly\');', decision: 'O' },
+  { id: 'A14', file: 'craft/routes.ts', needle: 'if (!actsAsOwner(p)) throw craftError(\'ownerOnly\'); return p;', decision: 'O' },
+  { id: 'A14', file: 'craft/versions.ts', needle: '    if (!actsAsOwner(p)) {', decision: 'O' },
+  { id: 'A15', file: 'craft/versions.ts', needle: 'return actsAsOwner(p) || versionDigest === currentDigest;', decision: 'O' },
+  { id: 'A16', file: 'booth/contract.ts', needle: 'if (!actsAsOwner(p)) throw boothError(\'ownerOnly\');', decision: 'O' },
+  { id: 'A17', file: 'ownTemplates.ts', needle: 'if (!actsAsOwner(p)) throw ownTemplateApiError(', decision: 'O' },
+  { id: 'A17', file: 'search/routes.ts', needle: 'if (!actsAsOwner(p)) throw searchError(\'ownerOnly\');', decision: 'O' },
+  { id: 'A17', file: 'search/runtime.ts', needle: 'if (!actsAsOwner(p)) throw searchError(\'ownerOnly\');', decision: 'O' },
+  { id: 'A17', file: 'picmodels/routes.ts', needle: 'pictureModelsFor(actsAsOwner(p), rows)', decision: 'O' },
+  { id: 'A17', file: 'picmodels/routes.ts', needle: 'if (!actsAsOwner(p)) throw picmodelsError(\'ownerOnly\');', decision: 'O' },
+  { id: 'A17', file: 'instruments/heard.ts', needle: 'if (!actsAsOwner(principal)) throw instrumentsError(\'ownerOnly\', {});', decision: 'O' },
+  { id: 'A17', file: 'http.ts', needle: 'if (!actsAsOwner(p)) throw instrumentsError(\'ownerOnly\', {});', decision: 'O' },
+  { id: 'A17', file: 'musicfit/routes.ts', needle: 'if (!actsAsOwner(principal)) throw musicFitApiError(\'notOwner\'', decision: 'O' },
+  { id: 'A18', file: 'library/contract.ts', needle: 'if (!actsAsOwner(p)) throw libraryError(\'ownerOnly\');', decision: 'O' },
+  { id: 'A18', file: 'library/routes.ts', needle: 'lib.status(actsAsOwner(p))', decision: 'O' },
+  { id: 'A19', file: 'http.ts', needle: 'if (!actsAsOwner(need(c, \'observe\'))) throw new ApiError(403, \'owner_required\'', decision: 'O' },
+  { id: 'A19', file: 'http.ts', needle: 'app.get(\'/api/v1/grants\', (c) => { const p = c.var.principal; if (!actsAsOwner(p))', decision: 'O' },
+  { id: 'A19', file: 'http.ts', needle: '    if (!actsAsOwner(p)) throw new ApiError(403, \'owner_required\', \'this action needs the project owner\\\'s own session\');', decision: 'O' },
+  { id: 'A19', file: 'lifeline.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'owner_required\'', decision: 'O' },
+  { id: 'A20', file: 'storage.ts', needle: 'const ownerOnly = (p: Principal, what: string) => { if (!actsAsOwner(p))', decision: 'O' },
+  { id: 'A20', file: 'renderCacheRoutes.ts', needle: 'if (!actsAsOwner(by)) throw new ApiError(403, \'owner_required\', \'only the owner can clear the render cache\');', decision: 'O' },
+  { id: 'A21', file: 'speechEngine.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'owner_required\', \'the speech engine is installed only', decision: 'O' },
+  { id: 'A21', file: 'http.ts', needle: 'if (job.type === SPEECH_ENGINE_JOB_TYPE && !actsAsOwner(p))', decision: 'O' },
+  { id: 'A22', file: 'assistant/routes.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'owner_required\', \'the language assistant is set up and used', decision: 'O' },
+  { id: 'A22', file: 'assistant/routes.ts', needle: 'cancel: (p, jobId) => { if (!actsAsOwner(p)) throw assistantCancelRefusal(jobId);', decision: 'O' },
+  { id: 'A22', file: 'http.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'owner_required\', \'the language assistant is set up and used', decision: 'O' },
+  { id: 'A22', file: 'http.ts', needle: '&& actsAsOwner(c.var.principal) && gov.ledgerFor(jobId) !== null;', decision: 'O' },
+  { id: 'A22', file: 'assistant/visibility.ts', needle: 'if (!actsAsOwner(p)) throw budgetReleaseRefusal(jobId);', decision: 'O' },
+  { id: 'A24', file: 'importContracts.ts', needle: 'if (actsAsOwner(p)) return; // A24', decision: 'O' },
+  { id: 'A17', file: 'growing.ts', needle: 'if (!actsAsOwner(principal)) throw GROWING_API_ERRORS.ownerRequired();', decision: 'O' },
+  { id: 'D10', file: 'speech.ts', needle: 'if (!actsAsOwner(principal)) throw new ApiError(403, \'human_approval_required\', \'speaking in a recorded person', decision: 'O' },
+  { id: 'B4', file: 'http.ts', needle: 'if (!actsAsOwner(p)) throw new ApiError(403, \'human_approval_required\', \'model downloads must be started', decision: 'O' },
+];

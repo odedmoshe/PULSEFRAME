@@ -62,6 +62,7 @@ import type { Principal } from './auth.ts';
 import type { Config } from './config.ts';
 import type { Governance } from './governance.ts';
 import { ApiError, type JobRow } from './store.ts';
+import { actsAsOwner, ownerKeeps } from './autonomy.ts';
 
 export type { ImportJobError, ImportJobOutput, ImportJobProgressOutput } from '@pulseframe/core';
 
@@ -215,8 +216,9 @@ export function diskReserveRefuses(freeBytes: number | null, reserveBytes: numbe
  */
 export function assertMayHandleImportJob(gov: Pick<Governance, 'assertMayAct'>, p: Principal, job: JobRow, what: 'cancel' | 'retry' | 'dismiss'): void {
   if (job.type !== IMPORT_JOB_TYPE) throw new ApiError(409, 'not_an_import', `job ${job.id} is not an import`, { jobId: job.id, type: job.type });
-  if (p.kind === 'user') return;
-  gov.assertMayAct(p, job.projectId, 'job');
+  if (ownerKeeps(p)) return;
+  gov.assertMayAct(p, job.projectId, 'job'); // paused and project limits hold for open agents too
+  if (actsAsOwner(p)) return; // A24: an open agent retries or dismisses any import, a phone's included
   if (isPhoneActor(job.actor)) throw new ApiError(403, 'owner_required', `only the owner can ${what} a file sent from a phone`, { jobId: job.id });
   if (job.actor !== p.actor) throw new ApiError(403, 'not_your_job', `agents can only ${what} imports they started`, { jobId: job.id, startedBy: job.actor });
 }

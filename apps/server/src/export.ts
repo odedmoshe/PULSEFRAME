@@ -36,6 +36,7 @@ import { fieldIssues } from './preflight.fields.ts';
 import type { FrameKeyFn, runSegmentedExport, SegmentEnv } from './exportSegments.ts';
 import type { SegmentStore } from './segmentStore.ts';
 import { RENDER_CACHE_PURGED } from './segmentStore.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 const exec = promisify(execFile);
 
@@ -285,9 +286,9 @@ export function stillOptionBlockers(options: Partial<ExportOptions>): Blocker[] 
  * …/exports/batch (startExportBatch), …/exports/browser, POST /jobs/:id/retry and the MCP tools export_project, export_batch and
  * retry_job. `options` = the raw request options (or the retried job's). The owner's own session = assistant/contract.ts isOwnerSession.
  */
-export function assertMayExportStill(p: { kind: 'user' | 'agent'; actor: string }, options: unknown): void {
+export function assertMayExportStill(p: { kind: 'user' | 'agent'; actor: string; open?: true }, options: unknown): void {
   const still = !!options && typeof options === 'object' && (options as Record<string, unknown>).still !== undefined;
-  if (!still || (p.kind === 'user' && p.actor === 'user:local')) return;
+  if (!still || actsAsOwner(p)) return; // A12: the owner's window, or an open agent
   const r = STILLS_REFUSALS.ownerRequired;
   throw new ApiError(r.status, r.code, r.message(), {}, r.hint);
 }

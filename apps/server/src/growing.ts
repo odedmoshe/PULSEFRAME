@@ -20,6 +20,7 @@ import type { GrowingApplyResult, GrowingPlanView, GrowingRegenerateResult, Rege
 import type { Principal } from './auth.ts';
 import type { Governance } from './governance.ts';
 import { ApiError, type Store } from './store.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 /** True once the bodies below are built (W2 flips it). */
 export const GROWING_SERVER_BUILT: boolean = false;
@@ -35,7 +36,7 @@ export type GrowingApiErrorKey = keyof typeof GROWING_API_ERRORS;
 /** The first check of every growing call: the credential may see the project, and it is the owner's own session. Exported for templates.ts. */
 export function assertGrowingCaller(gov: Governance, principal: Principal, projectId: string): void {
   gov.assertMayAct(principal, projectId, 'observe');
-  if (principal.kind !== 'user') throw GROWING_API_ERRORS.ownerRequired(); // the owner's browser session (http.ts owner(); auth.ts makes no other user session)
+  if (!actsAsOwner(principal)) throw GROWING_API_ERRORS.ownerRequired(); // the owner's browser session (http.ts owner(); auth.ts makes no other user session)
 }
 
 /** POST …/recipes/growing/plan. W2: planGrowing on the live document with the capture context; the view without ops and without eyes. */

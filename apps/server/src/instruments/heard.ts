@@ -15,6 +15,7 @@ import { isOwnerSession } from '../assistant/contract.ts';
 import type { Principal } from '../auth.ts';
 import { ApiError } from '../store.ts';
 import { instrumentsError, KITS_HEARD_FILE } from './contract.ts';
+import { actsAsOwner } from '../autonomy.ts';
 
 export interface HeardRow { kit: string; at: string }
 const fileOf = (dataDir: string) => path.join(dataDir, KITS_HEARD_FILE);
@@ -37,7 +38,7 @@ export function readKitsHeard(dataDir: string): Map<string, { at: string }> {
  * 403 owner_required for anyone but the owner's own session (checked first); 404 not_found for a kit this build does not have.
  */
 export function markKitHeard(dataDir: string, principal: Principal, kitId: string, heard: boolean, now: string, kits: readonly MusicKit[] = MUSIC_KITS): { kitId: string; version: number; heard: { at: string } | null } {
-  if (!isOwnerSession(principal)) throw instrumentsError('ownerOnly', {});
+  if (!actsAsOwner(principal)) throw instrumentsError('ownerOnly', {});
   const kit = kits.find((k) => k.id === kitId);
   if (!kit) throw new ApiError(404, 'not_found', `there is no recorded kit "${kitId.slice(0, 80)}"`, {}, 'GET /api/v1/music/kits lists the kits.');
   const key = kitKey(kit);

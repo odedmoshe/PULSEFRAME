@@ -28,6 +28,7 @@ import type { Principal } from './auth.ts';
 import { PYTHON_WORKER_FLAGS } from './pythonArgs.ts';
 import { assertStorageRoom, freeDiskBytes } from './storage.ts';
 import { ApiError, type JobRow, type Store } from './store.ts';
+import { actsAsOwner } from './autonomy.ts';
 
 export const SPEECH_ENGINE_JOB_TYPE = 'speech-engine-install';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -282,7 +283,7 @@ export class SpeechEngineInstaller {
     };
   }
   assertOwner(p: Principal) {
-    if (!isOwnerSession(p)) throw new ApiError(403, 'owner_required', 'the speech engine is installed only from the owner\'s own editor window: it runs software on this computer', {}, 'Open the editor from the owner link (start-pulseframe.cmd prints it) and install it in the speech panel there.');
+    if (!actsAsOwner(p)) throw new ApiError(403, 'owner_required', 'the speech engine is installed only from the owner\'s own editor window: it runs software on this computer', {}, 'Open the editor from the owner link (start-pulseframe.cmd prints it) and install it in the speech panel there.');
   }
 
   /** The one confirming press: starts the install job for the exact download size the plan showed. */
