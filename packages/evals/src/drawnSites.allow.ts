@@ -185,4 +185,7 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/evals/src/audiences-proof.core.ts", snippet: "if (clip.type === 'text') {", class: 'proof', note: "audiences proof reads the titles it made" },
   { file: "packages/evals/src/autonomy-proof.ts", snippet: "ent as any[]).find((x) => x.type === 'text')?.text;", class: 'proof', note: "MCP tool answer text, not a clip" },
   { file: "packages/evals/src/autonomy-proof.ts", snippet: "ent as any[]).find((x) => x.type === 'text')?.text; let", class: 'proof', note: "MCP tool answer text, not a clip" },
+  { file: "packages/evals/src/growing-proof.server.ts", snippet: "lots ?? []).filter((x) => x.kind === 'text').map((x) =>", class: 'proof', note: "growing proof reads the title slots it made" },
+  { file: "packages/evals/src/growing-proof.server.ts", snippet: "typeof v === 'object' && v.kind === 'text' && typeof v", class: 'proof', note: "growing proof reads the title slots it made" },
+  { file: "apps/server/src/growing.ts", snippet: "lots ?? []).filter((s) => s.kind === 'text').map((s) =>", class: 'n/a', note: "growing kept slot kind (a run record's slot, not a clip branch)" },
 ];

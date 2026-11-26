@@ -80,16 +80,4 @@ describe('growing contract: nothing about eyes is stored, and the stubs are hone
     }
   });
 });
-
-// W1 (growing.test.ts) makes these pass; named after the plan's checks (growing-plan.md §5, with the verifier's corrections)
-describe('growing planner (W1)', () => {
-  it.todo('solveAlignment: sourceToFrame of each eye lands on its target within 1e-4 px; eyesFromTransform inverts it within 1e-6 (C7, C11)');
-  it.todo('solveAlignment never swaps (C10); suggestEyeOrder swaps above |θ| 90° only');
-  it.todo('coverage: the closed-form smallest face size equals a brute-force search on random rectangles; midpoint outside → cannot_cover_all (C11)');
-  it.todo('G4 order: capture order, undated picks after the pick they followed, deterministic');
-  it.todo('time: cuts are start + i·hold in integer frames; a hold below flashGapFrames is refused hold_too_short, never raised (G15, C12)');
-  it.todo('captions never carry a field without words: undated → none, before birth → date only (G8)');
-  it.todo('a video pick is an add_clip freeze at sourceTimeOfFrame(frame); the dissolve after it is accepted (G5, G6)');
-  it.todo('step and slot counts under apply_template caps; the run record is growingRunRecordParams of the plan (G9–G11 shrunk)');
-  it.todo('G17: the plan digest is identical in two runs');
-});
+// The planner's own checks (W1) are in growing.test.ts.

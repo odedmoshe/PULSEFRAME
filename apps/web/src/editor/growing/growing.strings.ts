@@ -30,6 +30,18 @@ export interface GrowingStrings {
   excluded: Record<GrowingExclusionCode, string>;
   // the bar
   made: string; notWatched: string; undo: string; rebuild: string; restoreRemoved: string; why: string;
+  // wave 8 W3 additions
+  pickHelp: string; pickEmpty: string; pickLabel: string; dateOf(d: string): string; moveHint: string;
+  stateNone: string; stateOne: string; stateDone: string; stateWords(name: string, state: string): string;
+  markHelp: string; markHelpVideo: string; tooClose: string; pictureList: string; placed(n: number, x: number, y: number): string; crosshairAt(x: number, y: number): string;
+  playPreview: string; pausePreview: string; previewNeedsTwo: string; frameStepper: string;
+  blockerFew: string; blockerUnmarked: string; closeKeep: string; closeConfirm: string;
+  creating: string; created: string; staleProject: string; failed: string;
+  holdFramesText(frames: number, min: number): string; faceSuggestTitle: string; captionNeedsDate: string;
+  /** The bar's «ביטול» when the step that made the film is not among the recent actions (its disabled reason). */
+  undoUnavailable: string;
+  rebuilding: string; rebuilt: string; whyTitle: string; whyRow(name: string, date: string, mag: string, unc: string): string; whyAfterReload: string; noExclusions: string;
+  restoreTitle: string; restoreCreate: string; needsMarksList(n: number): string;
 }
 
 const shared = (d: typeof GROWING_HE | typeof GROWING_EN) => ({
@@ -68,6 +80,19 @@ const HE: GrowingStrings = {
     removed_by_hand: 'נמחקה ביד',
   },
   made: 'גדלים מול העיניים נוצר', notWatched: 'עוד לא נצפה', undo: 'ביטול', rebuild: 'בנו מחדש', restoreRemoved: 'החזרת החלקים שנמחקו', why: 'למה?',
+  pickHelp: 'סמנו בתיבה את התמונות. רווח מסמן. Alt+חץ למעלה או למטה מזיז תמונה בלי תאריך.', pickEmpty: 'אין בספרייה תמונות או סרטונים. הוסיפו קבצים ופתחו שוב.', pickLabel: 'תמונות וסרטונים לפי תאריך צילום',
+  dateOf: (d) => `תאריך: ${d}`, moveHint: 'Alt+חץ מזיז',
+  stateNone: 'עוד לא סומנה', stateOne: 'סומנה עין אחת', stateDone: 'סומנו שתי עיניים', stateWords: (n, s) => `${n}: ${s}`,
+  markHelp: 'לחצו על העין הראשונה (השמאלית בתמונה) ואז על העין השנייה. במקלדת: חצים מזיזים את הצלב (Shift: עשרה פיקסלים), Enter מסמן, S מחליף בין העיניים, Backspace מוחק את הסימון האחרון, PageDown ו־PageUp מחליפים תמונה.',
+  markHelpVideo: 'בסרטון בחרו קודם את הפריים: חצים ימינה ושמאלה בשורת הפריים (Shift: שנייה).', tooClose: 'שתי הנקודות קרובות מדי זו לזו. סמנו את העין השנייה במקומה.', pictureList: 'התמונות שנבחרו וסימון כל אחת',
+  placed: (n, x, y) => `סומנה נקודה ${n} במקום ${x},${y}`, crosshairAt: (x, y) => `הצלב ב־${x},${y}`,
+  playPreview: 'נגנו את התצוגה המקדימה', pausePreview: 'עצרו את התצוגה המקדימה', previewNeedsTwo: 'התצוגה המקדימה מופיעה אחרי שמסמנים עיניים בשתי תמונות.', frameStepper: 'פריים הסרטון',
+  blockerFew: 'סמנו שתי עיניים לפחות בשתי תמונות', blockerUnmarked: 'בחלק מהתמונות שבחרתם אין עדיין סימון. סמנו אותן או בטלו את הבחירה שלהן', closeKeep: 'להמשיך לסמן', closeConfirm: 'לסגור בכל זאת',
+  creating: 'יוצרים…', created: 'נוצר', staleProject: 'הפרויקט השתנה בינתיים. פתחו את החלון שוב.', failed: 'לא הצלחנו ליצור',
+  holdFramesText: (f, m) => `${f} פריימים (המינימום ${m})`, faceSuggestTitle: 'מדידה על רשת נקודות, לא הבטחה', captionNeedsDate: 'הכיתוב מופיע רק בתמונות עם תאריך',
+  undoUnavailable: 'הצעד שיצר את הסרט לא נמצא בין הפעולות האחרונות (אולי כבר בוטל, או שהדף נטען מחדש מאז). אפשר למחוק את התמונות שלו מציר הזמן, או לבנות מחדש.',
+  rebuilding: 'בונים מחדש…', rebuilt: 'נבנה מחדש', whyTitle: 'מה נעשה בכל תמונה', whyRow: (n, d, m, u) => `${n} · ${d} · הגדלה ${m} · לא מכוסה ${u}%`, whyAfterReload: 'המספרים מוצגים מיד אחרי יצירה או בנייה מחדש.', noExclusions: 'אף תמונה לא הוצאה.',
+  restoreTitle: 'סמנו מחדש את התמונות שנמחקו', restoreCreate: 'החזירו', needsMarksList: (n) => `${n} תמונות צריכות סימון מחדש`,
 };
 
 const EN: GrowingStrings = {
@@ -101,6 +126,19 @@ const EN: GrowingStrings = {
     removed_by_hand: 'Deleted by hand',
   },
   made: 'Growing up before your eyes made', notWatched: 'not watched yet', undo: 'Undo', rebuild: 'Rebuild', restoreRemoved: 'Bring back the deleted parts', why: 'Why?',
+  pickHelp: 'Tick the pictures. Space ticks. Alt+Up or Down moves a picture with no date.', pickEmpty: 'The library has no pictures or videos. Add files and open this again.', pickLabel: 'Pictures and videos by date taken',
+  dateOf: (d) => `Date: ${d}`, moveHint: 'Alt+arrow moves',
+  stateNone: 'not marked yet', stateOne: 'one eye marked', stateDone: 'both eyes marked', stateWords: (n, s) => `${n}: ${s}`,
+  markHelp: 'Click the first eye (the one on the left of the picture), then the second. By keyboard: arrows move the cross-hair (Shift: ten pixels), Enter marks, S swaps the eyes, Backspace removes the last mark, PageDown and PageUp change picture.',
+  markHelpVideo: 'For a video choose the frame first: left and right arrows on the frame row (Shift: one second).', tooClose: 'The two points are too close together. Mark the second eye in its place.', pictureList: 'The chosen pictures and the marks of each',
+  placed: (n, x, y) => `Point ${n} placed at ${x},${y}`, crosshairAt: (x, y) => `Cross-hair at ${x},${y}`,
+  playPreview: 'Play the preview', pausePreview: 'Pause the preview', previewNeedsTwo: 'The preview appears once two pictures have both eyes marked.', frameStepper: 'Video frame',
+  blockerFew: 'Mark both eyes in at least two pictures', blockerUnmarked: 'Some chosen pictures are not marked yet. Mark them or untick them', closeKeep: 'Keep marking', closeConfirm: 'Close anyway',
+  creating: 'Creating…', created: 'Created', staleProject: 'The project changed meanwhile. Open this again.', failed: 'Could not create it',
+  holdFramesText: (f, m) => `${f} frames (minimum ${m})`, faceSuggestTitle: 'Measured on a grid of points, not a promise', captionNeedsDate: 'The caption shows only on pictures with a date',
+  undoUnavailable: 'The step that made this film is not among the recent actions (it may be undone already, or the page was reloaded since). Delete its pictures on the timeline, or rebuild.',
+  rebuilding: 'Rebuilding…', rebuilt: 'Rebuilt', whyTitle: 'What was done with each picture', whyRow: (n, d, m, u) => `${n} · ${d} · magnified ${m} · uncovered ${u}%`, whyAfterReload: 'The numbers are shown right after creating or rebuilding.', noExclusions: 'No picture was left out.',
+  restoreTitle: 'Mark the deleted pictures again', restoreCreate: 'Bring back', needsMarksList: (n) => `${n} pictures need marking again`,
 };
 
 export const growingStrings = (lang: 'he' | 'en'): GrowingStrings => (lang === 'he' ? HE : EN);

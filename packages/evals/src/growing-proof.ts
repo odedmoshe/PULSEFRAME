@@ -54,8 +54,12 @@ if (pending.length) {
   process.exit(2);
 }
 let failed = 0;
+// PF_GROWING_PART=server|ui runs one half (each check once), PF_GROWING_CHECKS=G2,U5 only those checks; unset runs everything
+const only = process.env.PF_GROWING_PART;
 for (const [name, part] of Object.entries(parts)) {
+  if (only && only !== name) continue;
   for (const [id, check] of Object.entries(part.checks)) {
+    if (process.env.PF_GROWING_CHECKS && !process.env.PF_GROWING_CHECKS.split(',').includes(id)) continue;
     const r = await check();
     console.log(`${r === true ? 'PASS' : 'FAIL'} ${id} (${name})${r === true ? '' : `: ${r}`}`);
     if (r !== true) failed++;

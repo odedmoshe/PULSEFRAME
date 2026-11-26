@@ -81,6 +81,9 @@ export async function applyRecipe(store: Store, gov: Governance, principal: Prin
  * it, so a regeneration planned on an older revision is refused (409) instead of silently built on a moved project.
  */
 export async function regenerateRecipe(store: Store, gov: Governance, principal: Principal, projectId: string, runId: string, newParams?: unknown, options: RegenerateOptions = {}, expectedRevision?: number) {
+  // the credential's rights on the project come first (wave 8 growing): a credential that may not see the project learns nothing
+  // about its runs (an unknown run and a growing run answer it the same); then a growing run's owner check comes before its body
+  gov.assertMayAct(principal, projectId, 'observe');
   const p = store.getProject(projectId);
   const run = p.doc.recipeRuns && Object.hasOwn(p.doc.recipeRuns, runId) ? p.doc.recipeRuns[runId] : undefined;
   if (!run) throw new ApiError(404, 'not_found', `recipe run ${runId} not found`, { runId });

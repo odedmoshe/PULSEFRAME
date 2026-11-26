@@ -53,7 +53,7 @@ export const GROWING_TEMPLATE_ID = 'tpl.growing' as const;
 export const GROWING_RUN_RECIPE_ID = 'template:tpl.growing' as const;
 export const GROWING_VERSION = 1 as const;
 /** True once planGrowing, solveAlignment, eyesFromTransform and suggestEyeOrder are built (W1 flips it). The editor shows the feature only then. */
-export const GROWING_BUILT: boolean = false;
+export const GROWING_BUILT: boolean = true;
 export const GROWING_METHOD = 'a similarity transform from two eye points placed by hand (exact arithmetic); no face detection, no model' as const;
 
 export const GROWING = {
