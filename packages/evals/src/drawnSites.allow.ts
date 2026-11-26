@@ -202,4 +202,5 @@ export const DRAWN_SITES: readonly DrawnSite[] = [
   { file: "packages/evals/src/agent-proof.server.ts", snippet: "c) => c.id === titleId && c.type === 'text' && (c as {", class: 'proof', note: "agent proof reads the title it made" },
   { file: "apps/web/src/editor/made/MadeClipDialog.tsx", snippet: "{...(f.kind === 'text' ? { type: '", class: 'n/a', note: "a made page's field kind (text / colour / number), not a clip branch" },
   { file: "packages/evals/src/timeline-basics-proof.ts", snippet: "t doc()).find((c: any) => c.type === 'text').id;", class: 'proof', note: "timeline proof reads the title it made" },
+  { file: "packages/evals/src/grade-proof.engine.ts", snippet: "rse(r.content.find((x) => x.type === 'text')!.text);", class: 'proof', note: "MCP tool answer text, not a clip" },
 ];

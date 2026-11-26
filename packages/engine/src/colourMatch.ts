@@ -8,7 +8,7 @@
  * reference, `amount` can be below 1, and the residual is always reported. color.grade has limited reach (white balance R/B
  * 0.67–1.5, no curves): a cast beyond it is reported as `partial`, with the values that hit their limit in `limitedBy`.
  */
-import { DEFAULT_TRANSFORM, GradeCurvesNotBuilt, isTimeEffect, paramRange, type GradeCurveTables, type MediaClip, type ProjectDocument } from '@pulseframe/core';
+import { DEFAULT_TRANSFORM, isTimeEffect, paramRange, type GradeCurveTables, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 
 export interface GradeParams { exposure: number; temperature: number; tint: number; contrast: number; saturation: number; shadows: number; highlights: number; fade: number }
 /** The color.grade defaults (core effects.ts): no change. */
@@ -61,8 +61,11 @@ export function gradePixel(rgb: readonly [number, number, number], p: Readonly<G
  * q = 255·o; i = min(floor(q), 254); f = q − i; out = (T[i]·(1 − f) + T[i+1]·f) / 255, per channel with its own table. Model only.
  */
 export function curvePixel(o: readonly [number, number, number], tables: GradeCurveTables): [number, number, number] {
-  void o; void tables;
-  throw new GradeCurvesNotBuilt('curvePixel');
+  const step = (v: number, T: Uint8Array) => {
+    const q = 255 * clamp01(v), i = Math.min(Math.floor(q), 254), f = q - i;
+    return (T[i]! * (1 - f) + T[i + 1]! * f) / 255;
+  };
+  return [step(o[0], tables.r), step(o[1], tables.g), step(o[2], tables.b)];
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

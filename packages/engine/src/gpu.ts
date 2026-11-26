@@ -89,7 +89,7 @@ export function smoothNoise(seed: number, t: number): number {
  * The movement of the time-driven "motion" effects as plain numbers: zoom, rotation (radians) and offset (fractions of the
  * frame height) at a moment. The shader only applies them, so the picture can be checked against these numbers.
  */
-import { BEAT_WINDOW_SECONDS, GRADE_CURVE_TABLE_SIZE, MAX_GRADE_CURVE_TEXTURES } from '@pulseframe/core';
+import { BEAT_WINDOW_SECONDS, GRADE_CURVE_TABLE_SIZE, gradeCurvesKey, gradeCurveTables, gradeCurveTablesRgba, MAX_GRADE_CURVE_TEXTURES } from '@pulseframe/core';
 import { depthGridSize, LIVING_FOCUS, LIVING_MAX_SHIFT, livingMoveOf, livingSteps } from '@pulseframe/core';
 /**
  * For an effect set to follow the music: how far the moment is into the current hit (`phase`: 0 on the hit, rising to 1
@@ -1132,21 +1132,48 @@ export function gpuTransition(t: TransitionState, outgoing: OffscreenCanvas | nu
   if (!g) { skipped.add(t.type); return Promise.resolve(false); }
   return runPass(t.type, `tr:${g.kernel}`, () => transitionShader(T2[g.kernel]!), transitionUniforms(t, env.width, env.height), outgoing, incoming, dst, env);
 }
-/** Why a grade with curves is not drawn in this build (the reason export and the inspector show; i18n HE_GRADE words it). */
+/** Why a grade with curves is not drawn in this build (the reason export and the inspector show; i18n HE_GRADE words it). Kept for older callers: the pass is built (wave 8 grade W1), so this build no longer gives it. */
 export const GRADE_CURVES_PASS_NOT_BUILT = 'color.grade: colour curves are not built in this build yet';
+/** The last line of the color.grade body, which the curve variant replaces (checked: the grade's text itself is never changed). */
+const GRADE_LAST_LINE = 'return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)) * s.a, s.a);';
 /**
- * W1: the grade with its curves. Pipeline key `fx:color.grade+curves`, shader `shaderOf(<grade body with the curve step>, 'curve')`
- * (the WGSL of grade-plan §3.5 replaces the grade's last line: textureLoad of the two neighbouring entries, mixed in f32, then
- * premultiplied), binding 3 = curveTexture(s, gradeCurvesKey(curves), gradeCurveTablesRgba(gradeCurveTables(curves))).
- * Until then: refused as unavailable with GRADE_CURVES_PASS_NOT_BUILT (the layer is drawn without its grade and export refuses),
- * never drawn without the curves as if they were not there.
+ * The curve step (grade-plan §3.5; model: colourMatch.ts curvePixel): the clamped straight colour indexes the 256×1 table with
+ * textureLoad (never the sampler, grade-verify C6): the two neighbouring entries mixed in f32 by the fraction, then premultiplied.
+ */
+const GRADE_CURVE_STEP = `let o = clamp(c, vec3f(0.0), vec3f(1.0));
+      let q = o * 255.0; let i = min(floor(q), vec3f(254.0)); let f = q - i;
+      let r = mix(textureLoad(crv, vec2i(i32(i.r), 0), 0).r, textureLoad(crv, vec2i(i32(i.r) + 1, 0), 0).r, f.r);
+      let g = mix(textureLoad(crv, vec2i(i32(i.g), 0), 0).g, textureLoad(crv, vec2i(i32(i.g) + 1, 0), 0).g, f.g);
+      let b = mix(textureLoad(crv, vec2i(i32(i.b), 0), 0).b, textureLoad(crv, vec2i(i32(i.b) + 1, 0), 0).b, f.b);
+      return vec4f(vec3f(r, g, b) * s.a, s.a);`;
+/** The WGSL of the grade with curves: the grade's own body with its last line replaced by the curve step, crv at binding 3. */
+export function gradeCurvesShader(): string {
+  const body = GPU_EFFECTS['color.grade']!.wgsl;
+  if (body.split(GRADE_LAST_LINE).length !== 2) throw new Error('the color.grade body no longer ends with the line the curve step replaces');
+  return shaderOf(body.replace(GRADE_LAST_LINE, GRADE_CURVE_STEP), 'curve');
+}
+/** Table bytes by gradeCurvesKey, so a frame does not rebuild them (bounded like the textures; 1 KB each). */
+const curveBytes = new Map<string, Uint8Array>();
+/**
+ * The grade with its curves: pipeline `fx:color.grade+curves`, shader gradeCurvesShader(), binding 3 = the composed R, G, B tables
+ * (curveTexture, keyed by gradeCurvesKey). The same uniforms as the plain grade. A curves value the tables refuse (never in a valid
+ * document) is unavailable with its reason, never drawn without the curves as if they were not there.
  */
 function gradeWithCurves(params: Record<string, unknown>, curves: GradeCurves, src: OffscreenCanvas, dst: C2D, env: EffectEnv): Promise<boolean> {
-  void params; void curves; void src; void dst; void env;
-  skipped.add('color.grade');
-  // without an adapter the adapter is the reason given (as for a colour table that was not supplied)
-  if (state && !skippedWhy.has('color.grade')) skippedWhy.set('color.grade', GRADE_CURVES_PASS_NOT_BUILT);
-  return Promise.resolve(false);
+  const key = gradeCurvesKey(curves);
+  // a curves value whose channels are all the identity: the plain grade is the same picture (and the same pipeline as before)
+  if (!key) return runPass('color.grade', 'fx:color.grade', () => shaderOf(GPU_EFFECTS['color.grade']!.wgsl), GPU_EFFECTS['color.grade']!.params(params, env), src, null, dst, env);
+  let rgba = curveBytes.get(key);
+  if (!rgba) {
+    try { rgba = gradeCurveTablesRgba(gradeCurveTables(curves)); } catch (e) {
+      skipped.add('color.grade');
+      if (!skippedWhy.has('color.grade')) skippedWhy.set('color.grade', `color.grade: the colour curves could not be turned into a table: ${String((e as Error)?.message ?? e).slice(0, 200)}`);
+      return Promise.resolve(false);
+    }
+    if (curveBytes.size >= MAX_GRADE_CURVE_TEXTURES) curveBytes.clear();
+    curveBytes.set(key, rgba);
+  }
+  return runPass('color.grade', 'fx:color.grade+curves', gradeCurvesShader, GPU_EFFECTS['color.grade']!.params(params, env), src, null, dst, env, { kind: 'curve', key, rgba });
 }
 /** The texture of a grade's curve table (256×1 rgba8, raw bytes: no premultiplication or colour conversion), made on first use; at most MAX_GRADE_CURVE_TEXTURES, then all are dropped (C3). */
 function curveTexture(s: State, key: string, rgba: Uint8Array): any {

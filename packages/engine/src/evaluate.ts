@@ -455,6 +455,11 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
   const regionOf = (r: ResolvedRegion) => ({ id: r.id, state: r.state, whole: r.whole, style: r.style, sourceFrame: r.sourceFrame });
   /** Stabilisation of a picture (wave 7): its sample state, whether and why the cover limit weakened it, the zoom and the pose drawn. */
   const steadyOfLayer = (l: VideoLayer) => (l.steady ? { steady: { state: l.steady.state, limited: l.steady.limited, zoom: l.steady.zoom, pose: { r: l.steady.r, l: l.steady.l, tx: l.steady.tx, ty: l.steady.ty } } } : {});
+  /** The layer's colour grade as evaluated (wave 8 grade, G10): its params and, when it has them, its curves' points (no table samples: cut). */
+  const gradeOfLayer = (effects: readonly { type: string; params: Record<string, number | string | boolean>; curves?: GradeCurves }[] | undefined) => {
+    const e = effects?.find((x) => x.type === 'color.grade');
+    return e ? { grade: { params: e.params, ...(e.curves ? { curves: e.curves } : {}) } } : {};
+  };
   const lookOf = (l: Exclude<Layer, CaptionLayer | AdjustLayer>) => {
     // the effect instances behind the layer's effects: the clip's enabled effects, without the time effect the evaluator took out
     const clip = clipOf(l);
@@ -469,7 +474,7 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
       ...(l.kind === 'video' ? steadyOfLayer(l) : {}),
       ...(l.time ? { time: { type: l.time.type, taps: l.time.taps.map((t) => ({ lane: t.lane, ...(t.layer.kind === 'video' ? { sourceFrameIndex: t.layer.sourceFrameIndex, ...(t.layer.regions ? { regions: t.layer.regions.map(regionOf) } : {}), ...steadyOfLayer(t.layer) } : {}), weight: t.weight })) } } : {}),
       ...(l.remap ? { remap: { type: l.remap.type, shownFrame: l.remap.shownFrame } } : {}),
-      ...(l.effects ? { effects: l.effects.map((e) => e.type) } : {}), ...(modulated.length ? { modulated } : {}), ...(l.blend ? { blend: l.blend } : {}), ...(l.mask ? { mask: l.mask.shape } : {}),
+      ...(l.effects ? { effects: l.effects.map((e) => e.type) } : {}), ...gradeOfLayer(l.effects), ...(modulated.length ? { modulated } : {}), ...(l.blend ? { blend: l.blend } : {}), ...(l.mask ? { mask: l.mask.shape } : {}),
       ...(l.transition ? { transition: { type: l.transition.type, role: l.transition.role, progress: Number(l.transition.progress.toFixed(4)) } } : {}),
     };
   };
@@ -477,7 +482,7 @@ export function describeMoment(doc: ProjectDocument, time: T.RationalTime) {
     time: g.time,
     seconds: T.toSeconds(g.time),
     frameIndex: g.frameIndex,
-    layers: g.layers.map((l) => (l.kind === 'adjust' ? { kind: l.kind, clipId: l.clipId, effects: (l.effects ?? []).map((e) => e.type), opacity: Number(l.opacity.toFixed(4)), ...(l.mask ? { mask: l.mask.shape } : {}), ...(l.blend ? { blend: l.blend } : {}) } : l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...(l.colourFix ? { colourFix: l.colourFix } : {}), ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : l.kind === 'drawn' ? { kind: l.kind, clipId: l.clipId, drawn: drawnSummary(l.drawn), localFrame: l.localFrame, ...lookOf(l) } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
+    layers: g.layers.map((l) => (l.kind === 'adjust' ? { kind: l.kind, clipId: l.clipId, effects: (l.effects ?? []).map((e) => e.type), ...gradeOfLayer(l.effects), opacity: Number(l.opacity.toFixed(4)), ...(l.mask ? { mask: l.mask.shape } : {}), ...(l.blend ? { blend: l.blend } : {}) } : l.kind === 'video' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, sourceFrameIndex: l.sourceFrameIndex, sourceTime: l.sourceTime, ...(l.colourFix ? { colourFix: l.colourFix } : {}), ...lookOf(l) } : l.kind === 'image' ? { kind: l.kind, clipId: l.clipId, assetId: l.assetId, ...lookOf(l) } : l.kind === 'caption' ? { kind: l.kind, trackId: l.trackId, sourceId: l.sourceId, text: l.words.map((w) => w.text).join(' '), currentWord: l.words.find((w) => w.state === 'current')?.text ?? null } : l.kind === 'drawn' ? { kind: l.kind, clipId: l.clipId, drawn: drawnSummary(l.drawn), localFrame: l.localFrame, ...lookOf(l) } : { kind: l.kind, clipId: l.clipId, text: l.text, ...lookOf(l) })),
     audio: [...g.audio.map((a) => ({ ...a, fx: sound.fx.get(a.clipId) ?? [] })), ...sound.tails],
   };
 }
