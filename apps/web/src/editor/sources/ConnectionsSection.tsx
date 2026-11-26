@@ -17,11 +17,11 @@ import './sources.css';
 const SIGNUP: Record<'pixabay' | 'openverse', string> = { pixabay: 'https://pixabay.com/api/docs/', openverse: 'https://api.openverse.org/v1/' };
 const stateWord = (lang: Lang, s: SourceState): string => (s.state === 'needs_key' ? sx(lang, 'sources.needsKey') : s.state === 'needs_contact' ? sx(lang, 'sources.needsContact') : s.state === 'ready' ? sx(lang, 'sources.state.ready') : sx(lang, 'sources.state.not_built'));
 
-function Secret({ id, label, value, onChange, type = 'password' }: { id: string; label: string; value: string; onChange: (v: string) => void; type?: string }): ReactElement {
+function Secret({ id, label, value, onChange, type = 'password', testId }: { id: string; label: string; value: string; onChange: (v: string) => void; type?: string; testId?: string }): ReactElement {
   return (
     <label className="pf-src-field" htmlFor={id}>
       <span>{label}</span>
-      <input id={id} type={type} dir="ltr" className="pf-src-input" value={value} onChange={(e) => onChange(e.target.value)} autoComplete="off" spellCheck={false} />
+      <input id={id} type={type} dir="ltr" className="pf-src-input" value={value} onChange={(e) => onChange(e.target.value)} autoComplete="off" spellCheck={false} {...(testId ? { 'data-testid': testId } : {})} />
     </label>
   );
 }
@@ -63,9 +63,9 @@ export function ConnectionCard({ s, lang, owner, onChanged }: { s: SourceState; 
       {p === 'wikimedia' && <a href={policy.url} target="_blank" rel="noopener noreferrer">{sx(lang, 'sources.connect.policy')}</a>}
       {owner ? (
         <form className="pf-src-conn" onSubmit={save}>
-          {p === 'pixabay' && <Secret id="pf-conn-key-pixabay" label={sx(lang, 'sources.connect.key')} value={key} onChange={setKey} />}
-          {p === 'openverse' && <><Secret id="pf-conn-cid" label={sx(lang, 'sources.connect.clientId')} value={cid} onChange={setCid} type="text" /><Secret id="pf-conn-secret" label={sx(lang, 'sources.connect.clientSecret')} value={secret} onChange={setSecret} /></>}
-          {p === 'wikimedia' && <Secret id="pf-conn-contact" label={sx(lang, 'sources.connect.contact')} value={contact} onChange={setContact} type="text" />}
+          {p === 'pixabay' && <Secret id="pf-conn-key-pixabay" label={sx(lang, 'sources.connect.key')} value={key} onChange={setKey} testId={TID.keyInput(p)} />}
+          {p === 'openverse' && <><Secret id="pf-conn-cid" label={sx(lang, 'sources.connect.clientId')} value={cid} onChange={setCid} type="text" testId={TID.keyInput(p)} /><Secret id="pf-conn-secret" label={sx(lang, 'sources.connect.clientSecret')} value={secret} onChange={setSecret} /></>}
+          {p === 'wikimedia' && <Secret id="pf-conn-contact" label={sx(lang, 'sources.connect.contact')} value={contact} onChange={setContact} type="text" testId={TID.keyInput(p)} />}
           <div className="pf-src-row">
             <Button type="submit" size="sm" variant="secondary" disabled={busy || !body()} data-testid={TID.save(p)}>{sx(lang, 'sources.connect.save')}</Button>
             {hasSecret && <Button type="button" size="sm" variant="ghost" disabled={busy} data-testid={TID.forget(p)} onClick={() => void run(() => sourcesApi.deleteCredentials(p), sx(lang, 'sources.connect.removed'))}>{sx(lang, 'sources.connect.forget')}</Button>}

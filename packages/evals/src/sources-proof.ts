@@ -33,8 +33,8 @@ export const SOURCES_PROOF_CHECKS = [
   '5 import of a CC BY item as an AGENT credential: one use_source_item commit and one add_clip at the playhead, both as that agent; provenance.source validates; sha256 = the original hash; the credit verbatim; fetchedAt set; undo removes it exactly',
   '6 the download breaks at 50%: the job resumes with Range + If-Range (the double saw bytes=n-); with a changed ETag, or a 200 to the Range, it restarts at 0; the final hash is equal',
   '7 server restart mid-download: recover continues the .part; after success, after cancel and after a failure no src_* .part, up_ file or .link sidecar is left',
-  '8 limit 100 KB and a 200 KB file whose Content-Length lies low: download_too_large naming the setting and the number, nothing stored; a setting above the upload limit is capped at it',
-  '9 links to 127.0.0.1, [::ffff:127.0.0.1], 169.254.169.254, this machine\'s own interface address, and a public name redirecting to loopback: link_address_refused; a name that resolves to a public and a loopback address is refused; a 192.168.x.x link imports with link_private_network',
+  '8 limit 100 KB: a larger file with no Content-Length, and one whose Content-Length is above the limit, fail download_too_large naming the number, nothing stored; one whose Content-Length lies low is cut at the declared length by HTTP/1.1 and fails, nothing stored; a setting above the upload limit is capped at it',
+  '9 links to 127.0.0.1, [::ffff:127.0.0.1], [::1], 169.254.169.254, 0.0.0.0, this machine\'s own interface address, a public link redirecting to loopback and the name localhost: link_address_refused; a home-network link (the double\'s private address) imports with link_private_network (a name answering a public AND a loopback address: apps/server connectors/fetch.test.ts, with an injected lookup)',
   '9b the DEFAULT address policy (nothing injected) refuses 127.0.0.1',
   '10 a link answering text/html: download_not_media; a Dropbox share link (dl=0) is fetched as dl=1 and its pageUrl keeps dl=0 out',
   '11 an NC item and an ND item: imported with warnings (no refusal); the export answers non_commercial_content and licence_no_derivatives naming the licences and quoting the ND deed sentence; the export succeeds; a shared archive leaves the NC and the Pixabay files out',
@@ -112,11 +112,13 @@ const CHECKS: Record<string, () => Promise<Outcome>> = {
     return true;
   },
   '3': async () => {
+    // a query word that no item carries (an imported item's own title may hold its tags; the query must never reach the disk)
+    const first = await c.api('agent', 'GET', '/api/v1/sources/pixabay/search?q=sunrise%20quokka&kind=video');
     const n = dbl.px.seen.length;
-    const a = await c.api('agent', 'GET', '/api/v1/sources/pixabay/search?q=sunrise&kind=video');
-    need(a.body.cached === true && dbl.px.seen.length === n, 'answered from memory, no request', { cached: a.body.cached, requests: dbl.px.seen.length - n });
-    need(eq(filesContaining(ddir, 'sunrise'), []), 'no query word on disk', filesContaining(ddir, 'sunrise'));
-    evidence['3'] = { cached: true, requestsAdded: 0 };
+    const a = await c.api('agent', 'GET', '/api/v1/sources/pixabay/search?q=sunrise%20quokka&kind=video');
+    need(first.body.cached === false && a.body.cached === true && dbl.px.seen.length === n, 'answered from memory, no request', { cached: a.body.cached, requests: dbl.px.seen.length - n });
+    need(eq(filesContaining(ddir, 'quokka'), []), 'no query word on disk', filesContaining(ddir, 'quokka'));
+    evidence['3'] = { cached: true, requestsAdded: 0, rows: a.body.rows.length };
     return true;
   },
   '3b': async () => {
@@ -205,11 +207,17 @@ const CHECKS: Record<string, () => Promise<Outcome>> = {
     const n = Object.keys(docOf(rpid).assets).length;
     const big = Buffer.concat([fx['big.mp4'], Buffer.from('never stored')]);
     const codes: unknown[] = [];
-    for (const file of [{ bytes: big, contentType: 'video/mp4', noContentLength: true }, { bytes: big, contentType: 'video/mp4', lieContentLength: 50_000 }]) {
+    // no Content-Length, and a Content-Length above the limit: download_too_large naming the setting's number
+    for (const file of [{ bytes: big, contentType: 'video/mp4', noContentLength: true }, { bytes: big.subarray(0, 50_000), contentType: 'video/mp4', lieContentLength: 500_000 }]) {
       const j = await c.finished((await c.api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: dbl.host.put(`/large-${codes.length}.mp4`, file) })).body.jobId);
       codes.push([(j.error as any)?.code, (j.error as any)?.details?.maxBytes]);
       need((j.error as any)?.code === 'download_too_large' && (j.error as any).details.maxBytes === 100_000 && String((j.error as any).message).includes('100000 bytes'), 'download_too_large naming the number', j.error);
     }
+    // a Content-Length that lies LOW: HTTP/1.1 ends the body at the declared length, so the client sees a cut file (never more
+    // bytes than declared); the job fails and nothing is stored (the cut file is not media the importer can read)
+    const low = await c.finished((await c.api('agent', 'POST', `/api/v1/projects/${rpid}/sources/link`, { url: dbl.host.put('/large-low.mp4', { bytes: big, contentType: 'video/mp4', lieContentLength: 50_000 }) })).body.jobId);
+    need(low.status === 'failed', 'a low Content-Length: the job fails', low.status);
+    codes.push(['lies low', (low.error as any)?.code]);
     need(Object.keys(docOf(rpid).assets).length === n && !fs.readdirSync(path.join(ddir, 'blobs')).includes(sha(big)) && eq(tmpFiles(ddir), []), 'nothing stored');
     await c.api('agent', 'PUT', '/api/v1/sources/settings', { maxDownloadBytes: null });
     evidence['8'] = { refused: codes, fileBytes: big.length };
@@ -271,7 +279,7 @@ const CHECKS: Record<string, () => Promise<Outcome>> = {
       ids.push(out(j).assetId);
     }
     // image clips get a default length; make each 2 s so the film is short
-    const ex = await c.api('agent', 'POST', `/api/v1/projects/${pid}/exports`, { format: 'mp4' });
+    const ex = await c.api('agent', 'POST', `/api/v1/projects/${pid}/exports`, { format: 'mp4-h264-aac' });
     need(ex.status === 202, 'the export starts', ex.body);
     const ej = await c.finished(ex.body.jobId, 240_000);
     need(ej.status === 'succeeded', 'the export succeeds', ej.error);
@@ -309,6 +317,7 @@ const CHECKS: Record<string, () => Promise<Outcome>> = {
     return true;
   },
   '13': async () => {
+    await c.api('agent', 'PUT', '/api/v1/sources/settings', { maxDownloadBytes: null }); // the upload limit (an earlier check may have left a lower one)
     const pid = (await c.api('owner', 'POST', '/api/v1/projects', { name: 'sources check 13', width: 320, height: 180 })).body.project.id as string;
     const id = 'a1b2c3d4-0000-4000-8000-0000000000a5';
     dbl.ov.items.push({ id, media: 'audio', title: 'Proof song', creator: 'Dee', license: 'by-sa', license_version: '4.0', fileUrl: dbl.host.put('/ov/proof-song.wav', { bytes: songWav(60, 120, 1), contentType: 'audio/wav' }), filetype: 'wav', duration: 60_000, category: 'music' });

@@ -133,6 +133,9 @@ describe('connection cards', () => {
     const other = renderToStaticMarkup(createElement(ConnectionCard, { s: st({}), lang: 'he', owner: false, onChanged: () => {} }));
     expect(other).not.toContain('<button'); expect(other).not.toContain('<input');
   });
+  it('the first field of each card carries the contract\'s keyInput test id (sources.testids.ts; the proof types into it)', () => {
+    for (const provider of ['pixabay', 'openverse', 'wikimedia'] as const) expect(renderToStaticMarkup(createElement(ConnectionCard, { s: st({ provider }), lang: 'en', owner: true, onChanged: () => {} })), provider).toContain(`data-testid="${TID.keyInput(provider)}"`);
+  });
   it('Forget shows only when a key is stored; Openverse shows the hourly number; Wikimedia links its policy', () => {
     expect(renderToStaticMarkup(createElement(ConnectionCard, { s: st({ state: 'ready', keySet: true, keyAddedAt: '2026-11-26' }), lang: 'en', owner: true, onChanged: () => {} }))).toContain(`data-testid="${TID.forget('pixabay')}"`);
     const ov = renderToStaticMarkup(createElement(ConnectionCard, { s: st({ provider: 'openverse', state: 'ready', mode: 'anonymous', remaining: { count: 5, perSeconds: 3600 } }), lang: 'he', owner: true, onChanged: () => {} }));
