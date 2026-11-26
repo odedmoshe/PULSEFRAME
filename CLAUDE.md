@@ -6,6 +6,7 @@ How work is split across agents and models: `docs/EXECUTION_POLICY.md`.
 
 ## Product scope (owner, 2026-11-26)
 A general-purpose video editor for any creator's work (YouTube, short clips, social formats, tutorials, music clips, family films): do not narrow features, defaults or wording to one niche. Autonomy first, open by default: the owner wants the system to do as much as possible by itself (a language model now, skills later), with every tool available and no approval steps unless the owner switches one on. Do not design new gates, owner-only limits or refusals-by-policy; warn and continue instead. Keep: every edit a registered op (undoable), the owner key on the server, validated results. Details and what is being re-decided: `docs/BLOCKERS.md`, owner decisions of 2026-11-26.
+Tool radar: the lead looks for fitting tools, engines, models and services before the owner has to name them (a research pass at the start of each wave and each new track; `docs/design/TOOL_RADAR_*.md`, summary in `docs/TECH_RADAR.md`).
 
 ## Commands
 - `pnpm install` · `pnpm dev` (server :8787 + Vite :5173) · `pnpm build` · `pnpm start`
