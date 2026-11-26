@@ -34,6 +34,7 @@ import { Speech } from './speech.ts';
 import { Store } from './store.ts';
 
 let dir: string, cfg: Config, store: Store, auth: Auth, gov: Governance, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, speech: Speech, capabilities: Capabilities;
+let derivatives: Derivatives;
 let ownerCookie = '', proposeGrant = '', pid = '', fx: LibraryFixture, imports: ReturnType<typeof createImportQueue>;
 const base = () => `http://127.0.0.1:${cfg.port}`;
 const OWNER: Principal = { actor: 'user:local', kind: 'user', scopes: ['observe', 'edit'] };
@@ -61,6 +62,12 @@ const counts = () => ({
   assets: Object.keys(store.getProject(pid).doc.assets).length,
   revision: store.getProject(pid).revision,
 });
+/**
+ * The counts once the server has finished deriving: an import returns before its derived files (a waveform, thumbnails) are made,
+ * and the derivation queue later interns them into `blobs`. A "nothing stored" check compares against this, never against a count
+ * read while an earlier import's waveform is still queued (2026-11-25: 3 then 4 under load).
+ */
+const settledCounts = async () => { await derivatives.idle(); return counts(); };
 async function untilReady() {
   for (let i = 0; i < 400; i++) { const st = await rest(owner, 'GET', '/api/v1/library/status'); if (st.body.state !== 'indexing') return st.body; await new Promise((r) => setTimeout(r, 25)); }
   throw new Error('the index did not finish');
@@ -91,7 +98,7 @@ beforeAll(async () => {
   auth.resolveGrant = (token) => gov.principalForToken(token);
   speech = new Speech(store, cfg);
   mcp = createMcp(store, auth, exporter, capabilities, presence, gov, speech);
-  const derivatives = new Derivatives(store);
+  derivatives = new Derivatives(store);
   imports = createImportQueue({ store, lane: new FifoComputeLane(), derivatives, maxUploadBytes: 1 << 30, reserveBytes: 0, homeZone: 'Asia/Jerusalem' });
   app = createApp(cfg, store, auth, exporter, capabilities, derivatives, presence, mcp, gov, undefined, speech, { imports });
   ownerCookie = auth.issueSession(new Request(`${base()}/api/v1/session`, { headers: { origin: base(), 'x-pf-owner-key': auth.tokens.owner } })).split(';')[0]!;
@@ -100,6 +107,7 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => {
   await imports.stop();
+  await derivatives.stop();
   closeLibraryService(dir);
   await mcp.close();
   await speech.stop();
@@ -269,7 +277,7 @@ describe('what the workers make pass', () => {
   });
   it('A: use — refusals store nothing: propose mode 403, unusable 409 with the reason, a changed file item 409 library_hash_mismatch, a touched tree file 409 library_changed_since_index, a link or `..` 409 library_path_escape, an unsafe SVG 422', async () => {
     const use = (who: Who, key: string, extra: Record<string, unknown> = {}) => rest(who, 'POST', `/api/v1/projects/${pid}/library/use`, { key, ...extra });
-    const before = counts();
+    const before = await settledCounts();
     expect((await use(proposer, FIX_KEYS.track120)).status).toBe(403);
     expect((await use(observer, FIX_KEYS.track120)).status).toBe(403);
     for (const [key, reason] of [[FIX_KEYS.nd, 'licence_no_derivatives'], [FIX_KEYS.unknownCustom, 'licence_unknown'], [FIX_KEYS.animated, 'animated'], [FIX_KEYS.orphan, 'credit_unresolved'], [FIX_KEYS.ccbyNoAuthor, 'credit_missing']] as const) {
@@ -293,7 +301,7 @@ describe('what the workers make pass', () => {
     try {
       expect((await rest(owner, 'POST', '/api/v1/library/reindex')).status).toBe(202);
       await untilReady();
-      const before = counts();
+      const before = await settledCounts();
       const opened: string[] = [];
       const real = fs.promises.open;
       fs.promises.open = (async (...a: Parameters<typeof real>) => { opened.push(String(a[0])); return real(...a); }) as typeof real;
@@ -310,7 +318,7 @@ describe('what the workers make pass', () => {
     }
   });
   it('A: use — a usable item: 501 library_not_built (nothing stored) until use_library_item is built; then copied by hash with its record, placed at the asked frame, undo keeps the file, a hand upload gets the record', async () => {
-    const before = counts();
+    const before = await settledCounts();
     const start = { value: '30', timescale: 30 };
     const r = await rest(owner, 'POST', `/api/v1/projects/${pid}/library/use`, { key: FIX_KEYS.track120, start });
     if (!LIBRARY_OPS_BUILT) {
@@ -346,7 +354,7 @@ describe('what the workers make pass', () => {
   });
   it('A: the import queue\'s library branch: received bytes that are not the checked ones are refused 409 before anything is stored; a bad record is 400', async () => {
     const { Readable } = await import('node:stream');
-    const before = counts();
+    const before = await settledCounts();
     const record = { itemId: 'x/y', sourceId: 'x', kind: 'sound', title: 't', sourceSha256: 'a'.repeat(64), ledger: { item: 'x/y' }, licence: { id: 'CC0-1.0' }, flags: {} } as const;
     const req = (expect: any, rec: any = record) => imports.receive({ projectId: pid, actor: 'user:local', body: Readable.from([Buffer.from('some bytes')]), name: 'y.wav', via: 'browser', declaredBytes: 10, maxBytes: 1 << 20, commitKind: 'edit', library: { record: rec, expect } });
     const code = async (p: Promise<unknown>) => { try { await p; return 'stored'; } catch (e) { return (e as { code?: string }).code; } };
