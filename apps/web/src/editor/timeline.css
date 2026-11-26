@@ -55,6 +55,21 @@
 .timeline.pf-ds .tl-magnet.is-on, .timeline.pf-ds .tl-ripple.is-on { background: var(--pf-frame-soft); color: var(--pf-frame); box-shadow: 0 0 0 1px color-mix(in srgb, var(--pf-frame) 40%, transparent); }
 .timeline.pf-ds .tl-snap.is-on { background: var(--pf-pulse-soft); color: var(--pf-pulse); box-shadow: 0 0 0 1px color-mix(in srgb, var(--pf-pulse) 45%, transparent); }
 .timeline.pf-ds[data-tool='blade'] .clip { cursor: crosshair; }
+/* until the beat is analysed the action sits on the toolbar, at a full control height, with its word */
+.timeline.pf-ds .tl-view button.tempo-run { block-size: var(--pf-h-sm); padding-inline: var(--pf-sp-4); border-radius: var(--pf-r-sm); }
+.timeline.pf-ds .tl-empty-lanes { gap: var(--pf-sp-3); white-space: nowrap; }
+
+/* ---------- the picture's room (DESIGN_REVIEW §6) ----------
+   An empty lane is a thin strip in its colour (view state; Timeline.tsx laneCollapsed): its name is the strip's tooltip and a
+   click opens it. Its header stays in the page (its buttons keep their ids) but shows only the colour bar. */
+.timeline.pf-ds .track.is-collapsed { cursor: pointer; overflow: clip; }
+.timeline.pf-ds .track.is-collapsed > .track-head { overflow: clip; padding-block: 0; }
+.timeline.pf-ds .track.is-collapsed > .track-head > :not(.track-bar) { visibility: hidden; }
+.timeline.pf-ds .track.is-collapsed > .track-lane { background: color-mix(in srgb, var(--k) 10%, transparent); }
+.timeline.pf-ds .track.is-collapsed:hover > .track-lane { background: color-mix(in srgb, var(--k) 22%, transparent); }
+/* without an analysed beat the Pulse Strip has no row: the ruler is the first row under the toolbar */
+.timeline.pf-ds .tl-top[data-beats='none'] .pulse-strip { display: none; }
+.timeline.pf-ds .tl-top[data-beats='none'] .tl-corner { grid-template-rows: var(--pf-lane-ruler) var(--pf-lane-flash); }
 
 /* the ride bar */
 .timeline.pf-ds .tl-ride-zone { flex: 1 1 0; min-inline-size: 0; position: relative; align-self: stretch; }

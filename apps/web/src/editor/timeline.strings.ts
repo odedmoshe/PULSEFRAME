@@ -20,6 +20,10 @@ const he = {
   split: 'פיצול בסמן', splitNeed: 'העמידו את הסמן בתוך הקליפ שנבחר',
   marker: 'סימנייה בסמן', markerThere: 'כבר יש סימנייה בפריים הזה',
   closeGaps: 'סגירת כל הרווחים',
+  // empty lanes drawn as thin strips
+  laneCollapsed: (name: string) => `${name}: מסלול ריק. לחיצה פותחת אותו`,
+  emptyLanes: (n: number) => (n === 1 ? 'מסלול ריק אחד' : `${n} מסלולים ריקים`),
+  emptyLanesShow: 'הצגת המסלולים הריקים',
   // ruler and zoom
   rulerMode: 'תצוגת הסרגל', rulerTime: 'זמן', rulerBars: 'תיבות', rulerBarsNeed: 'אין עדיין ניתוח קצב, ולכן אין תיבות להציג',
   zoomGroup: 'זום בציר הזמן', zoomOut: 'התרחקות', zoomIn: 'התקרבות', zoomSlider: 'רמת הזום בציר הזמן', fit: 'כל העריכה',
@@ -101,6 +105,9 @@ const en: typeof he = {
   split: 'Split at the playhead', splitNeed: 'Put the playhead inside the selected clip',
   marker: 'Marker at the playhead', markerThere: 'There is already a marker on this frame',
   closeGaps: 'Close all gaps',
+  laneCollapsed: (name: string) => `${name}: empty track. Click to open it`,
+  emptyLanes: (n: number) => (n === 1 ? '1 empty track' : `${n} empty tracks`),
+  emptyLanesShow: 'Show the empty tracks',
   rulerMode: 'Ruler shows', rulerTime: 'Time', rulerBars: 'Bars', rulerBarsNeed: 'The beat has not been analysed yet, so there are no bars to show',
   zoomGroup: 'Timeline zoom', zoomOut: 'Zoom out', zoomIn: 'Zoom in', zoomSlider: 'Timeline zoom level', fit: 'Whole edit',
   zoomValue: (seconds: string) => `${seconds} seconds across the screen`,
