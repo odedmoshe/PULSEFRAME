@@ -29,10 +29,10 @@ export function TermRows({ ids, lang }: { ids: readonly string[]; lang: Lang }):
 }
 
 /** One warning: what it names (the licence's own name), then the licence's own sentence. Never our conclusion. */
-export function WarningLine({ w, lang, id }: { w: SourceWarning; lang: Lang; id?: string }): ReactElement {
+export function WarningLine({ w, lang, id, withTitle }: { w: SourceWarning; lang: Lang; id?: string; /** name the file first (the export sheet lists notes of many files) */ withTitle?: boolean }): ReactElement {
   return (
     <div className="pf-src-warn" role="note" data-code={w.code} id={id}>
-      <span dir="auto"><bdi>{warningHead(lang, w)}</bdi></span>
+      <span dir="auto">{withTitle && w.title ? <><bdi>{w.title}</bdi>: </> : null}<bdi>{warningHead(lang, w)}</bdi></span>
       <TermRows ids={w.termIds} lang={lang} />
     </div>
   );

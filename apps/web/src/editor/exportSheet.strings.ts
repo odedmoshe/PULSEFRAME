@@ -47,6 +47,12 @@ export const EXPORT_STRINGS = {
       title_hidden: ['כותרת מוסתרת', 'תמונה מלאה מעליה מכסה אותה לכל אורכה', ''],
       ends_mid_word: ['הסרט נגמר באמצע מילה', 'לפי זמני המילים בתמליל', ''],
       cut_mid_word: ['חיתוך באמצע מילה', 'לפי זמני המילים בתמליל', ''],
+      // wave 8 sources (core PREFLIGHT_CODES_SOURCES): a headline; the detail is the server's message, quoting the licence's own words
+      licence_no_derivatives: ['קובץ ברישיון ND (בלי יצירות נגזרות)', '', ''],
+      licence_share_alike: ['קובץ ברישיון SA (שיתוף זהה)', '', ''],
+      licence_unknown: ['קובץ שהרישיון שלו לא ידוע', '', ''],
+      licence_unconfirmed: ['קובץ שהרישיון שלו לא נקרא כאן במלואו', '', ''],
+      source_terms: ['תנאים של שירות המקור', '', ''],
     } as Record<string, [string, string, string]>,
     blocker: 'חוסם', warning: 'שימו לב',
     // progress
@@ -111,6 +117,11 @@ export const EXPORT_STRINGS = {
       title_hidden: ['A hidden title', 'A full picture above it covers it for its whole length', ''],
       ends_mid_word: ['The film ends inside a word', 'By the transcript\'s word times', ''],
       cut_mid_word: ['A cut inside a word', 'By the transcript\'s word times', ''],
+      licence_no_derivatives: ['A file under an ND (no-derivatives) licence', '', ''],
+      licence_share_alike: ['A file under an SA (share-alike) licence', '', ''],
+      licence_unknown: ['A file whose licence is unknown', '', ''],
+      licence_unconfirmed: ['A file whose licence was not read in full here', '', ''],
+      source_terms: ['Terms of the source service', '', ''],
     } as Record<string, [string, string, string]>,
     blocker: 'Blocks export', warning: 'Heads up',
     progressTitle: (label: string) => `Exporting · ${label}`, frameWord: 'frames', framesOf: (a: number, b: number) => `${a} / ${b}`,
@@ -130,3 +141,5 @@ export const EXPORT_STRINGS = {
   },
 } as const;
 export type ExportStrings = (typeof EXPORT_STRINGS)['he'] | (typeof EXPORT_STRINGS)['en'];
+/** Codes whose detail line is the server's own message (it quotes a licence or a service's terms verbatim; never reworded here). */
+export const ISSUE_DETAIL_IS_MESSAGE: ReadonlySet<string> = new Set(['licence_no_derivatives', 'licence_share_alike', 'licence_unknown', 'licence_unconfirmed', 'source_terms']);

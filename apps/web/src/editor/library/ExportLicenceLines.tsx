@@ -29,7 +29,7 @@ export function ExportLicenceLinesView({ output, lang }: { output: Record<string
   return (
     <div className="pf-lib-export">
       {lic.nonCommercial.length > 0 && <p className="pf-lib-export-nc" role="note" data-testid={TID.exportNonCommercial} dir="auto">{fillLib(L.nonCommercialLine, { titles: lic.nonCommercial.join(', ') })}</p>}
-      {notes.length > 0 && <div className="pf-lib-export-notes">{notes.map((n, i) => <WarningLine key={`${n.code}-${n.assetId ?? i}-${i}`} w={n} lang={lang} />)}</div>}
+      {notes.length > 0 && <div className="pf-lib-export-notes">{notes.map((n, i) => <WarningLine key={`${n.code}-${n.assetId ?? i}-${i}`} w={n} lang={lang} withTitle />)}</div>}
       {lic.credits && (
         <div className="pf-lib-export-credits" data-testid={TID.exportCredits}>
           <h4>{L.creditsTitle}</h4>

@@ -85,18 +85,18 @@ describe('use_source_item fuzz', () => {
       const src = a.provenance.source;
       if (!src || a.contentHash !== `sha256:${src.sha256}` || (src.provider === 'link') !== (src.link !== undefined)) continue;
       const id = src.licence.id;
-      if (!['CC-BY-SA-4.0', 'CC-BY-ND-4.0', 'provider:pixabay', 'unknown'].includes(id)) continue;
+      if (!['CC-BY-SA-4.0', 'CC-BY-ND-4.0', 'provider:pixabay', 'unknown', 'custom:site-licence'].includes(id)) continue;
       const doc = createProject({ id: 'prj_f', name: 'f', width: 640, height: 360 });
       let out: { warnings: { code: string }[] };
       try { out = applyTransaction(doc, [call], { idSeed: 'f_', actor: 'agent:fuzz', allowInternal: true }).results[0]!.output as unknown as { warnings: { code: string }[] }; } catch (e) {
-        // the generator's "unknown" row carries no licenceUnconfirmed mark: a record weaker than its own id is a data fact
-        expect([id, e instanceof OpError && (e.details as { why?: string }).why]).toEqual(['unknown', 'source_record_weaker']);
+        // the generator's bare "unknown" row carries no licenceUnconfirmed mark: a record weaker than its own id is a data fact
+        expect([id, src.flags.licenceUnconfirmed, e instanceof OpError && (e.details as { why?: string }).why]).toEqual(['unknown', undefined, 'source_record_weaker']);
         continue;
       }
-      const want = { 'CC-BY-SA-4.0': 'licence_share_alike', 'CC-BY-ND-4.0': 'licence_no_derivatives', 'provider:pixabay': 'licence_unconfirmed', unknown: 'licence_unknown' }[id]!;
+      const want = { 'CC-BY-SA-4.0': 'licence_share_alike', 'CC-BY-ND-4.0': 'licence_no_derivatives', 'provider:pixabay': 'licence_unconfirmed', unknown: 'licence_unknown', 'custom:site-licence': 'licence_unconfirmed' }[id]!;
       expect(out.warnings.map((w) => w.code), id).toContain(want);
       seen.add(id);
     }
-    expect([...seen].sort()).toEqual(['CC-BY-ND-4.0', 'CC-BY-SA-4.0', 'provider:pixabay']);
+    expect([...seen].sort()).toEqual(['CC-BY-ND-4.0', 'CC-BY-SA-4.0', 'custom:site-licence', 'provider:pixabay', 'unknown']); // an ACCEPTED unknown and an unread licence (licenceUnconfirmed) included
   });
 });

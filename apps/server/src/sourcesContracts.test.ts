@@ -11,13 +11,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { SEARCHABLE_SOURCES, SOURCE_PROVIDERS, SOURCES_API } from '@pulseframe/core';
+import { archiveLibraryPlan, SEARCHABLE_SOURCES, SOURCE_PROVIDERS, SOURCE_TERMS, SOURCES_API } from '@pulseframe/core';
+import { GOLD_DOCS } from '../../../packages/core/src/credits.golden.fixtures.ts';
+import { planArchive } from './archive.ts';
 import { SOURCE_DESCRIPTORS, userAgentFor } from '@pulseframe/providers';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
 import { Derivatives } from './derive.ts';
-import { Exporter } from './export.ts';
+import { exportLicence, Exporter, libraryExportWarnings } from './export.ts';
 import { Governance } from './governance.ts';
 import { createApp } from './http.ts';
 import { createMcp } from './mcp.ts';
@@ -30,7 +32,7 @@ import { Store } from './store.ts';
 
 import { SOURCE_JOB_TYPE, validateProject, type Asset } from '@pulseframe/core';
 import { DOUBLE_HOST, DOUBLE_PRIVATE_HOST, type LinkHost, type OpenverseDouble, type PixabayDouble, type WikimediaDouble } from '../../../packages/evals/src/doubles/sources/doubles.ts';
-import { bootSources, client, CONTACT, filesContaining as filesContainingOf, freeSpace, makeFixtures, PX_KEY, sha, startDoubles, tmpFiles as tmpFilesOf, until, type Doubles, type Fixtures } from '../../../packages/evals/src/doubles/sources/harness.ts';
+import { bootSources, client, CONTACT, OV_BY, OV_NC, OV_ND, filesContaining as filesContainingOf, freeSpace, makeFixtures, PX_KEY, sha, startDoubles, tmpFiles as tmpFilesOf, until, type Doubles, type Fixtures } from '../../../packages/evals/src/doubles/sources/harness.ts';
 import type { RunningServer } from './index.ts';
 import { createSourcesRuntime } from './sources/runtime.ts';
 let dir: string, cfg: Config, store: Store, auth: Auth, app: ReturnType<typeof createApp>, mcp: ReturnType<typeof createMcp>, speech: Speech, capabilities: Capabilities;
@@ -440,7 +442,38 @@ describe('import (checks 5, 6, 7, 8, 9, 10, 14)', () => {
   });
 });
 
-describe('rows another builder makes pass', () => {
-  it.todo('check 11 (export part, W1): the export answers non_commercial_content and licence_no_derivatives quoting the licence names and the deed sentence; a shared archive leaves the NC and Pixabay files out');
-  it.todo('check 12 (W1): credits of library-only projects stay byte-identical to credits.golden.json (core and server golden tests)');
+describe('checks 11 and 12 (W1\'s answers through the real server)', () => {
+  it('check 11: an NC, an ND and a Pixabay item import with warnings, never refused; preflight names the licences and quotes the ND deed; nothing blocks; a sharing archive leaves the NC and the Pixabay files out (the CC BY one stays); no choice is a 409 asking for one', async () => {
+    const pid11 = s.store.createProject({ name: 'check 11' }).doc.id;
+    const imp = async (provider: string, itemId: string) => finished((await api('agent', 'POST', `/api/v1/projects/${pid11}/sources/import`, { provider, itemId, place: { start: { value: String(2 * (await Promise.resolve(Object.keys(s.store.wholeProject(pid11).doc.assets).length))), timescale: 1 } } })).body.jobId);
+    const nc = await imp('openverse', `image:${OV_NC}`), nd = await imp('openverse', `image:${OV_ND}`), pxj = await imp('pixabay', 'video:4242'), by = await imp('openverse', `image:${OV_BY}`);
+    for (const j of [nc, nd, pxj, by]) expect([j.status, j.error]).toEqual(['succeeded', null]);
+    // the import job's warnings are core use_source_item's (sourceDuties), carried onto the source_fetch job
+    expect((nd.output as any).warnings.map((w: any) => w.code)).toContain('licence_no_derivatives');
+    expect((nc.output as any).warnings.map((w: any) => w.code)).toContain('non_commercial_content');
+    expect((pxj.output as any).warnings.map((w: any) => w.code)).toEqual(['licence_unconfirmed', 'source_terms']);
+    const pf = await api('agent', 'GET', `/api/v1/projects/${pid11}/preflight`);
+    const byCode = (c: string) => pf.body.issues.filter((i: any) => i.code === c);
+    expect(byCode('non_commercial_content')[0].message).toContain('CC BY-NC 4.0');
+    expect(byCode('licence_no_derivatives')[0].message).toContain(SOURCE_TERMS['cc.nd']!.quote);
+    expect(byCode('licence_no_derivatives')[0].message).toContain('CC BY-ND 4.0');
+    expect(byCode('source_terms').length).toBe(1);
+    expect(pf.body.issues.filter((i: any) => ['non_commercial_content', 'licence_no_derivatives', 'licence_unconfirmed', 'source_terms', 'credits_for_description'].includes(i.code)).every((i: any) => i.severity !== 'blocker')).toBe(true);
+    expect((await api('owner', 'GET', `/api/v1/projects/${pid11}/archive`)).body.error.code).toBe('archive_needs_library_choice');
+    expect(planArchive(s.store, pid11, { family: 'keep', library: 'strip' }).library).toBe('strip');
+    const left = new Set(archiveLibraryPlan(s.store.getProject(pid11).doc).omitted.map((o) => o.assetId)); // what planArchive leaves out
+    const ids = [nc, nd, pxj, by].map((j) => (j.output as any).assetId as string);
+    expect([left.has(ids[0]!), left.has(ids[2]!), left.has(ids[3]!)]).toEqual([true, true, false]);
+  });
+  it('check 12: the library-only golden documents answer byte-identically in this server process; a project with only a CC BY source credit gets the export reminder and a credits card', async () => {
+    const golden = JSON.parse(fs.readFileSync(new URL('./library/credits.golden.json', import.meta.url), 'utf8')) as Record<string, unknown>;
+    for (const [name, make] of GOLD_DOCS) { const doc = make(); expect(JSON.stringify({ licence: exportLicence(doc), warnings: libraryExportWarnings(doc) }), name).toBe(JSON.stringify(golden[name])); }
+    const pid12 = s.store.createProject({ name: 'check 12' }).doc.id;
+    const j = await finished((await api('agent', 'POST', `/api/v1/projects/${pid12}/sources/import`, { provider: 'openverse', itemId: `image:${OV_BY}`, place: { start: { value: '0', timescale: 1 } } })).body.jobId);
+    expect(j.status).toBe('succeeded');
+    const pf = await api('agent', 'GET', `/api/v1/projects/${pid12}/preflight`);
+    expect(pf.body.issues.map((i: any) => i.code)).toContain('credits_for_description');
+    const card = await api('agent', 'POST', `/api/v1/projects/${pid12}/transactions`, { ops: [{ op: 'add_credits_card', args: {} }] });
+    expect(card.status, JSON.stringify(card.body)).toBe(200);
+  });
 });

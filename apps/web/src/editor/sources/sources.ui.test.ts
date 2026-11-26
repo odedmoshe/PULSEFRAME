@@ -2,8 +2,11 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { SOURCE_TERMS, type Asset, type SourceRecord, type SourceResultRow, type SourceState, type SourceWarning } from '@pulseframe/core';
+import * as T from '@pulseframe/time';
+import { applyTransaction, createProject, SOURCE_TERMS, sourceDuties, type Asset, type SourceRecord, type SourceResultRow, type SourceState, type SourceWarning } from '@pulseframe/core';
 import { ExportLicenceLinesView, licenceNotesOf } from '../library/ExportLicenceLines.tsx';
+import { ArchiveChoiceView } from '../library/ArchiveLibraryOption.tsx';
+import { archiveRestrictedCount } from '../library/library.logic.ts';
 import { LibraryAssetBadgesView } from '../library/LibraryAssetBadges.tsx';
 import { ConnectionCard } from './ConnectionsSection.tsx';
 import { DownloadRow, LinkBox, TermRows, WarningLine } from './SourceParts.tsx';
@@ -86,6 +89,34 @@ describe('asset lines and export lines', () => {
     const html = renderToStaticMarkup(createElement(ExportLicenceLinesView, { output: out, lang: 'en' }));
     expect(html).toContain('CC BY-ND 4.0'); expect(html).toContain(SOURCE_TERMS['cc.nd']!.quote);
     expect(renderToStaticMarkup(createElement(ExportLicenceLinesView, { output: { licence: { lines: [], nonCommercial: [] } }, lang: 'en' }))).toBe('');
+  });
+});
+
+describe('the export sheet with licence notes only', () => {
+  it('a job whose licence holds only notes (an unknown-licence link, a Pixabay file: no credit line, nothing non-commercial) shows each note', () => {
+    const notes = [
+      ...sourceDuties(rec({ provider: 'link', itemId: 'f'.repeat(32), title: 'clip.mp4', licence: { id: 'unknown', name: '', from: 'none' }, credit: undefined, flags: { licenceUnconfirmed: true, notShareable: true }, terms: [], link: { via: 'direct', host: 'files.example.invalid' } }), 'clip.mp4'),
+      ...sourceDuties(rec({ provider: 'pixabay', title: 'Sea', licence: { id: 'provider:pixabay', name: 'Pixabay Content License', from: 'provider' }, credit: undefined, flags: { licenceUnconfirmed: true, notShareable: true }, terms: ['pixabay.licence_unread'] }), 'Sea'),
+    ].map((w) => ({ ...w, assetId: 'a1' }));
+    // the shape apps/server export.ts exportLicence writes (credits.descriptionText empty, no lines)
+    const output = JSON.parse(JSON.stringify({ licence: { lines: [], onScreenMissing: [], nonCommercial: [], people: [], licenceNotes: notes, credits: { descriptionText: '', file: null } } }));
+    for (const lang of ['he', 'en'] as const) {
+      const html = renderToStaticMarkup(createElement(ExportLicenceLinesView, { output, lang }));
+      expect(html, lang).toContain('clip.mp4');
+      expect(html, lang).toContain('Pixabay Content License');
+      expect(html, lang).toContain(SOURCE_TERMS['pixabay.licence_unread']!.quote);
+    }
+  });
+});
+
+describe('the archive choice counts fetched files the server leaves out', () => {
+  it('a project holding only a Pixabay file (not shareable) draws the choice, as the server asks for one; the words name no library', () => {
+    const r = rec({ provider: 'pixabay', itemId: 'video:1', title: 'Sea', licence: { id: 'provider:pixabay', name: 'Pixabay Content License', from: 'provider' }, credit: undefined, flags: { licenceUnconfirmed: true, notShareable: true }, terms: [] });
+    const asset = { kind: 'image', name: 'sea.png', contentHash: `sha256:${r.sha256}`, byteSize: 5, container: 'png', mimeType: 'image/png', duration: T.ZERO, image: { width: 8, height: 8, codec: 'png', hasAlpha: false }, provenance: { origin: 'upload', importedAt: '2026-11-26T10:00:00Z', importedBy: 'agent:t', source: r } };
+    const doc = applyTransaction(createProject({ id: 'prj_a', name: 'a', width: 640, height: 360 }), [{ op: 'use_source_item', args: { asset } }], { idSeed: 'a_', actor: 'agent:t', allowInternal: true }).doc;
+    expect(archiveRestrictedCount(doc)).toBe(1);
+    expect(archiveRestrictedCount(createProject({ id: 'prj_b', name: 'b', width: 640, height: 360 }))).toBe(0);
+    for (const lang of ['he', 'en'] as const) expect(renderToStaticMarkup(createElement(ArchiveChoiceView, { lang, count: 1, owner: true, mode: 'strip', onChange: () => {} })).replace(/<[^>]*>/g, ' ')).not.toMatch(/ספרייה|ספריה|[Ll]ibrary/);
   });
 });
 

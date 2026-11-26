@@ -5,7 +5,7 @@
  * The server's answers are the contract types of core (libraryContract.ts, libraryCredits.ts); a refusal is worded by the shared
  * tables (packages/i18n), never composed here.
  */
-import type { Asset, ArchiveLibraryMode, LibraryItemsQuery, LibraryKind, LibraryRow, LibraryStatus, LibraryUseBody, LibraryUnusable } from '@pulseframe/core';
+import { archiveLibraryPlan, type Asset, type ArchiveLibraryMode, type LibraryItemsQuery, type LibraryKind, type LibraryRow, type LibraryStatus, type LibraryUseBody, type LibraryUnusable, type ProjectDocument } from '@pulseframe/core';
 import { dictionaries, type Lang } from '@pulseframe/i18n';
 
 /** The kinds each drawer lists, in the order of its kind switch. */
@@ -168,6 +168,10 @@ export function exportLicence(output: Record<string, unknown> | null | undefined
 /** Library files of the project that may not be passed on (diskOnly), by their record. */
 export function restrictedAssets(assets: Record<string, Pick<Asset, 'provenance' | 'name'>>): { id: string; title: string }[] {
   return Object.entries(assets).filter(([, a]) => a.provenance?.library?.flags.diskOnly).map(([id, a]) => ({ id, title: a.provenance.library!.title || a.name }));
+}
+/** How many files a sharing archive leaves out: core archiveLibraryPlan, the server's own rule (library files and fetched files whose record is not shareable). */
+export function archiveRestrictedCount(doc: ProjectDocument): number {
+  return new Set(archiveLibraryPlan(doc).omitted.map((o) => o.assetId)).size;
 }
 /** The sharing archive is the safe default (the server answers 409 without a choice); «לעצמי» is offered to the owner's session only. */
 export const archiveModes = (owner: boolean): ArchiveLibraryMode[] => (owner ? ['strip', 'keep'] : ['strip']);

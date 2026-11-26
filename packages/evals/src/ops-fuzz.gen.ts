@@ -806,7 +806,7 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
   /**
    * Stock sources (wave 8 `sources`; internal: the source_fetch job commits it with allowInternal). `genSource()` returns a random
    * use_source_item call: a fetched file with a source record — licences CC0, PDM, CC BY with and without credit, CC BY-NC with and
-   * without its marks, CC BY-SA, CC BY-ND, provider:pixabay, unknown — a link record on a non-link provider, a hash that differs from
+   * without its marks, CC BY-SA, CC BY-ND, provider:pixabay, unknown with and without its mark, an id outside the table — a link record on a non-link provider, a hash that differs from
    * the record's, and sometimes no record. Not drawn by `gen`. Until W1 builds the body every call is refused with sources_not_built;
    * after, a licence finding is never a refusal (only the data facts of SOURCE_OP_REFUSALS are).
    */
@@ -819,6 +819,9 @@ export function createFuzz(seed: number, opts: FuzzOptions = {}) {
       ['CC-BY-NC-4.0', { credit, flags: { nonCommercial: true, notShareable: true } }], ['CC-BY-NC-4.0', { credit }],
       ['CC-BY-SA-4.0', { credit, flags: { shareAlike: true, licenceUnconfirmed: true, notShareable: true } }], ['CC-BY-ND-4.0', { credit, flags: { noDerivatives: true, licenceUnconfirmed: true, notShareable: true } }],
       ['provider:pixabay', { flags: { licenceUnconfirmed: true, notShareable: true } }], ['unknown', {}],
+      // ACCEPTED: an unknown licence (a link that named none) and an id outside the table, each marked licenceUnconfirmed
+      ['unknown', { licence: { id: 'unknown', name: '', from: 'none' }, flags: { licenceUnconfirmed: true, notShareable: true } }],
+      ['custom:site-licence', { flags: { licenceUnconfirmed: true, notShareable: true } }],
     ];
     const [id, extra] = pick(licences);
     const provider = pick(['openverse', 'pixabay', 'wikimedia', 'link']);

@@ -98,6 +98,8 @@ export function noteText(lang: Lang, t: MusicFitT, n: MusicFitNote): string {
     similarity: num('similarity', 3), ms: num('tempoSpreadMs', 1), count: typeof d.count === 'number' ? d.count : '?',
     before: typeof d.before === 'number' ? d.before : '?', after: typeof d.after === 'number' ? d.after : '?',
     n: Array.isArray(d.clipIds) ? d.clipIds.length : '?',
+    // a fetched song's licence notes (wave 8 sources): the licence as the service named it, and the server's quote verbatim
+    licence: typeof d.licenceName === 'string' && d.licenceName ? d.licenceName : typeof d.licenceId === 'string' ? d.licenceId : '?', quote: n.message,
   };
   const text = t(`note.${n.code}`, vars);
   if (text === `note.${n.code}`) return (lang === 'he' ? translateRefusal('he', n.message) : undefined) ?? n.message;
