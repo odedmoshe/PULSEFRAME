@@ -1,6 +1,6 @@
 /**
- * The booth contract (wave 8 booth pre-pass). The it.todo rows are builder W1's (report.ts, scrub.ts), named after the plan's and the
- * verifier's checks; W1 replaces each with a real test in report.test.ts / scrub.test.ts.
+ * The booth contract (wave 8 booth pre-pass). Builder W1's rows (report.ts, scrub.ts) are real tests in report.test.ts and
+ * scrub.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -59,16 +59,11 @@ describe('items and answers', () => {
     expect(BoothItemSchema.safeParse({ ...item, problems: ['unnatural'] }).success).toBe(false);
     expect(BOOTH_PROBLEM_IDS).not.toContain('unnatural');
   });
-  it('the builder functions answer a typed not-built until W1 writes them', () => {
-    expect(() => parseBoothBlock('')).toThrow(BoothNotBuiltError);
-    expect(() => scrubNote('', { literals: [] })).toThrow(BoothNotBuiltError);
+  it('the builder functions are built (W1): they answer instead of the typed not-built', () => {
+    expect(new BoothNotBuiltError('x').code).toBe('booth_not_built');
+    expect(parseBoothBlock('')).toEqual({ ok: false, code: 'no_block' });
+    expect(scrubNote('', { literals: [] })).toBe('');
   });
 });
 
-describe('report and scrub (builder W1)', () => {
-  it.todo('C4d: boothBlockText writes ASCII-only lines of at most 64 characters and a sha256 line of the lines joined; parseBoothBlock round-trips the answers');
-  it.todo('C4d: a bidi mark (U+200F) inside the frame → not_ascii; one changed character → checksum; a pure re-wrap of the lines is accepted');
-  it.todo('C4d: the block holds no note, no Hebrew, no time of day; the report text holds the notes as stored');
-  it.todo('C4b: scrubNote replaces the user name, home folder and host name literally (case-insensitive), then C:\\ and C:/ paths to the end of the segment (with spaces, OneDrive - <name>), UNC, ~/, POSIX paths, e-mail, URL, IPv4/IPv6, 7+ digit runs');
-  it.todo('L2: namesInNote finds a people-sheet name as a whole word (with a Hebrew prefix) and never inside another word');
-});
+// The 'report and scrub (builder W1)' rows moved to report.test.ts and scrub.test.ts as real tests.
