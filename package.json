@@ -54,6 +54,7 @@
     "proof:speed": "tsx packages/evals/src/speed-proof.ts",
     "proof:creative": "tsx packages/evals/src/creative-tools-proof.ts",
     "shots": "tsx packages/evals/src/design-shots.ts",
+    "shots:review": "tsx packages/evals/src/design-review-shots.ts",
     "proof:phase12": "tsx packages/evals/src/phase12-proof.ts",
     "proof:phase11": "tsx packages/evals/src/phase11-proof.ts",
     "audit:a11y": "tsx packages/evals/src/a11y-audit.ts",
