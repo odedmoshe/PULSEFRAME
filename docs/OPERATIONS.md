@@ -13,6 +13,7 @@ This describes the one supported deployment profile: a single user, one machine,
 | `PF_MAX_UPLOAD_BYTES` | see `config.ts` | Largest accepted upload. |
 | `PF_MAX_STORAGE_BYTES` | `0` (off) | Ceiling for the whole data directory. At the ceiling, uploads, imports and exports are refused with `507 storage_quota_exceeded`; editing continues. Free space by deleting projects and running the storage clean-up. |
 | `PF_SECURE_COOKIE` | unset (off) | `1` adds `Secure` to the owner session cookie; use behind a TLS-terminating proxy. |
+| `PF_OPEN_BROWSER` | unset (off) | `1` opens the "Editor (owner)" link in the default browser once the server listens (Windows: `cmd /c start "" <link>` as an argument array; macOS `open`; others `xdg-open`). A failure is printed, never fatal. `start-pulseframe.cmd` sets it. Unit-tested with an injected spawner only (`apps/server/src/openBrowser.test.ts`); nobody has run it on Windows. |
 | `PF_BACKUP_DIR` | unset (off) | Directory for automatic backups; must be outside the data directory (the server refuses to start otherwise). |
 | `PF_BACKUP_EVERY_HOURS` | `24` | Hours between automatic backups when `PF_BACKUP_DIR` is set; `0` turns the schedule off ("Back up now" still works). |
 | `PF_BACKUP_KEEP` | `14` | Dated database snapshots to retain (at least 1). |

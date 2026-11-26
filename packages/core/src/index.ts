@@ -164,3 +164,8 @@ export * from './footageSearch.ts';
 // groundLocalAnswer / localPhrase are builder A's
 export * from './commandBar/understands.ts';
 export * from './commandBar/localIntent.ts';
+// «תא הבדיקה» (wave 8 booth track): the contract is lead-built; report.ts and scrub.ts bodies are builder W1's
+export * from './booth/contract.ts';
+export * from './booth/report.ts';
+export * from './booth/scrub.ts';
+export * from './booth/scene.ts';

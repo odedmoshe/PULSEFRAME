@@ -104,7 +104,9 @@
     "proof:search-real": "tsx packages/evals/src/footage-search-real.ts",
     "proof:assistant-local": "tsx packages/evals/src/assistant-local-proof.ts",
     "proof:assistant-local-model": "tsx packages/evals/src/assistant-local-model-proof.ts",
-    "proof:instruments": "tsx packages/evals/src/instruments-proof.ts"
+    "proof:instruments": "tsx packages/evals/src/instruments-proof.ts",
+    "proof:booth": "tsx packages/evals/src/booth-proof.ts",
+    "booth:ingest": "tsx tools/booth/ingest.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

@@ -23,6 +23,7 @@ import { STORY_EN, STORY_HE } from './story.ts';
 import { MUSICFIT_EN, MUSICFIT_HE } from './musicFit.ts';
 import { INSTRUMENTS_EN, INSTRUMENTS_HE } from './instruments.ts';
 import { FOOTAGE_EN, FOOTAGE_HE } from './footageSearch.ts';
+import { BOOTH_EN, BOOTH_HE } from './booth.ts';
 export type Lang = 'he' | 'en';
 export const he = {
   'app.loading': 'טוען…', 'lang.toggle': 'EN', 'lang.label': 'שפת ממשק',
@@ -234,6 +235,7 @@ export const he = {
   ...MUSICFIT_HE,
   ...FOOTAGE_HE,
   ...INSTRUMENTS_HE,
+  ...BOOTH_HE,
 };
 export const en: Record<keyof typeof he, string> = {
   'app.loading': 'Loading…', 'lang.toggle': 'עברית', 'lang.label': 'Interface language',
@@ -445,6 +447,7 @@ export const en: Record<keyof typeof he, string> = {
   ...MUSICFIT_EN,
   ...FOOTAGE_EN,
   ...INSTRUMENTS_EN,
+  ...BOOTH_EN,
 };
 export type Key = keyof typeof he;
 export const dictionaries = { he, en };
@@ -474,3 +477,4 @@ export * from './story.ts';
 export * from './musicFit.ts';
 export * from './footageSearch.ts';
 export * from './instruments.ts';
+export * from './booth.ts';
