@@ -20,6 +20,8 @@ import { AiCompare } from './AiCompare.tsx';
 import { Badge, Button, JobRow, Ring } from '../ds/index.ts';
 import { HUB_STRINGS, pillKind, type HubStrings } from './aiHub.strings.ts';
 import { capIcon } from './aiHubIcons.tsx';
+import { focusNow } from '../ds/focus.ts';
+import { requestApprovalsFocus } from './focusRequests.ts';
 import './aiTools.css';
 import './aiHub.css';
 
@@ -142,7 +144,7 @@ export function AiTools() {
   const caps = provider.capabilities as unknown as CapInfo[];
   const byTab = Object.fromEntries(AI_TABS.map((x) => [x, caps.filter((c) => tabOf(c) === x)])) as Record<AiTab, CapInfo[]>;
   const current: AiTab = tab ?? AI_TABS.find((x) => byTab[x].length > 0) ?? 'image';
-  const choose = (x: AiTab, focus = false) => { setTab(x); writeTab(x); if (focus) setTimeout(() => document.getElementById(`${uid}-tab-${x}`)?.focus(), 0); };
+  const choose = (x: AiTab, focus = false) => { if (focus) focusNow(document.getElementById(`${uid}-tab-${x}`)); setTab(x); writeTab(x); }; // the tab is in the page already (roving tabindex): focus it first, in this task
   const onTabKey = (e: React.KeyboardEvent) => {
     const i = AI_TABS.indexOf(current);
     const rtl = lang === 'he';
@@ -278,8 +280,7 @@ function ToolCard({ cap: c, tab, S, editor, job, run, onStarted }: { cap: CapInf
     catch (e) { setAsk({ state: 'failed', text: e instanceof ApiFailure ? sayFailure(lang, e) : String(e) }); }
   };
   const goApprovals = () => {
-    document.getElementById('inspector-tab-review')?.click();
-    setTimeout(() => { const el = document.querySelector<HTMLElement>('[data-testid=approvals] [data-testid=approval-approve]'); el?.scrollIntoView({ block: 'nearest' }); el?.focus(); }, 50);
+    requestApprovalsFocus(); // the inspector shows its review panel and focuses the first approval in the commit that draws it
   };
   const doCancel = async () => {
     if (!job || !runBusy) { setCancel({ sending: false, text: S.cancelNothing }); return; }

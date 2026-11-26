@@ -19,6 +19,7 @@ import { clock, editedClipCount, handleReviewKey, LENGTH_CHIPS, lengthRange, nud
 import { ConfirmRemoveSequence, focusSequenceTab } from './SequenceSwitcher.tsx';
 import { SourceViewer } from './SourceViewer.tsx';
 import './shorts.css';
+import { focusNow } from '../ds/focus.ts';
 
 type Loudness = 'project' | 'off' | '-14' | '-16' | '-23';
 interface Settings {
@@ -377,7 +378,7 @@ export function ShortsPanel() {
       </section>
 
       <ConfirmRemoveSequence sequence={built.find((s) => s.id === removing) ?? null} onClose={() => setRemoving(null)} />
-      {viewer && <SourceViewer assetId={viewer.assetId} startAt={viewer.startAt} onClose={() => { const back = viewer.back; setViewer(null); setTimeout(() => document.querySelector<HTMLElement>(`[data-candidate-id="${back}"]`)?.focus(), 0); }} />}
+      {viewer && <SourceViewer assetId={viewer.assetId} startAt={viewer.startAt} onClose={() => { focusNow(document.querySelector<HTMLElement>(`[data-candidate-id="${viewer.back}"]`)); setViewer(null); }} />}
       <Dialog open={!!plan} onClose={() => setPlan(null)} title={S.planTitle} size="lg" closeLabel={lang === 'he' ? 'סגירה' : 'Close'} testId={ID.planDialog}
         footer={plan && <>
           <Button variant="ghost" onClick={() => setPlan(null)}>{S.cancel}</Button>

@@ -32,6 +32,7 @@ import { ADJUST_STRINGS } from './adjust.strings.ts';
 import { TEMPLATE_TESTIDS as TID } from './templates.testids.ts';
 import { wholeEditAdjustment } from './commands.ts';
 import './effectGallery.css';
+import { focusNow } from '../ds/focus.ts';
 
 /** Where a look picked in the Look panel or the gallery goes (ADR-0016): this clip, or an adjustment layer over the whole edit. */
 export type ApplyTo = 'clip' | 'edit';
@@ -186,7 +187,7 @@ export function EffectGalleryButton({ clip, trackKind, applyTo = 'clip', onApply
   return (
     <>
       <button ref={btn} type="button" data-testid={testId} aria-haspopup="dialog" onClick={() => setOpen(true)}>{G.open}</button>
-      {open && <EffectGallery clip={clip} trackKind={trackKind} applyTo={applyTo} onApplyTo={onApplyTo} onClose={() => { setOpen(false); setTimeout(() => btn.current?.focus(), 0); }} />}
+      {open && <EffectGallery clip={clip} trackKind={trackKind} applyTo={applyTo} onApplyTo={onApplyTo} onClose={() => { focusNow(btn.current); setOpen(false); }} />}
     </>
   );
 }
@@ -206,7 +207,7 @@ export function GalleryHost() {
   // nothing selected any more (the clip was deleted elsewhere): the request lapses
   useEffect(() => { if (g && !sel) editor.closeGallery(); }, [g, sel, editor]);
   if (!g || !sel) return null;
-  const close = () => { editor.closeGallery(); const el = opener.current; setTimeout(() => { if (el?.isConnected) el.focus(); }, 0); };
+  const close = () => { focusNow(opener.current); editor.closeGallery(); };
   return <EffectGallery key={`${g.n}:${sel.clip.id}`} clip={sel.clip} trackKind={sel.track.kind} applyTo="clip" initialTab={g.tab} onClose={close} />;
 }
 
