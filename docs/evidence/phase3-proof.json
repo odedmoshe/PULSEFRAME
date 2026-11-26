@@ -1,6 +1,6 @@
 {
-  "ranAt": "2026-11-26T13:58:42.987Z",
-  "result": "FAILED",
+  "ranAt": "2026-11-26T15:11:44.605Z",
+  "result": "PASSED",
   "machine": {
     "platform": "Linux 6.18.44-fc-v880 x64",
     "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
@@ -159,11 +159,11 @@
     },
     {
       "name": "visual baselines: screenshots match the committed baselines (SSIM ≥ 0.98), or were written on first run",
-      "ok": false,
+      "ok": true,
       "detail": {
-        "editor-he": 0.684841,
-        "editor-en": 0.709358,
-        "palette-en": 0.566237
+        "editor-he": 1,
+        "editor-en": 1,
+        "palette-en": 1
       }
     },
     {
@@ -628,38 +628,38 @@
       "ok": true,
       "detail": {
         "sampled": 40,
-        "movingFramesCompared": 34,
-        "differentSourceFrames": 28,
+        "movingFramesCompared": 35,
+        "differentSourceFrames": 24,
         "firstFrames": [
           {
-            "frame": 4,
+            "frame": 6,
             "quality": "draft",
-            "code": 4
+            "code": 6
           },
           {
-            "frame": 9,
+            "frame": 13,
             "quality": "draft",
-            "code": 9
+            "code": 13
           },
           {
-            "frame": 12,
+            "frame": 18,
             "quality": "draft",
-            "code": 12
+            "code": 18
           },
           {
-            "frame": 16,
+            "frame": 25,
             "quality": "draft",
-            "code": 16
+            "code": 25
           },
           {
-            "frame": 21,
+            "frame": 33,
             "quality": "draft",
-            "code": 21
+            "code": 0
           },
           {
-            "frame": 27,
+            "frame": 38,
             "quality": "draft",
-            "code": 27
+            "code": 0
           }
         ],
         "mismatches": []
@@ -820,7 +820,7 @@
       "ok": true,
       "detail": {
         "unexpected": [],
-        "leftOut": 2
+        "leftOut": 0
       }
     }
   ]
