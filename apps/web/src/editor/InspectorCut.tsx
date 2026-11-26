@@ -12,7 +12,7 @@ import { Section } from './Section.tsx';
 import { EffectGalleryButton } from './EffectGallery.tsx';
 import { TransitionControls } from './LookPanel.tsx';
 import { IconBeatLock, IconOnBeat } from './icons.tsx';
-import { Switch } from '../ds/index.ts';
+import { NumUnit, Switch } from '../ds/index.ts';
 import { INSPECTOR_STRINGS } from './inspector.strings.ts';
 import { cutBefore, framesToNearestBeat, rollCutOps, secondsText } from './inspector.model.ts';
 
@@ -30,7 +30,7 @@ function Meter({ label, frames, fps }: { label: string; frames: number | null; f
   return (
     <div className={`cut-meter${sec !== null && sec < 0.5 ? ' is-short' : ''}`}>
       <span className="cut-meter-label">{label}</span>
-      <span className="cut-meter-val num">{sec === null ? S.handleStill : `${secondsText(sec)} ${S.seconds}`}</span>
+      <span className="cut-meter-val">{sec === null ? S.handleStill : <NumUnit value={secondsText(sec)} unit={S.seconds} />}</span>
       <span className="cut-meter-bar" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={2} aria-valuenow={sec === null ? 2 : Math.min(2, +sec.toFixed(2))} aria-valuetext={sec === null ? S.handleStill : `${secondsText(sec)} ${S.seconds}`}><i style={{ inlineSize: `${pct}%` }} /></span>
     </div>
   );

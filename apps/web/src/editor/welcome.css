@@ -4,6 +4,10 @@
  * The class names .welcome and .welcome-drop stay (proofs and the drop handling find them by test id and class).
  */
 .welcome { z-index: 5; }
+/* The hub is fixed over the stage at z-index 5; the timeline's sticky ruler (z-index 6) painted over its rows. While the hub is shown the timeline and its splitter are not drawn (they are empty anyway: no clip exists). */
+.app:has(.welcome.pf-hub) > .timeline, .app:has(.welcome.pf-hub) > [data-shell-slot=splitter] { visibility: hidden; }
+/* One drop zone at a time: the hub has its own; the drawer keeps its header (title and import button). */
+.app:has(.welcome.pf-hub) .pf-bw-drop { display: none; }
 .welcome.pf-hub { position: fixed; inset-block: var(--pf-shell-top, var(--pf-topbar)) var(--pf-statusbar); inset-inline-start: var(--pf-shell-rail, var(--pf-rail)); inset-inline-end: 0; padding-inline-start: var(--pf-shell-browser, var(--pf-browser)); z-index: 5; display: block; overflow-y: auto; background: var(--pf-surface-1); color: var(--pf-text); font-family: var(--pf-font); text-align: start; scrollbar-width: thin;
   background-image: radial-gradient(900px 340px at 50% -80px, color-mix(in srgb, var(--pf-frame) 9%, transparent), transparent 70%), radial-gradient(500px 260px at 90% 0, color-mix(in srgb, var(--pf-pulse) 7%, transparent), transparent 70%); }
 .pf-hub-inner { display: flex; flex-direction: column; gap: var(--pf-sp-8); inline-size: min(760px, 100%); margin-inline: auto; padding: var(--pf-sp-9) var(--pf-sp-8) var(--pf-sp-9); }

@@ -127,6 +127,7 @@
 /* ---------- rail ---------- */
 .pf-rail { --pf-rail-pad: var(--pf-sp-2); position: relative; display: flex; flex-direction: column; justify-content: space-between; min-block-size: 0; overflow-y: auto; overflow-x: hidden; padding: var(--pf-sp-4) var(--pf-sp-3); background: var(--pf-surface-1); box-shadow: inset -1px 0 0 var(--pf-line); scrollbar-width: none; }
 :root[dir='rtl'] .pf-rail { box-shadow: inset 1px 0 0 var(--pf-line); }
+.pf-rail :focus-visible, .pf-browser :focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 2px; } /* one ring colour: the global :focus-visible (styles.css) is the info blue */
 .pf-rail-list { display: flex; flex-direction: column; gap: var(--pf-sp-5); }
 .pf-rail-group { display: flex; flex-direction: column; gap: var(--pf-sp-1); }
 .pf-rail-group + .pf-rail-group { padding-block-start: var(--pf-sp-4); border-block-start: 1px solid var(--pf-line); }
@@ -146,7 +147,7 @@
 .pf-rail { padding-inline: var(--pf-sp-2); }
 .pf-rail-label { font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); max-inline-size: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; }
 .pf-rail-dot { position: absolute; inset-block-start: -2px; inset-inline-end: -4px; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--pf-agent); box-shadow: 0 0 0 2px var(--pf-surface-3); }
-@media (max-height: 780px) { .pf-rail-btn { min-block-size: 44px; padding-block: var(--pf-sp-2); } .pf-rail { padding-block: var(--pf-sp-3); } .pf-rail-list { gap: var(--pf-sp-3); } }
+@media (max-height: 780px) { .pf-rail-btn { min-block-size: 44px; padding-block: 2px; gap: 0; } .pf-rail { padding-block: var(--pf-sp-3); } .pf-rail-list { gap: var(--pf-sp-3); } .pf-rail-ic { inline-size: 20px; block-size: 20px; } .pf-rail-ic svg { inline-size: 18px; block-size: 18px; } .pf-rail-label { line-height: 14px; } .pf-rail-group + .pf-rail-group, .pf-rail-pinned { padding-block-start: var(--pf-sp-2); } }
 @media (max-height: 700px) { .pf-rail-label { display: none; } .pf-rail-btn { min-block-size: 38px; } }
 
 /* ---------- browser drawer ---------- */
@@ -174,10 +175,13 @@
 .pf-bw-search input::placeholder { color: var(--pf-text-3); opacity: 1; }
 /* the field that holds the focus draws the focus ring itself (the box's frame-coloured line is only a hint) */
 .pf-bw-search input:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 3px; border-radius: var(--pf-r-xs); }
-.pf-bw-chips { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); flex: none; }
+.pf-bw-chips { display: flex; flex-wrap: nowrap; gap: var(--pf-sp-3); flex: none; overflow-x: auto; scrollbar-width: none; /* one row; edge shadows (covered by the local layers at each end) say that more chips lie beyond */
+  background: linear-gradient(to right, var(--pf-surface-1), transparent) left center / 20px 100% no-repeat local, linear-gradient(to left, var(--pf-surface-1), transparent) right center / 20px 100% no-repeat local, linear-gradient(to right, var(--pf-line-strong), transparent) left center / 8px 60% no-repeat scroll, linear-gradient(to left, var(--pf-line-strong), transparent) right center / 8px 60% no-repeat scroll; }
+.pf-bw-chips { padding: 2px; margin: -2px; } /* room for the focus ring that overflow would clip */
+.pf-bw-chips::-webkit-scrollbar { display: none; }
 .pf-bw-chips .pf-chip { flex: none; }
 .pf-bw-chips .pf-chip.is-on { background: var(--pf-text); color: var(--pf-surface-1); }
-.pf-bw-scroll { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; margin-inline: calc(-1 * var(--pf-sp-6)); padding: var(--pf-sp-2) var(--pf-sp-6) var(--pf-sp-9); scrollbar-width: thin; mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
+.pf-bw-scroll { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; margin-inline: calc(-1 * var(--pf-sp-6)); padding: var(--pf-sp-2) var(--pf-sp-6) var(--pf-sp-9); scrollbar-width: thin; mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
 .pf-bw-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--pf-sp-5); flex: none; margin-block-end: var(--pf-sp-6); padding: var(--pf-sp-9) var(--pf-sp-6); border: 1.5px dashed var(--pf-line-control); border-radius: var(--pf-r-lg); text-align: center; color: var(--pf-text-2); background: color-mix(in srgb, var(--pf-surface-2) 60%, transparent); }
 .pf-bw-drop svg { color: var(--pf-frame); }
 .pf-bw-drop p { margin: 0; max-inline-size: 22ch; font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }
@@ -201,7 +205,7 @@
 .pf-bw-legacy :is(input, select):focus, .pf-bw-audio :is(input, select):focus { box-shadow: 0 0 0 1.5px var(--pf-frame); outline: 0; }
 .pf-bw-legacy :is(.el-chips, .pf-tpl-chips) button, .pf-bw-audio .sfx-chips button { block-size: var(--pf-h-sm); padding: 0 var(--pf-sp-5); border: 0; border-radius: var(--pf-r-pill); background: var(--pf-surface-2); color: var(--pf-text-2); font: inherit; font-size: var(--pf-fs-xs); font-weight: var(--pf-fw-medium); box-shadow: 0 0 0 1px var(--pf-line); }
 .pf-bw-legacy :is(.el-chips, .pf-tpl-chips) button[aria-pressed='true'], .pf-bw-audio .sfx-chips button[aria-pressed='true'] { background: var(--pf-text); color: var(--pf-surface-1); box-shadow: none; }
-.pf-bw-legacy .el-tile { background: var(--pf-surface-2); border: 0; box-shadow: 0 0 0 1px var(--pf-line); border-radius: var(--pf-r-md); }
+.pf-bw-legacy .el-tile { background: var(--pf-stage); border: 0; box-shadow: 0 0 0 1px var(--pf-line); border-radius: var(--pf-r-md); }
 .pf-bw-legacy .el-tile:hover:not(:disabled) { box-shadow: 0 0 0 1.5px var(--pf-frame); }
 .pf-bw-legacy .pf-tpl-card { background: var(--pf-surface-2); border: 0; box-shadow: 0 0 0 1px var(--pf-line); border-radius: var(--pf-r-md); }
 .pf-bw-legacy .pf-tpl-card:hover:not(.unavailable) { box-shadow: 0 0 0 1.5px var(--pf-frame); }
