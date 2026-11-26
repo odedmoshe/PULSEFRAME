@@ -33,7 +33,7 @@ export const MADE_LIMITS = {
   /** internet files a page names, fetched once before drawing */ fetchFiles: 16, fetchBytes: 50_000_000,
   /** the owner's media a page reads */ assets: 16,
   /** frames compared for determinism: three fixed (0, n/2, n−1) plus three from a per-job seed (verify C6) */ determinismFrames: 6,
-  /** a page with more running animations than this is refused at the first frame (a fact about the page, not policy) */ animations: 200,
+  /** informative (lead, integration decision 3): a page with more running animations is not refused; the frame budget bounds the seek */ animations: 200,
   /** flash rate above which the report warns (per second, ADR-0009's general limit) */ flashPerSecond: 3,
 } as const;
 
@@ -153,7 +153,7 @@ export const MADE_OP_REFUSALS = {
  */
 export const MADE_JOB_FAILURES = {
   frameTimeout: row('made_frame_timeout', 'made_frame_timeout', (frame: number, ms: number) => `the page did not finish drawing frame ${frame} within ${ms / 1000} seconds`, 'Look for a loop that never ends in render(); each frame must finish on its own.'),
-  crashed: row('made_crashed', 'made_crashed', () => 'the page crashed while drawing (probably memory)', 'Draw with less memory: smaller pictures, fewer objects kept between frames.'),
+  crashed: row('made_crashed', 'made_crashed', () => 'the page crashed or threw an error while drawing (the detail says which)', 'Read the detail: fix the error the page threw, or, for a crash (usually memory), draw with smaller pictures and fewer objects kept between frames.'),
   jobTimeout: row('made_job_timeout', 'made_job_timeout', (minutes: number) => `drawing took longer than ${minutes} minutes and was stopped`, 'Make the clip shorter or simpler, then render again.'),
   empty: row('made_empty', 'made_empty', () => 'the clip is empty: nothing was drawn', 'Check that render() draws into the page and that the colours are not fully transparent.'),
   decodeBack: row('made_decode_back', 'made_decode_back', (frame: number) => `the file does not keep what was drawn (frame ${frame} differs after encoding)`, 'Render again; if it repeats, report the page.'),
@@ -233,7 +233,7 @@ export interface MadeJobReport {
   /** when succeeded */ fileSha256?: string; record?: MadeRecord; stills?: [string, string, string];
   /** set once applied */ appliedAssetId?: string;
   warnings: { why: MadeWarning; message: string; at?: number }[];
-  failure?: { why: MadeJobFailure; message: string; hint: string };
+  failure?: { why: MadeJobFailure; message: string; hint: string; /** what the browser said: the error a page threw, a crash */ detail?: string };
   /** one sample of the wall time on this machine */ seconds?: number;
 }
 /** GET /api/v1/made/templates */

@@ -144,6 +144,7 @@ export function madeContractText(): string {
     '- Refused before drawing (422 made_bad_page) only for facts: over the size limit, a NUL character, text that is not UTF-8.',
     '- Every other finding of the static scan is a warning with its character offset (made_static): network, storage and clock names, SMIL, outside scripts. The browser lock decides, not the scan.',
     `- Job failures (facts about the page or the file): ${Object.values(MADE_JOB_FAILURES).map((r) => r.why).join(', ')}.`,
+    `- An error thrown by the page while drawing ends the job made_crashed, with the error in failure.detail. Pages with more than ${L.animations} running animations are not refused: the ${L.frameMs / 1000} s frame budget bounds the seek (made_frame_timeout).`,
     `- Warnings (the clip is kept): ${Object.values(MADE_WARNINGS).map((r) => r.why).join(', ')}. Flashing is measured over black and over white; above ${L.flashPerSecond} a second is a warning with the rate, never a refusal.`,
     '',
     '## Placing the result',

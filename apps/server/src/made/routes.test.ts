@@ -137,6 +137,9 @@ describe('MCP: submit_made_clip and view_made_clip share the routes\' service', 
     expect(text).toContain(`${MADE_LIMITS.pageBytes} UTF-8 bytes`);
     for (const id of ['rising-title', 'lower-third', 'counter', 'intro-plate', 'end-card', 'made_flash', 'made_frame_timeout', 'PF.render']) expect(text).toContain(id);
     expect(text).not.toMatch(/\bsafe\b|verified/i);
+    // integration decision 3: an error thrown while drawing is made_crashed with its detail; many animations are left to the frame budget
+    expect(text).toMatch(/error thrown by the page while drawing ends the job made_crashed/);
+    expect(text).toContain(`Pages with more than ${MADE_LIMITS.animations} running animations are not refused`);
   });
 });
 

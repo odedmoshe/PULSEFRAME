@@ -33,7 +33,7 @@ export const MADE_HE = {
   'made.check.sandbox.none': 'הדפדפן רץ בלי ארגז החול של כרום',
   // job failures (MADE_JOB_FAILURES, by why)
   'made.fail.made_frame_timeout': 'הדף לא סיים לצייר את פריים {frame} בתוך {s} שניות. חפשו בדף לולאה שלא נגמרת',
-  'made.fail.made_crashed': 'הדף קרס בזמן הציור (כנראה זיכרון). ציירו עם פחות זיכרון ונסו שוב',
+  'made.fail.made_crashed': 'הדף קרס או זרק שגיאה בזמן הציור (הפירוט אומר מה). תקנו את השגיאה, או ציירו עם פחות זיכרון, ונסו שוב',
   'made.fail.made_job_timeout': 'הציור נמשך יותר מ־{m} דקות ונעצר. קצרו או פשטו את הקליפ ונסו שוב',
   'made.fail.made_empty': 'הקליפ ריק — לא צויר כלום. בדקו שהדף מצייר ושהצבעים לא שקופים לגמרי',
   'made.fail.made_decode_back': 'הקובץ לא שומר את מה שצויר (פריים {frame}). צרו שוב; אם זה חוזר, דווחו על הדף',
@@ -83,7 +83,7 @@ export const MADE_EN: Record<keyof typeof MADE_HE, string> = {
   'made.check.time': 'Took {s} seconds on this computer (one sample)',
   'made.check.sandbox.none': 'The browser ran without Chromium\'s sandbox',
   'made.fail.made_frame_timeout': 'The page did not finish drawing frame {frame} within {s} seconds. Look for a loop that never ends',
-  'made.fail.made_crashed': 'The page crashed while drawing (probably memory). Draw with less memory and try again',
+  'made.fail.made_crashed': 'The page crashed or threw an error while drawing (the detail says which). Fix the error, or draw with less memory, and try again',
   'made.fail.made_job_timeout': 'Drawing took longer than {m} minutes and was stopped. Make the clip shorter or simpler and try again',
   'made.fail.made_empty': 'The clip is empty: nothing was drawn. Check that the page draws and that the colours are not fully transparent',
   'made.fail.made_decode_back': 'The file does not keep what was drawn (frame {frame}). Render again; if it repeats, report the page',

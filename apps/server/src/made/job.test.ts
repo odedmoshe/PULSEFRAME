@@ -119,6 +119,13 @@ describe('made job (made browser, ffmpeg)', () => {
     expect(bad.error.message).toContain('https://pictures.example/missing.png');
   }, 600_000);
 
+  it('a page error thrown while drawing ends the job crashed with the error as its detail, and the report carries the detail (integration decision 3)', async () => {
+    const j = await render(owner, page(`PF.render = (f) => { if (f === 2) throw new Error('boom-at-two'); c.fillRect(0,0,9,9); };`));
+    expect(j.error).toMatchObject({ code: 'made_crashed', why: 'crashed' });
+    expect(j.error.detail).toContain('boom-at-two');
+    expect(jobs.report(j).failure).toMatchObject({ why: 'crashed', detail: expect.stringContaining('boom-at-two') });
+    expect(jobs.report(j).failure!.message).toMatch(/error/);
+  }, 600_000);
   it('an internet file is fetched once before drawing, served locally and recorded by hash', async () => {
     const j = await render(owner, `<!doctype html><img src="https://pictures.example/dot.svg" width=96 height=54 style="display:block">`);
     expect(j.status, JSON.stringify(j.error)).toBe('succeeded');

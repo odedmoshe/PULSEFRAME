@@ -163,7 +163,7 @@ export class MadeJobs {
       progress: o.progress ?? null, submittedBy: j.actor, warnings: (o.report?.warnings ?? o.warnings ?? []) as MadeJobReport['warnings'],
       ...(o.fileSha256 ? { fileSha256: o.fileSha256, record: o.record, stills: o.stills } : {}),
       ...(o.appliedAssetId ? { appliedAssetId: o.appliedAssetId } : {}),
-      ...(j.error && j.status !== 'succeeded' ? { failure: { why: j.error.why ?? j.error.code, message: j.error.message, hint: j.error.hint ?? '' } as MadeJobReport['failure'] } : {}),
+      ...(j.error && j.status !== 'succeeded' ? { failure: { why: j.error.why ?? j.error.code, message: j.error.message, hint: j.error.hint ?? '', ...(typeof j.error.detail === 'string' ? { detail: j.error.detail } : {}) } as MadeJobReport['failure'] } : {}),
       ...(typeof o.report?.seconds === 'number' ? { seconds: o.report.seconds } : {}),
     };
     return r;

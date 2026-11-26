@@ -335,7 +335,7 @@ export class MadeHost {
         if (failure) throw failure;
         if (/context was destroyed|navigat/i.test(String((e as Error)?.message ?? e))) throw new MadeDrawError('navigated', frame, 'the page navigated away while drawing');
         if ((e as Error)?.name === 'TimeoutError' || /Timeout \d+ms exceeded/i.test(String((e as Error)?.message ?? e))) throw new MadeDrawError('frameTimeout', frame, `the page did not finish drawing frame ${frame} within ${spec.frameMs / 1000} seconds`);
-        throw new MadeDrawError('crashed', frame, 'the page crashed while drawing (probably memory)', String((e as Error)?.message ?? e).slice(0, 300));
+        throw new MadeDrawError('crashed', frame, 'the page threw an error while drawing', String((e as Error)?.message ?? e).slice(0, 300));
       }
     };
     const result: MadeDrawResult = { browser: browser.version(), sandbox: plan.sandbox, ...(plan.warning ? { sandboxWarning: plan.warning } : {}), clock: [], missingFonts: [], fontsChecked: {}, webgl: false, served: [], compared: [], maxAnimations: 0, pageErrors: [] };
