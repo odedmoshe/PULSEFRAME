@@ -13,7 +13,7 @@
 .canvas-wrap { position: relative; }
 .app > .stage { --pf-ar: 1.777778; position: relative; margin: 4px; border-radius: var(--pf-r-lg, 14px); background: var(--pf-stage); box-shadow: var(--pf-e1); color: var(--pf-text); }
 .app > .stage > .stage-head { grid-row: 1; grid-column: 1 / -1; }
-.app > .stage > .canvas-wrap { grid-row: 2; grid-column: 1; padding: var(--pf-sp-5) var(--pf-sp-6) var(--pf-sp-2); container-type: size; }
+.app > .stage > .canvas-wrap { grid-row: 2; grid-column: 1; padding: var(--pf-sp-4) var(--pf-sp-6) var(--pf-sp-1); container-type: size; }
 .app > .stage > .stage-loupe, .app > .stage > .stage-over { grid-row: 2; grid-column: 1; }
 .app > .stage > .stage-side { grid-row: 2; grid-column: 2; }
 .app > .stage > .transport { grid-row: 3; grid-column: 1 / -1; }
@@ -161,11 +161,11 @@
 .pf-insp .insp-scopes .scopes > :is(dl, p) { grid-column: 1 / -1; }
 .pf-insp .insp-scopes .pf-section:not([data-help='open']) .scope-stats { display: none; }
 
-/* ---------- transport: 52px, left to right in every language ----------
+/* ---------- transport: 48px, left to right in every language ----------
    Each part keeps its own column (time, keys, end), so the keys stay in the middle whatever is hidden. The timecode never
    shrinks under its digits and its column is never narrower than it; the total sits after it on the same line and is left
    out where the transport is narrower than 820 px, so the two never overlap or wrap (1024 to 1908 px, both languages, every mode). */
-.transport.pf-ds { display: grid; grid-template-columns: minmax(min-content, 1fr) auto minmax(min-content, 1fr); align-items: center; gap: var(--pf-sp-5); min-block-size: 52px; padding: 0 var(--pf-sp-5) var(--pf-sp-2); border: 0; background: none; container-type: inline-size; }
+.transport.pf-ds { display: grid; grid-template-columns: minmax(min-content, 1fr) auto minmax(min-content, 1fr); align-items: center; gap: var(--pf-sp-5); min-block-size: 48px; padding: 0 var(--pf-sp-5) var(--pf-sp-1); border: 0; background: none; container-type: inline-size; }
 .transport > .tp-time { grid-column: 1; } .transport > .tp-keys { grid-column: 2; } .transport > .tp-end { grid-column: 3; }
 .transport .tp-time { display: flex; flex-wrap: nowrap; align-items: baseline; column-gap: var(--pf-sp-4); min-inline-size: 0; }
 /* the total never goes under the timecode (it wrapped at 1366×650, DESIGN_REVIEW D8): below 820 px of transport it is left out */
