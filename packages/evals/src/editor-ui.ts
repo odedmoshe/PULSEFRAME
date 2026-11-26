@@ -20,6 +20,16 @@ import type { Page } from 'playwright';
 
 export type Mode = 'pro' | 'color' | 'sound' | 'captions' | 'deliver' | 'quick' | 'motion' | 'custom';
 
+/**
+ * Opens the modes' row when it is closed (DESIGN_REVIEW WP1: the top bar names the mode on one button, «מצב: …», and the seven
+ * mode radios open under it; they keep their ids). Does nothing while the row is open.
+ */
+export async function openModes(page: Page): Promise<void> {
+  const row = page.getByTestId('workspace-switch');
+  if (await row.isVisible()) return;
+  const menu = page.getByTestId('workspace-menu');
+  if (await menu.count()) { await menu.click(); await row.waitFor({ state: 'visible', timeout: 5000 }); }
+}
 /** Chooses a workspace. The five on the mode bar are clicked; quick, motion and custom are set as the editor keeps them and the page reloads. */
 export async function setWorkspace(page: Page, ws: Mode): Promise<void> {
   // the mode bar keeps the id of the old select (workspace-switch, UX_REDESIGN §8); its radios are workspace-<mode>
@@ -29,7 +39,7 @@ export async function setWorkspace(page: Page, ws: Mode): Promise<void> {
     captions: () => modes().getByTestId('workspace-captions'), deliver: () => modes().getByTestId('workspace-deliver'),
   };
   const b = bar[ws];
-  if (b) { await b().click(); await page.waitForFunction((w) => document.querySelector(`[data-testid="workspace-${w}"]`)?.getAttribute('aria-checked') === 'true', ws, { timeout: 10000 }); return; }
+  if (b) { await openModes(page); await b().click(); await page.waitForFunction((w) => document.querySelector(`[data-testid="workspace-${w}"]`)?.getAttribute('aria-checked') === 'true', ws, { timeout: 10000 }); return; }
   // as the bar does, the mode change leaves the all-tools view: the inspector then opens the mode's first panel
   await page.evaluate((w) => { localStorage.setItem('pf.workspace.v1', w); if (localStorage.getItem('pf.inspector.tab.v1') === 'all') localStorage.setItem('pf.inspector.tab.v1', 'clip'); }, ws);
   await page.reload();

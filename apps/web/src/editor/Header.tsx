@@ -94,20 +94,19 @@ export function Header() {
         <span className={`pf-top-save ${saveTone}`} role="status" data-testid="save-state">
           <SaveIcon size={12} strokeWidth={2} aria-hidden="true" />
           <span className="pf-top-saveWord">{saveWord}</span>
-          {doc && save === 'save.saved' && <span className="num pf-top-meta" dir="ltr">{doc.settings.width}×{doc.settings.height} · {clock}</span>}
+          {/* the frame size and the length are at the end of the transport (Transport.tsx) and in the status bar; here, only the word */}
+          {doc && save === 'save.saved' && <span className="pf-sr">{doc.settings.width}×{doc.settings.height} · {clock}</span>}
           {/* the revision number only for tools and tests: hidden from sight and from assistive technology (it is not owner language) */}
           <span className="pf-top-rev" data-testid="revision" aria-hidden="true"><bdi>{revision}</bdi></span>
         </span>
       </div>
 
-      <div className="pf-top-modes" data-testid="workspace-switch">
-        <ModeBar<Workspace> options={modeOptions} value={shownMode} onChange={(v) => editor.setWorkspace(v)} label={S.modeLabel} />
-      </div>
+      <ModeMenu options={modeOptions} value={shownMode} />
 
       <button type="button" className="pf-top-cmd" onClick={() => editor.set({ paletteOpen: true })} data-testid="open-palette" aria-haspopup="dialog" aria-label={S.cmdOpen}>
         <span className="pf-top-cmdInner">
           <kbd className="pf-top-cmdKeys" dir="ltr"><span>{chordLabel('Mod+KeyK').split('+')[0]}</span><span>K</span></kbd>
-          <span className="pf-top-cmdText">{S.cmdPlaceholder}</span>
+          <span className="pf-top-cmdText">{S.cmdShort}</span>
           <Search size={16} strokeWidth={1.75} aria-hidden="true" />
         </span>
       </button>
@@ -130,6 +129,43 @@ export function Header() {
       {/* «למדו אותי פעם אחת» (wave 8 teach): the dialog «החילו גם על…» while it is open (teach/TeachHost.tsx; nothing until W3) */}
       <TeachHost />
     </header>
+  );
+}
+
+/**
+ * The modes (DESIGN_REVIEW WP1 "a calm top bar"): one button «מצב: עריכה ▾» with the mode's glyph and tint; it opens the
+ * seven modes as one row with their words (the ModeBar, keys Shift+1…7 unchanged, palette «מצב …»). The row is always in the
+ * page and hidden while closed, so it keeps the ids workspace-switch and workspace-<mode>. Choosing a mode, Escape, Tab out or
+ * a click outside closes it; the focus returns to the button.
+ */
+function ModeMenu({ options, value }: { options: SegOption<Workspace>[]; value: Workspace }) {
+  const { editor, state } = useEditorState();
+  const S = CHROME_STRINGS[state.lang];
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null), btn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); btn.current?.focus(); } };
+    document.addEventListener('pointerdown', away, true); document.addEventListener('keydown', esc, true);
+    // the chosen mode's radio takes the focus, so the arrows move between the modes at once
+    requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('.pf-top-modes [aria-checked=true]')?.focus());
+    return () => { document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', esc, true); };
+  }, [open]);
+  const i = MODES.indexOf(value);
+  const name = S.modes[value as keyof typeof S.modes];
+  return (
+    <div className="pf-top-mode" ref={root} style={{ '--pf-mode-tint': TINT[value] } as React.CSSProperties}>
+      <Tooltip label={S.modeLabel} keys={['Shift', String(i + 1)]}>
+        <button ref={btn} type="button" className="pf-top-modeBtn" data-testid="workspace-menu" aria-haspopup="true" aria-expanded={open} aria-controls="pf-top-modes" onClick={() => setOpen((o) => !o)}>
+          <ModeGlyph id={value} /><span className="pf-top-modeWord">{S.modeIs(name)}</span><ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      </Tooltip>
+      <div id="pf-top-modes" className="pf-top-modes" data-testid="workspace-switch" hidden={!open}
+        onKeyDown={(e) => { if (e.key === 'Tab') setOpen(false); }}>
+        <ModeBar<Workspace> options={options} value={value} onChange={(v) => { editor.setWorkspace(v); setOpen(false); btn.current?.focus(); }} label={S.modeLabel} />
+      </div>
+    </div>
   );
 }
 

@@ -31,7 +31,7 @@ import { drumLoop } from '../../../apps/server/src/beats.fixtures.ts';
 import { dictionaries, effectParamLabel, translateRefusal, fillIn, TREND_PACK_HE } from '../../i18n/src/index.ts';
 import { creativeProjection, beatSwitchFrame, BUILTIN_TEMPLATES, MODEL_GATED_TEMPLATES, MUSIC_GENERATOR, PACKS, removedByHand, sha256Hex, velocityNeeds, type MediaClip, type ProjectDocument } from '@pulseframe/core';
 import { TEMPLATE_TESTIDS } from '../../../apps/web/src/editor/templates.testids.ts';
-import { chooseFormat, openInspectorPage, startExport } from './editor-ui.ts';
+import { chooseFormat, openInspectorPage, startExport, openModes } from './editor-ui.ts';
 import { MUSICFIT_TESTIDS } from '../../../apps/web/src/editor/musicfit/musicFit.testids.ts';
 import { SEARCH_TESTIDS } from '../../../apps/web/src/editor/search/search.testids.ts';
 import { libraryPanelsProbe } from './library-proof.ui.ts';
@@ -1314,6 +1314,7 @@ async function main() {
       await sPage.getByTestId('timecode').waitFor();
       if ((await sPage.evaluate(() => document.documentElement.lang)) !== 'he') await sPage.locator('[data-testid=lang-toggle]').click().catch(() => {});
       // the mode button takes the focus and Enter opens the panel: no pointer
+      await openModes(sPage); // the modes open under the top bar's «מצב: …» button (DESIGN_REVIEW WP1)
       await sPage.getByTestId('workspace-shorts').focus();
       await sPage.keyboard.press('Enter');
       await sPage.getByTestId(ID.panel).waitFor({ timeout: 8000 });
@@ -1408,6 +1409,7 @@ async function main() {
       await ppage.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await ppage.keyboard.press('Shift+Digit7');
       const entered = await ppage.getByTestId(PID.view).waitFor({ timeout: 10000 }).then(() => true, () => false);
+      await openModes(ppage);
       const bar = await ppage.locator('[data-testid=workspace-switch] [data-testid^=workspace-]').evaluateAll((els) => els.map((e) => ({ id: (e as HTMLElement).dataset.testid, top: Math.round(e.getBoundingClientRect().top), checked: e.getAttribute('aria-checked') })));
       const oneRow = bar.length === 7 && new Set(bar.map((b) => b.top)).size === 1;
       check('perform: Shift+7 enters the perform mode (its view mounts, its mode button is checked); the 7-button mode bar is one row at 1280 px', entered && bar.find((b) => b.id === 'workspace-perform')?.checked === 'true' && oneRow, { entered, bar });

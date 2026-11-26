@@ -39,7 +39,7 @@ import { sha256Hex } from '@pulseframe/core';
 import { generateBarcodeFixture } from '@pulseframe/fixtures';
 import { startServer } from '@pulseframe/server';
 import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
-import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
+import { chooseFormat, formatOptions, openCardMenu, openModes } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
@@ -895,7 +895,7 @@ async function main() {
         await page.goto(`${s.ownerUrl}&project=${pid}`);
         await page.getByTestId('timecode').waitFor();
         if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.locator('[data-testid=lang-toggle]').click().catch(() => {});
-        await page.getByTestId('workspace-shorts').click({ timeout: 8000 }).catch(() => {});
+        await openModes(page).catch(() => {}); await page.getByTestId('workspace-shorts').click({ timeout: 8000 }).catch(() => {});
         await page.getByTestId('shorts-panel').waitFor({ timeout: 8000 }).catch(() => {});
         await auditState('shorts-panel', { shown: (await page.getByTestId('shorts-panel').count()) === 1 && (await page.locator('[data-testid=shorts-step]').count()) === 4 });
         const made = await shApi.tx(pid, [{ op: 'add_sequence', args: { name: lang === 'he' ? 'קטע בדיקה' : 'Test short', format: { width: 720, height: 1280, fit: 'cover', profileId: 'vertical-9x16', safeArea: null } } }]).catch(() => null);
@@ -910,7 +910,7 @@ async function main() {
           Object.assign(states.at(-1), await sd.close());
           await shApi.tx(pid, [{ op: 'remove_sequence', args: { sequenceId: shortId, withContents: true } }]).catch(() => null);
         }
-        await page.getByTestId('workspace-pro').click().catch(() => {});
+        await openModes(page).catch(() => {}); await page.getByTestId('workspace-pro').click().catch(() => {});
       }
       // keyframe curves and motion paths (ADR-0019): the strip and the path of a selected title, then the curve picker opened with
       // Enter on a strip key (focus inside, Tab kept inside, Escape closes and gives focus back to the key)
