@@ -199,3 +199,4 @@ export class RenderHost {
     if (g && g !== b) await g.close().catch(() => {});
   }
 }
+export { MadeHost, MadeDrawError, madeCompareFrames, madeInitScript, unlistedFamilies, type MadeDrawSpec, type MadeDrawResult, type MadeServedFile, type MadeDrawFailure, type MadeHostOptions } from './made.ts'; // «קליפ מקוד» (wave 8 motioncode, W1): the made-clip browser, separate from RenderHost

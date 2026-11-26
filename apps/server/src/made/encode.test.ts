@@ -121,8 +121,8 @@ describe('made encode', () => {
   it('compares pixels: alpha, coverage, colour; and counts differing pixels', async () => {
     const a = new Uint8Array([10, 20, 30, 255, 0, 0, 0, 0]);
     const b = new Uint8Array([10, 20, 30, 255, 0, 0, 0, 200]);
-    const c = compareRgba(a, b, 3);
-    expect(c).toMatchObject({ frame: 3, alphaMean: 100, coverageA: 0.5, coverageB: 1 });
+    const c = compareRgba(a, b, 3, 2);
+    expect(c).toMatchObject({ frame: 3, alphaMean: 100, coverageA: 0.5, coverageB: 1, blocks: 0 });
     expect(frameFails(c)).toBe(true);
     const [p0, p1] = pngs(half, 2);
     expect(await differingPixels(p0!, p0!)).toBe(0);
