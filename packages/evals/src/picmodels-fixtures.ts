@@ -7,11 +7,15 @@
  * Ground truth (the growing proof's rule): an eye square covers the pixels [X−3, X+3) × [Y−3, Y+3) for odd whole numbers X, Y, so its
  * centroid in continuous pixel coordinates (pixel i covers [i, i+1)) is exactly (X, Y), and its shown mark is (X / width, Y / height).
  * No other pixel is magenta: the background keeps green ≥ 60. The labelled fake adapter (fake_pf_picture.py) finds exactly these.
- * EXIF-rotated stills are made by the server part with apps/server/src/captureMeta.fixtures.ts (W1), not here.
+ * EXIF-rotated stills (makeExifStill, W1): the picture AS SHOWN is drawn as above, turned into the pixels a camera would store for
+ * that EXIF orientation (storedFromShown, from the EXIF definition of where stored row 0 and column 0 are shown — independent of
+ * ffmpeg), encoded as a JPEG at the highest quality with full chroma, and tagged with apps/server/src/captureMeta.fixtures.ts withExif.
+ * JPEG is lossy: the drawn squares' centroids survive to well under a pixel (the fixture test measures it), not exactly.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { withExif } from '../../../apps/server/src/captureMeta.fixtures.ts';
 
 export interface Pt { x: number; y: number }
 export interface DrawnFace { a: Pt; b: Pt }
@@ -72,6 +76,36 @@ export function makePicmodelsFixtures(dir: string): PicmodelsFixtures {
   encode(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${W}x${H}`, '-framerate', String(fps), '-i', 'pipe:0', '-c:v', 'libx264', '-qp', '0', '-pix_fmt', 'yuv444p', '-movflags', '+faststart', file], frames);
   return { dir, stills, video: { file, width: W, height: H, frames: N, fps, eyesAt } };
 }
+
+/**
+ * The pixels a camera stores for a picture SHOWN as `shown` (w × h, rgb24) when it tags EXIF orientation `o` (1–8). From the EXIF
+ * definition (where stored row 0 / column 0 are shown): the stored pixel (c, r) is shown at
+ *   1 (c, r) · 2 (Ws−1−c, r) · 3 (Ws−1−c, Hs−1−r) · 4 (c, Hs−1−r) · 5 (r, c) · 6 (Hs−1−r, c) · 7 (Hs−1−r, Ws−1−c) · 8 (r, Ws−1−c).
+ */
+export function storedFromShown(shown: Buffer, w: number, h: number, o: number): { rgb: Buffer; width: number; height: number } {
+  const turned = o >= 5;
+  const Ws = turned ? h : w, Hs = turned ? w : h;
+  const out = Buffer.alloc(Ws * Hs * 3);
+  for (let r = 0; r < Hs; r++) for (let c = 0; c < Ws; c++) {
+    const [x, y] = ({
+      1: [c, r], 2: [Ws - 1 - c, r], 3: [Ws - 1 - c, Hs - 1 - r], 4: [c, Hs - 1 - r],
+      5: [r, c], 6: [Hs - 1 - r, c], 7: [Hs - 1 - r, Ws - 1 - c], 8: [r, Ws - 1 - c],
+    } as Record<number, [number, number]>)[o] ?? [c, r];
+    shown.copy(out, 3 * (r * Ws + c), 3 * (y * w + x), 3 * (y * w + x) + 3);
+  }
+  return { rgb: out, width: Ws, height: Hs };
+}
+/** A JPEG whose picture AS SHOWN has these faces, stored for EXIF orientation `o` and tagged so. */
+export function makeExifStill(dir: string, name: string, o: number, w: number, h: number, faces: readonly DrawnFace[]): StillFixture {
+  fs.mkdirSync(dir, { recursive: true });
+  const s = storedFromShown(drawFaces(w, h, faces), w, h, o);
+  const jpeg = encode(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-video_size', `${s.width}x${s.height}`, '-i', 'pipe:0', '-frames:v', '1', '-c:v', 'mjpeg', '-pix_fmt', 'yuvj444p', '-q:v', '1', '-f', 'image2pipe', 'pipe:1'], s.rgb);
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, withExif(jpeg, { orientation: o, date: null }));
+  return { name, file, width: w, height: h, faces: [...faces], decoys: [] };
+}
+/** The two EXIF stills of check E3 (shown 640 × 480; one face off-centre so a wrong turn moves it). */
+export const EXIF_FACE: DrawnFace = face(201, 141, 80);
 
 /** The checks of proof:picmodels (verify-corrected; each sentence is what the check must show). */
 export const PICMODELS_CHECKS: Record<string, string> = {
