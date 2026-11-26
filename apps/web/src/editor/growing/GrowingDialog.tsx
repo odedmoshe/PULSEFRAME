@@ -16,6 +16,8 @@ import { useEditorState } from '../store.ts';
 import { GrowingMarkView } from './GrowingMarkView.tsx';
 import { growingStrings } from './growing.strings.ts';
 import { GROWING_TESTIDS as ID } from './growing.testids.ts';
+import { eyesApi } from './eyes.client.ts';
+import { setupFromModels, type EyesSetup, type Proposal } from './eyes.logic.ts';
 import { setGrowingLast, takeGrowingIntent } from './growing.link.ts';
 import {
   agePerson, buildParams, buildPreview, closeLosesMarks, createBlocker, currentGrowingRun, dateWords, defaultSettings, emptyMark, failureWords, fpsOf, holdFrames, listCandidates,
@@ -51,6 +53,9 @@ function GrowingDialogBody({ lang }: { lang: 'he' | 'en' }): ReactElement {
   const [step, setStep] = useState<Step>(runView ? 'mark' : 'pick');
   const [marks, setMarks] = useState<Record<string, Mark>>(() => Object.fromEntries((runView?.deleted ?? []).map((d) => [d.assetId, emptyMark(d.frame)]))); // by asset id; MEMORY ONLY (C8)
   const [cur, setCur] = useState(0);
+  // «הציעו עיניים»: the proposals by asset id and the picture model's setup; memory only, dropped with the dialog
+  const [proposals, setProposals] = useState<Record<string, Proposal>>({});
+  const [eyesSetup, setEyesSetup] = useState<EyesSetup | null>(null);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -58,6 +63,16 @@ function GrowingDialogBody({ lang }: { lang: 'he' | 'en' }): ReactElement {
   const made = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+  useEffect(() => {
+    if (step !== 'mark') return;
+    const ctl = new AbortController();
+    eyesApi.models(ctl.signal).then((a) => { if (!ctl.signal.aborted) setEyesSetup(setupFromModels(a.models)); }, (e: unknown) => {
+      if (ctl.signal.aborted) return;
+      setEyesSetup((e as { code?: string })?.code === 'eyes_not_built' || (e as { status?: number })?.status === 501 ? { code: 'not_built', module: null, missingBytes: 0 } : { code: 'unknown' });
+    });
+    return () => ctl.abort();
+  }, [step === 'mark']); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refs = useMemo(() => order.filter((id) => ticked.includes(id)).map((id) => ({ assetId: id, frame: (marks[id] ?? emptyMark(byId[id]?.kind === 'video' ? 0 : null)).frame })), [order, ticked, marks, byId]);
   const markOf = (id: string): Mark => marks[id] ?? emptyMark(byId[id]?.kind === 'video' ? 0 : null);
@@ -183,7 +198,8 @@ function GrowingDialogBody({ lang }: { lang: 'he' | 'en' }): ReactElement {
                 <p className="pf-growing-prompt" data-testid={ID.markPrompt} role="status" aria-live="polite">
                   {markWords(markOf(curRef.assetId)) === 'none' ? S.firstEye : markWords(markOf(curRef.assetId)) === 'one' ? S.secondEye : S.stateDone}
                 </p>
-                <GrowingMarkView key={curAsset.id} lang={lang} doc={doc} asset={curAsset} shown={curShown} mark={markOf(curRef.assetId)} order={orderFn} frameLocked={!!runView} onChange={(m) => patchMark(curRef.assetId, m)} onPage={page} />
+                <GrowingMarkView key={curAsset.id} lang={lang} doc={doc} asset={curAsset} shown={curShown} mark={markOf(curRef.assetId)} order={orderFn} frameLocked={!!runView} onChange={(m) => patchMark(curRef.assetId, m)} onPage={page}
+                  eyes={{ setup: eyesSetup, proposal: proposals[curRef.assetId], onProposal: (p) => setProposals((x) => { const { [curRef.assetId]: _gone, ...rest } = x; return p ? { ...rest, [curRef.assetId]: p } : rest; }) }} />
                 <div className="pf-growing-row">
                   <Button size="sm" data-testid={ID.markPrev} disabled={cur <= 0} onClick={() => page(-1)}>{S.prevPicture}</Button>
                   <Button size="sm" data-testid={ID.markNext} disabled={cur >= refs.length - 1} onClick={() => page(1)}>{S.nextPicture}</Button>
