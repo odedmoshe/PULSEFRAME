@@ -18,3 +18,6 @@
 .cover-ppi ul, .cover-notes { margin: 0; padding-inline-start: var(--pf-sp-6); display: grid; gap: var(--pf-sp-2); }
 .cover-job { margin: 0; min-block-size: 1.2em; }
 .cover-download { display: inline-block; text-decoration: none; }
+/* the dialog's «שמרו את התמונה» in the light theme: the legacy .primary colours (dark ink on --pf-accent) measured 2.81:1 there (audit:a11y,
+   integration 2026-11-26), as the templates dialog's did; the frame tokens follow the theme (as the inspector's primary buttons) */
+.cover-dlg button.primary { background-color: var(--pf-frame); background-image: linear-gradient(180deg, var(--pf-frame-strong), var(--pf-frame) 60%); color: var(--pf-frame-ink); }
