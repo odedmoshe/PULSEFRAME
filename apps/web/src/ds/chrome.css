@@ -166,10 +166,13 @@
 .pf-bw-search input::placeholder { color: var(--pf-text-3); opacity: 1; }
 /* the field that holds the focus draws the focus ring itself (the box's frame-coloured line is only a hint) */
 .pf-bw-search input:focus-visible { outline: 2px solid var(--pf-focus); outline-offset: 3px; border-radius: var(--pf-r-xs); }
-.pf-bw-chips { display: flex; flex-wrap: wrap; gap: var(--pf-sp-3); flex: none; }
+.pf-bw-chips { display: flex; flex-wrap: nowrap; gap: var(--pf-sp-3); flex: none; overflow-x: auto; scrollbar-width: none; /* one row; edge shadows (covered by the local layers at each end) say that more chips lie beyond */
+  background: linear-gradient(to right, var(--pf-surface-1), transparent) left center / 20px 100% no-repeat local, linear-gradient(to left, var(--pf-surface-1), transparent) right center / 20px 100% no-repeat local, linear-gradient(to right, var(--pf-line-strong), transparent) left center / 8px 60% no-repeat scroll, linear-gradient(to left, var(--pf-line-strong), transparent) right center / 8px 60% no-repeat scroll; }
+.pf-bw-chips { padding: 2px; margin: -2px; } /* room for the focus ring that overflow would clip */
+.pf-bw-chips::-webkit-scrollbar { display: none; }
 .pf-bw-chips .pf-chip { flex: none; }
 .pf-bw-chips .pf-chip.is-on { background: var(--pf-text); color: var(--pf-surface-1); }
-.pf-bw-scroll { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; margin-inline: calc(-1 * var(--pf-sp-6)); padding: var(--pf-sp-2) var(--pf-sp-6) var(--pf-sp-9); scrollbar-width: thin; mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
+.pf-bw-scroll { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; margin-inline: calc(-1 * var(--pf-sp-6)); padding: var(--pf-sp-2) var(--pf-sp-6) var(--pf-sp-9); scrollbar-width: thin; mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
 .pf-bw-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--pf-sp-5); flex: none; margin-block-end: var(--pf-sp-6); padding: var(--pf-sp-9) var(--pf-sp-6); border: 1.5px dashed var(--pf-line-control); border-radius: var(--pf-r-lg); text-align: center; color: var(--pf-text-2); background: color-mix(in srgb, var(--pf-surface-2) 60%, transparent); }
 .pf-bw-drop svg { color: var(--pf-frame); }
 .pf-bw-drop p { margin: 0; max-inline-size: 22ch; font-size: var(--pf-fs-sm); line-height: var(--pf-lh-sm); }

@@ -15,3 +15,10 @@ ul.assets.media-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1f
    danger hatching) and its words, «הקובץ לא נמצא» / "The file is missing", over the picture. White on --pf-danger-fill is 5.9:1. */
 .media-card.is-missing .mc-thumb { box-shadow: inset 0 0 0 2px var(--pf-danger); background-image: repeating-linear-gradient(135deg, var(--pf-danger-soft) 0 6px, transparent 6px 12px); }
 .media-card .pf-mc-missing { position: absolute; inset-inline: 6px; inset-block-start: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; gap: 4px; padding: 2px 6px; border-radius: var(--pf-r-xs); background: var(--pf-danger-fill); color: var(--pf-on-danger); font-size: var(--pf-fs-xs); line-height: var(--pf-lh-xs); font-weight: var(--pf-fw-medium); text-align: center; pointer-events: none; z-index: 1; }
+/* The multicam pick box (24 px target) shows on hover or focus of its card, and on every card once one is ticked (the pick is open);
+   it stays in the DOM and keeps its test id. The format badge only makes room for it while it shows. */
+.media-card .mc-thumb > .mc-pick { inline-size: 24px; block-size: 24px; inset-block-start: 4px; left: 4px; opacity: 0; transition: opacity var(--pf-dur-fast); }
+.media-card:hover .mc-thumb > .mc-pick, .media-card:focus-within .mc-thumb > .mc-pick, .media-grid:has(.mc-pick:checked) .mc-thumb > .mc-pick, .media-card .mc-thumb > .mc-pick:focus-visible { opacity: 1; }
+.media-card .pf-mc-thumb:has(> .mc-pick) .pf-mc-fmt { left: 6px; }
+.media-card:hover .pf-mc-thumb:has(> .mc-pick) .pf-mc-fmt, .media-card:focus-within .pf-mc-thumb:has(> .mc-pick) .pf-mc-fmt, .media-grid:has(.mc-pick:checked) .media-card .pf-mc-thumb:has(> .mc-pick) .pf-mc-fmt { left: 34px; }
+@media (prefers-reduced-motion: reduce) { .media-card .mc-thumb > .mc-pick { transition: none; } }
