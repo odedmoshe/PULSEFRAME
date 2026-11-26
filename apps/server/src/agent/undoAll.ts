@@ -59,6 +59,8 @@ function undo(d: UndoDeps, p: Principal, projectId: string, actor: string, since
 export function undoAllRun(d: UndoDeps, p: Principal, projectId: string, runId: string, opts: { dryRun?: boolean; partial?: boolean }, stopRun: (runId: string) => void): UndoAllAnswer {
   const run = d.runs.get(runId, projectId);
   mayUndo(d, p, run.actor, [run.startedBy]);
+  // a run still working is stopped first (the step in flight finishes its write; an edit it lands after this can be undone again)
+  if (!opts.dryRun) stopRun(run.id);
   const notUndone = notUndoneOfSteps(d.runs.steps(run.id));
   let r;
   try { r = undo(d, p, projectId, run.actor, run.startRevision, opts); }
@@ -67,7 +69,6 @@ export function undoAllRun(d: UndoDeps, p: Principal, projectId: string, runId: 
     throw new ApiError(AGENT_REFUSAL_CODES.alreadyUndone.status, AGENT_REFUSAL_CODES.alreadyUndone.code, `run ${run.id} was already undone by ${run.undoneBy}`, { runId: run.id, transactionId: run.undoneBy, notUndone }, 'Redo that undo (Ctrl+Shift+Z in the editor) if you want the run\'s edits back.');
   let canceledJobs: string[] = [];
   if (!opts.dryRun) {
-    stopRun(run.id); // a run still working is stopped first (the step in flight finishes; a later edit of it can be undone again)
     canceledJobs = d.cancelOpenJobs(projectId, run.actor);
     if (r.transactionId) d.runs.setUndoneBy(run.id, r.transactionId);
   }
@@ -76,8 +77,8 @@ export function undoAllRun(d: UndoDeps, p: Principal, projectId: string, runId: 
 
 /** Any actor since a revision (undo_actor_since, POST …/undo-actor). */
 export function undoActorFor(d: UndoDeps, p: Principal, projectId: string, body: { actor: string; sinceRevision?: number; dryRun?: boolean; partial?: boolean }): UndoAllAnswer {
-  mayUndo(d, p, body.actor);
   const run = body.actor.startsWith(AGENT_RUN_ACTOR_PREFIX) ? d.runs.byActor(body.actor) : null;
+  mayUndo(d, p, body.actor, run ? [run.startedBy] : []); // a run's starter undoes it, as with undo-all
   const since = body.sinceRevision ?? (run ? run.startRevision : sessionSince(d.store, projectId, body.actor));
   const notUndone = run ? notUndoneOfSteps(d.runs.steps(run.id)) : notUndoneOutside(d.store, projectId, body.actor, since);
   let r;
