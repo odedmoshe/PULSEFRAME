@@ -48,7 +48,7 @@ import { MusicFitApplyRequestSchema, MusicFitPlanRequestSchema } from '@pulsefra
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
 import type { MusicKit } from '@pulseframe/core';
 import { cancelMomentsJob, momentsLaneOf, startMomentsJob } from './moments.ts';
-import { cancelStillsJob, readSharpFrames, startStillsJob, withStillsErrors } from './stills.ts';
+import { cancelStillsJob, readSharpFrames, startStillsJob, stillsReady, withStillsErrors } from './stills.ts';
 import { FindSharpBodySchema, ReadSharpQuerySchema, STILLS_JOB_TYPE } from '@pulseframe/core';
 import type { Presence } from './presence.ts';
 import { ApiError, revisionWithChanges, type JobRow, type RevisionEvent, type Store } from './store.ts';
@@ -422,14 +422,16 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
   app.post('/api/v1/projects/:id/stills', async (c) => {
     const p = need(c, 'edit');
     const b = await body(c, FindSharpBodySchema);
+    await stillsReady(); // the cache check needs the ffmpeg build line (a first POST after start must not measure again)
     const r = withStillsErrors(() => startStillsJob(store, gov, p, c.req.param('id'), b, { derivatives, lane: momentsLaneOf(exporter.lane) }));
     return 'cached' in r ? c.json(r, 200) : c.json({ jobId: r.jobId, status: r.status }, 202);
   });
-  app.get('/api/v1/projects/:id/stills', (c) => {
+  app.get('/api/v1/projects/:id/stills', async (c) => {
     const p = need(c, 'observe');
     gov.assertMayAct(p, c.req.param('id'), 'observe');
     const q = ReadSharpQuerySchema.safeParse(c.req.query());
     if (!q.success) throw new ApiError(400, 'invalid_request', z.prettifyError(q.error), { issues: q.error.issues });
+    await stillsReady(); // a first read right after start answers what is stored, not "nothing measured"
     return c.json(withStillsErrors(() => readSharpFrames(store, c.req.param('id'), q.data, { derivatives })));
   });
   app.get('/api/v1/projects/:id/motion-tracks/:motionTrackId', (c) => {

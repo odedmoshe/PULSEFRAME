@@ -1,17 +1,18 @@
 /**
- * Lead contracts of track cover on the server (wave 8 pre-pass): the sharpest-frame routes and MCP tools answer an honest 501
- * stills_not_built after the scope, body and project checks until W1 builds the job; a saved picture (`still`) is refused 403
+ * Lead contracts of track cover on the server (wave 8 pre-pass, turned to the built behaviour at integration): after the scope,
+ * body and project checks the sharpest-frame routes and MCP tools start a job (202) or read what is stored (numbers only); a saved picture (`still`) is refused 403
  * owner_required for every credential but the owner's own session, at every route that starts or retries an export; the option
  * rules of a still are blockers; the browser route refuses a still; the options of older jobs parse as before; both tools are in
  * the people tables and answer numbers only. What W1 and W2 build is tested in stills.test.ts, stills.math.test.ts and
- * stillExport.test.ts (theirs); the rows below marked todo are the checks they must turn on.
+ * stillExport.test.ts (theirs). The seeded file has no bytes, so a started job is stopped here before it reads.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { STILL_EXPORT_BUILT, STILLS_MEASURE_BUILT, STILLS_REFUSALS } from '@pulseframe/core';
+import { STILL_EXPORT_BUILT, STILLS_LABEL, STILLS_MEASURE_BUILT, STILLS_REFUSALS } from '@pulseframe/core';
+import { cancelStillsJob, stopStillsJobs } from './stills.ts';
 import { Auth } from './auth.ts';
 import { Capabilities } from './capabilities.ts';
 import { loadConfig, type Config } from './config.ts';
@@ -69,6 +70,7 @@ beforeAll(() => {
   ownerCookie = auth.issueSession(new Request(`${base()}/api/v1/session`, { headers: { origin: base(), 'x-pf-owner-key': auth.tokens.owner } })).split(';')[0]!;
 });
 afterAll(async () => {
+  await stopStillsJobs(store);
   (app as any).browserExport?.stop();
   await mcp.close();
   await capabilities.stop();
@@ -78,7 +80,7 @@ afterAll(async () => {
 });
 
 describe('cover: the sharpest-frame routes and tools (wave 8 pre-pass)', () => {
-  it('POST …/stills: 400 for a bad body, 404 for an unknown project, 403 for the observer, then 501 stills_not_built while unbuilt', async () => {
+  it('POST …/stills: 400 for a bad body, 404 for an unknown project, 403 for the observer, then 202 with a job; a second job in the project is 409', async () => {
     const s = seed('find');
     const agent = bearer(auth.tokens.agent);
     expect((await rest('POST', `/projects/${s.pid}/stills`, { assetId: s.assetId }, agent)).status).toBe(400); // neither clip nor stretch
@@ -88,25 +90,34 @@ describe('cover: the sharpest-frame routes and tools (wave 8 pre-pass)', () => {
     expect((await rest('POST', `/projects/prj_none/stills`, { assetId: s.assetId, clipId: s.clipId }, agent)).status).toBe(404);
     expect((await rest('POST', `/projects/${s.pid}/stills`, { assetId: s.assetId, clipId: s.clipId }, bearer(auth.tokens.observer))).status).toBe(403);
     const r = await rest('POST', `/projects/${s.pid}/stills`, { assetId: s.assetId, clipId: s.clipId }, agent);
-    if (!STILLS_MEASURE_BUILT) expect([r.status, r.body.error.code, r.body.error.message, r.body.error.hint]).toEqual([501, 'stills_not_built', STILLS_REFUSALS.notBuilt.message(), STILLS_REFUSALS.notBuilt.hint]);
+    expect(STILLS_MEASURE_BUILT).toBe(true);
+    expect(r.status).toBe(202);
+    expect(r.body.jobId).toMatch(/^job_/);
+    const again = await rest('POST', `/projects/${s.pid}/stills`, { assetId: s.assetId, clipId: s.clipId }, agent);
+    expect([again.status, again.body.error.code, again.body.error.details.jobId]).toEqual([409, 'stills_in_progress', r.body.jobId]);
+    cancelStillsJob(store, r.body.jobId, 'test');
   });
-  it('GET …/stills: 400 for a bad query, 404 for an unknown project, then 501 while unbuilt (the observer may read)', async () => {
+  it('GET …/stills: 400 for a bad query, 404 for an unknown project, then a SharpAnswer of what is stored (the observer may read)', async () => {
     const s = seed('read');
     const obs = bearer(auth.tokens.observer);
     expect((await rest('GET', `/projects/${s.pid}/stills?assetId=${s.assetId}&from=x&to=3`, undefined, obs)).status).toBe(400);
     expect((await rest('GET', `/projects/${s.pid}/stills?assetId=${s.assetId}`, undefined, obs)).status).toBe(400);
     expect((await rest('GET', `/projects/prj_none/stills?assetId=${s.assetId}&from=0&to=3`, undefined, obs)).status).toBe(404);
     const r = await rest('GET', `/projects/${s.pid}/stills?assetId=${s.assetId}&from=0&to=3`, undefined, obs);
-    if (!STILLS_MEASURE_BUILT) expect([r.status, r.body.error.code]).toEqual([501, 'stills_not_built']);
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ assetId: s.assetId, from: 0, to: 3, measuredFrames: 0, complete: false, median: null, candidates: [], frames: [], heuristic: true, label: { he: STILLS_LABEL.he, en: STILLS_LABEL.en } });
   });
-  it('MCP find_sharp_frames and read_sharp_frames answer the same honest state, as text only (no image part)', async () => {
+  it('MCP find_sharp_frames starts a job and read_sharp_frames reads the stored numbers, as text only (no image part)', async () => {
     const s = seed('mcp');
     const f = await tool('find_sharp_frames', { projectId: s.pid, assetId: s.assetId, clipId: s.clipId }, auth.tokens.agent);
     const g = await tool('read_sharp_frames', { projectId: s.pid, assetId: s.assetId, from: 0, to: 3 }, auth.tokens.observer);
     for (const r of [f, g]) {
       expect(r.content.every((c) => c.type === 'text')).toBe(true);
-      if (!STILLS_MEASURE_BUILT) { expect(r.isError).toBe(true); expect(r.text).toContain('stills_not_built'); }
+      expect(r.isError, r.text).toBe(false);
     }
+    expect(JSON.parse(f.text).jobId).toMatch(/^job_/);
+    expect(JSON.parse(g.text)).toMatchObject({ measuredFrames: 0, complete: false, heuristic: true });
+    cancelStillsJob(store, JSON.parse(f.text).jobId, 'test');
     expect((await tool('find_sharp_frames', { projectId: s.pid, assetId: s.assetId, clipId: s.clipId }, auth.tokens.observer)).isError).toBe(true); // needs edit
   });
   it('both tools and both routes are in the people tables as reader-document', () => {
@@ -115,10 +126,6 @@ describe('cover: the sharpest-frame routes and tools (wave 8 pre-pass)', () => {
     expect(PEOPLE_REST_SURFACES['POST /api/v1/projects/:id/stills']).toEqual(['reader-document']);
     expect(PEOPLE_REST_SURFACES['GET /api/v1/projects/:id/stills']).toEqual(['reader-document']);
   });
-  it.todo('W1: a measured clip answers 202 then the job\'s output.answer; a second request is { cached: true } with no ffmpeg started');
-  it.todo('W1: a stretch over 600 frames is 422 stills_range_too_long; a picture file is 422 no_video; a clip of another file 422 invalid_request');
-  it.todo('W1: one open job per project (409 stills_in_progress with details.jobId), three per server (429 busy); cancel writes nothing');
-  it.todo('W1: a restart recovers a running stills job and runs it again from the start');
 });
 
 describe('cover: the saved picture (export option still)', () => {
@@ -155,21 +162,16 @@ describe('cover: the saved picture (export option still)', () => {
     }
     expect(store.openJobs('export').filter((j) => j.projectId === s.pid)).toEqual([]);
   });
-  it('the owner\'s own session passes the owner rule and meets the honest still_not_built blocker while unbuilt', async () => {
+  it('the owner\'s own session passes the owner rule; built, its still is planned as a job (here blocked only by the absent bytes and render page)', async () => {
     const s = seed('still-owner');
     const r = await rest('POST', `/projects/${s.pid}/exports`, still(s.assetId), owner());
-    if (!STILL_EXPORT_BUILT) {
-      expect([r.status, r.body.error.code]).toEqual([422, 'render_blocked']);
-      expect(r.body.error.details.blockers.map((x: any) => x.code)).toContain('still_not_built');
-    } else expect(r.status).not.toBe(403);
+    expect(STILL_EXPORT_BUILT).toBe(true);
+    expect([r.status, r.body.error.code]).toEqual([422, 'render_blocked']);
+    expect(r.body.error.details.blockers.map((x: any) => x.code).sort()).toEqual(['missing_media', 'renderer_unavailable']);
   });
   it('the browser route refuses a still (409 unsupported_in_browser_export), even for the owner', async () => {
     const s = seed('still-browser');
     const r = await rest('POST', `/projects/${s.pid}/exports/browser`, { sessionId: 'tab-session-1', ...still(s.assetId) }, owner());
     expect([r.status, r.body.error.code, r.body.error.message]).toEqual([409, 'unsupported_in_browser_export', STILLS_REFUSALS.stillBrowserRoute.message()]);
   });
-  it.todo('W2: the owner\'s still of a 3000x2000 PNG is a PNG of exactly the crop\'s pixels, with output.still {ppi, tier, crop, source}; JPEG mjpeg 4:4:4');
-  it.todo('W2: a still output carries no format or stream tags (ffprobe), and a still with tags fails still_tags and saves nothing');
-  it.todo('W2: a side over 8192 is still_too_large; a frame outside the file out_of_bounds; an audio file still_no_picture; a crop off the paper shape still_options');
-  it.todo('W2: an agent retrying the owner\'s still export (REST retry, MCP retry_job) is refused 403 owner_required');
 });

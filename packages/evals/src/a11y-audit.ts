@@ -43,6 +43,7 @@ import { chooseFormat, formatOptions, openCardMenu } from './editor-ui.ts';
 import { makeRenderCacheCtx, renderCacheA11yScenarios } from './a11y-render-cache.ts';
 import { craftA11yScenarios } from './a11y-craft.ts';
 import { stabiliseA11yScenarios } from './a11y-stabilise.ts';
+import { coverA11yScenarios } from './a11y-cover.ts';
 import { musicfitA11yScenarios } from './a11y-musicfit.ts';
 import { instrumentsA11yScenarios } from './a11y-instruments.ts';
 import { assistantLocalA11yScenarios } from './assistant-local-proof.ui.ts';
@@ -841,6 +842,7 @@ async function main() {
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
       }
+      for (const sc of coverA11yScenarios) { const r = await sc.prepare({ page, lang, pid }); await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal); await sc.leave?.({ page, lang, pid }); } // «הפריים הכי חד» (wave 8 cover, a11y-cover.ts)
       // marked ranges «פנינים» (wave 7): the list, the pearl form, «מי בקליפ?» and the screen-time table (a11y-pearls.ts, builder C)
       for (const sc of pearlsA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
@@ -1214,6 +1216,12 @@ async function main() {
       }
       // the local language assistant (wave 7 assistant) in the light theme: the same nine scenarios as the dark pass (assistant-local-proof.ui.ts; contract-shaped fixtures)
       for (const sc of assistantLocalA11yScenarios) {
+        const r = await sc.prepare({ page, lang, pid });
+        await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
+        await sc.leave?.({ page, lang, pid });
+      }
+      // «הפריים הכי חד» and «שמירת התמונה» (wave 8 cover) in the light theme: the same scenarios as the dark pass (a11y-cover.ts)
+      for (const sc of coverA11yScenarios) {
         const r = await sc.prepare({ page, lang, pid });
         await auditState(sc.id, { shown: r.shown, ...(r.detail ?? {}) }, r.modal);
         await sc.leave?.({ page, lang, pid });
