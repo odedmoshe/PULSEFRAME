@@ -257,6 +257,8 @@ export const PEOPLE_REST_SURFACES: Readonly<Record<string, readonly PeopleFilter
   'PUT /api/v1/booth/answers/:id': ['owner-only'],
   'DELETE /api/v1/booth/answers/:id': ['owner-only'],
   'POST /api/v1/booth/checks/:rowId': ['owner-only'],
+  // versions for an audience (wave 8): the change list holds ids, frames and dB only, no names
+  [`GET ${P}/variants/:variantId/audience`]: ['reader-document'],
   // MCP over HTTP: see PEOPLE_MCP_TOOLS and PEOPLE_MCP_RESOURCES
   'ALL /mcp': ['reader-document'],
 };
@@ -299,6 +301,8 @@ export const PEOPLE_MCP_TOOLS: Readonly<Record<string, readonly PeopleFilter[]>>
   get_pearls: ['reader-document'],
   // music that fits the film (wave 7 musicfit track)
   plan_music_fit: ['reader-document'], apply_music_fit: ['reader-document', 'write'],
+  // versions for an audience (wave 8 audiences track)
+  get_audience_changes: ['reader-document'],
   // find it in your footage (wave 7 search track): text only, the reader document without pearl names or tags
   find_in_footage: ['reader-document'],
   // «הפריים הכי חד» (wave 8 cover): numbers only, no picture

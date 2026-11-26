@@ -11,6 +11,7 @@ import type { GradeFit, GradeParams, PictureStats, VoiceMeasurement } from '@pul
 import type { RationalTime } from '@pulseframe/time';
 import type { ClipLoudnessRequest, ClipLoudnessResult } from '@pulseframe/core';
 import type { PearlsView } from '@pulseframe/core';
+import type { AudienceChanges } from '@pulseframe/core';
 import type { MusicFitApplyRequest, MusicFitApplyResult, MusicFitPlan, MusicFitPlanRequest, JoinRemoval } from '@pulseframe/core';
 import type { MusicKitStatus } from '@pulseframe/core';
 import type { BoothAnswerBody, BoothAnswerResult, BoothCheckRow, BoothServerCheckId, BoothView } from '@pulseframe/core';
@@ -287,6 +288,8 @@ export const api = {
   musicFitPlan: (projectId: string, req: MusicFitPlanRequest) => call<MusicFitPlan>(`/projects/${projectId}/music-fit/plan`, json(req)),
   musicFitApply: (projectId: string, req: MusicFitApplyRequest) => call<MusicFitApplyResult>(`/projects/${projectId}/music-fit/apply`, json(req)),
   /** The owner's own session only (agents get 403 human_approval_required). */
+  // ----- «גרסה לכל קהל» (wave 8 audiences; apps/server/src/audiences/routes.ts): 501 audience_not_built until built -----
+  audienceChanges: (projectId: string, variantId: string) => call<AudienceChanges>(`/projects/${projectId}/variants/${encodeURIComponent(variantId)}/audience`),
   markJoinHeard: (projectId: string, assetId: string, heard: boolean) => call<unknown>(`/projects/${projectId}/assets/${encodeURIComponent(assetId)}/music-join/heard`, json({ heard })),
   // ----- «כלים מוקלטים» (wave 7 instruments; apps/server/src/instruments/routes.ts) -----
   musicKits: () => call<{ kits: MusicKitStatus[] }>('/music/kits'),

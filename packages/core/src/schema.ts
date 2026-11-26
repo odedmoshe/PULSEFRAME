@@ -10,6 +10,7 @@ import { BLEND_MODES, EffectInstanceSchema, MaskSchema, TransitionSchema } from 
 import { FollowSchema, MAX_REDACT_REGIONS, MotionTrackSchema, RedactRegionSchema } from './tracking.ts';
 import { ANIMATABLE, KeyframeSchema, MAX_TRANSFORM_KEYS, RationalTimeSchema, type Animatable } from './keyframe.ts';
 import { CameraMotionSchema, ClipStabiliseSchema } from './steadyContract.ts';
+import { AUDIENCE_MUSIC_DB_MAX, AUDIENCE_MUSIC_DB_MIN, AUDIENCE_PROFILES, AUDIENCE_RULES_VERSION, KEEP_RULES, SOUND_ROLES } from './audienceLimits.ts';
 import { MOMENTS_MAX_WINDOWS, MomentsFileSchema, MomentsMeasuredSchema, MomentWindowSchema } from './momentsContract.ts';
 import { ANGLE_KINDS, MAX_ANCHORS_PER_PIECE, MAX_ANGLES, MAX_PIECES, MAX_SPEAKERS, MAX_SYNC_CANDIDATES, SYNC_VERDICTS } from './multicamLimits.ts';
 
@@ -579,8 +580,26 @@ export const VariantOverrideSchema = z.object({
   hidden: z.boolean().optional(),
   /** Title clips: wording for this format only (for example a shorter line for a narrow frame). */
   text: z.string().min(1).max(2000).optional(),
-  /** Title clips: style fields for this format only (for example a larger size). */
+  /** Title clips: style fields for this format only (for example a larger size). In an audience version a size set here is absolute (verifier C3). */
   textStyle: TextStyleSchema.partial().optional(),
+  /**
+   * Audience versions only (wave 8 audiences): rules of the version's profile the owner keeps as in the master on this clip
+   * («להשאיר כמו במקור»). Unique, each keepable for the profile (audienceValidate.ts). A split copies them with the override.
+   */
+  keep: z.array(z.enum(KEEP_RULES)).min(1).max(KEEP_RULES.length).optional(),
+}).strict();
+/**
+ * «גרסה לכל קהל» (wave 8 audiences; audienceContract.ts): present on a version for an audience. It stores the profile, the rule-table
+ * version, the music level and the owner's role corrections — never the result; the rules run on the current master at every
+ * projection. Exclusive with a translation (audienceValidate.ts). No `applied` marker exists (verifier C1).
+ */
+export const VariantAudienceSchema = z.object({
+  profile: z.enum(AUDIENCE_PROFILES),
+  rules: z.literal(AUDIENCE_RULES_VERSION).describe('rule-table version; a later build never re-reads an old version with new rules'),
+  /** the music level of this version, integer dB relative to the rest of the mix; absent = the profile's default (calm −6, grandparents −8) */
+  musicDb: z.number().int().min(AUDIENCE_MUSIC_DB_MIN).max(AUDIENCE_MUSIC_DB_MAX).optional(),
+  /** the owner's correction of the sound-role heuristic, by sound track id */
+  sound: z.record(Id, z.enum(SOUND_ROLES)).optional(),
 }).strict();
 export const VariantSchema = z
   .object({
@@ -600,6 +619,8 @@ export const VariantSchema = z
     language: z.string().min(2).max(35).optional(),
     /** Present on a language variant made by machine translation: where its wording came from and whether the owner reviewed it. */
     translation: VariantTranslationSchema.optional(),
+    /** Present on a version for an audience (wave 8): the profile and its settings (VariantAudienceSchema). */
+    audience: VariantAudienceSchema.optional(),
   })
   .strict();
 
@@ -1004,6 +1025,8 @@ export type Transcript = z.infer<typeof TranscriptSchema>;
 export type Analysis = z.infer<typeof AnalysisSchema>;
 export type Variant = z.infer<typeof VariantSchema>;
 export type VariantTranslation = z.infer<typeof VariantTranslationSchema>;
+export type VariantAudience = z.infer<typeof VariantAudienceSchema>;
+export type VariantOverride = z.infer<typeof VariantOverrideSchema>;
 export type DerivedFrames = z.infer<typeof DerivedFramesSchema>;
 export type SafeArea = z.infer<typeof SafeAreaSchema>;
 export type Segment = z.infer<typeof SegmentSchema>;

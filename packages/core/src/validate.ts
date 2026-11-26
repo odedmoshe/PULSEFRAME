@@ -22,6 +22,7 @@ import { libraryRecordIssues } from './libraryDuties.ts';
 import { steadyIssues } from './steadyValidate.ts';
 import { validateSourceRanges } from './sourceRanges.ts';
 import { musicFitIssues } from './musicFitValidate.ts';
+import { audienceIssues } from './audienceValidate.ts';
 import { instrumentsIssues } from './instrumentsValidate.ts';
 
 export interface Issue { code: string; message: string; ids: string[] }
@@ -415,6 +416,8 @@ export function validateProject(doc: ProjectDocument): Issue[] {
   issues.push(...musicFitIssues(doc));
   // recorded instruments for built-in music (wave 7 instruments track; instrumentsValidate.ts, code instruments_provenance)
   issues.push(...instrumentsIssues(doc));
+  // versions for an audience (wave 8 audiences; audienceValidate.ts, codes audience_*)
+  issues.push(...audienceIssues(doc));
   return issues;
 }
 const hasTags = (doc: ProjectDocument) => Object.values(doc.sequences).some((s) => s.tracks.some((t) => t.clips.some((c) => c.type === 'media' && !!c.multicam)));

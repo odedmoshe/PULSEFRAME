@@ -10,6 +10,8 @@ import { FORMAT_PROFILES } from '@pulseframe/core';
 import { useEditorState } from './store.ts';
 import { Menu, rovingNext, useDir } from '../ds/index.ts';
 import { STAGE_STRINGS } from './stage.strings.ts';
+import { AUDIENCE_UI_BUILT } from './audience/AudiencePanel.tsx';
+import { audienceMenuItems, isAudienceMenuId } from './audience/audienceMenu.ts';
 
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 /** "16:9", "9:16", "1:1", "4:5": the shape of a frame in the smallest whole numbers (a shape that has none short enough is written as a decimal ratio). */
@@ -72,8 +74,10 @@ export function FormatPrism() {
             : <button key={c.id || 'master'} {...props} data-testid="format-chip">{inner}</button>;
         })}
       </div>
+      {/* «גרסה לקהל» (wave 8 audiences): W3 appends audienceMenuItems and routes its ids (isAudienceMenuId); W3 also makes the menu render
+          when no format profile is left to add (verifier C14) */}
       {addable.length > 0 && (
-        <Menu label={S.addFormat} items={addable.map((p) => ({ id: p.id, label: `${p.name[state.lang]} · ${p.width}×${p.height}` }))} onSelect={(id) => void add(id)}
+        <Menu label={S.addFormat} items={[...addable.map((p) => ({ id: p.id, label: `${p.name[state.lang]} · ${p.width}×${p.height}` })), ...(AUDIENCE_UI_BUILT ? audienceMenuItems(state.lang) : [])]} onSelect={(id) => { if (!isAudienceMenuId(id)) void add(id); }}
           trigger={(p) => <button type="button" className="prism-add" aria-label={S.addFormat} title={S.addFormat} data-testid="prism-add" {...p}><Plus size={16} strokeWidth={1.75} aria-hidden="true" /></button>} />
       )}
     </div>

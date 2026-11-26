@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
+import { applyTransaction, createProject, creativeProjection, diffEntities, LIBRARY_OPS_BUILT, MUSICFIT_OPS_BUILT, AUDIENCE_PROJECTION_BUILT, SOURCE_RANGE_OPS_BUILT, STEADY_OPS_BUILT, SST, OpError, ProjectSchema, projectVariant, restoreEntities, summarize, timeline, validateProject, type OpCall, type ProjectDocument } from '@pulseframe/core';
 import { audioPlan, evaluate } from '@pulseframe/engine';
 import { createFuzz } from './ops-fuzz.gen.ts';
 
@@ -112,6 +112,19 @@ function run(seed: number, focus: () => string[] = () => []) {
         step({ op: 'update_source_range', args: { rangeId, start: T.rt(2, 7), end: T.rt(6, 7) } }, 'pearl update');
         step({ op: 'remove_source_range', args: { rangeId } }, 'pearl remove');
       }
+    }
+  }
+  // versions for an audience (wave 8): after the random steps, one fixed add, update, keep and give-back through the same oracles, so
+  // each of the three is accepted in every run (the random draws reach them rarely); fixed choices, no draw from the random stream
+  if (AUDIENCE_PROJECTION_BUILT) {
+    const added = step({ op: 'add_audience_version', args: { profile: seed % 2 ? 'calm' : 'grandparents' } }, 'audience add');
+    const variantId = added?.variantId as string | undefined;
+    const tracks = Object.values(doc.sequences).flatMap((s) => s.tracks);
+    const sound = tracks.find((t) => t.kind === 'audio');
+    const clip = tracks.filter((t) => t.kind !== 'audio').flatMap((t) => t.clips)[0];
+    if (variantId) {
+      step({ op: 'update_audience_version', args: { variantId, musicDb: -9, ...(sound ? { sound: { trackId: sound.id, role: 'music' } } : {}) } }, 'audience update');
+      if (clip) { step({ op: 'set_audience_keep', args: { variantId, clipId: clip.id, rule: 'effect', keep: true } }, 'audience keep'); step({ op: 'set_audience_keep', args: { variantId, clipId: clip.id, rule: 'effect', keep: false } }, 'audience give back'); }
     }
   }
   return stats;

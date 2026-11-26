@@ -175,3 +175,10 @@ export * from './booth/contract.ts';
 export * from './booth/report.ts';
 export * from './booth/scrub.ts';
 export * from './booth/scene.ts';
+// a version for every audience «גרסה לכל קהל» (wave 8 audiences track): the contract, limits, validation and the three ops are
+// lead-built; audience.ts (rules, sound roles, change list) is W1's
+export * from './audienceLimits.ts';
+export * from './audienceContract.ts';
+export * from './audienceValidate.ts';
+export * from './audience.ts';
+export * from './audienceOps.ts';

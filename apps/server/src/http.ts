@@ -41,6 +41,7 @@ import { buildOpenApi } from './openapi.ts';
 import { cancelTrackingJob, motionTrackView, startTrackingJob } from './tracking.ts';
 import { cameraMotionView, cancelStabiliseJob, startStabiliseJob } from './stabilise.ts';
 import { pearlsView } from './pearls.ts';
+import { audienceChangesFor } from './audiences/routes.ts';
 import { applyMusicFitFor, markJoinHeardFor, musicJoinPreviewFor, planMusicFitFor, refuseHeardByAgent } from './musicfit/routes.ts';
 import { MusicFitApplyRequestSchema, MusicFitPlanRequestSchema } from '@pulseframe/core';
 import { STABILISE_JOB_TYPE, StabiliseRunBodySchema } from '@pulseframe/core';
@@ -453,6 +454,8 @@ export function createApp(cfg: Config, store: Store, auth: Auth, exporter: Expor
     const p = store.getProject(c.req.param('id'));
     return c.json(pearlsView(p.doc, p.revision, who, c.req.query('sequenceId') || undefined));
   });
+  // ----- versions for an audience «גרסה לכל קהל» (wave 8; audiences/routes.ts): the change list, 501 audience_not_built until built -----
+  app.get('/api/v1/projects/:id/variants/:variantId/audience', (c) => { need(c, 'observe'); return c.json(audienceChangesFor(store, c.req.param('id'), c.req.param('variantId'))); });
   const RecipeBody = z.object({ params: z.record(z.string(), z.unknown()).optional(), expectedRevision: z.number().int().optional() }).strict();
   app.post('/api/v1/projects/:id/recipes/:recipeId/plan', async (c) => { const p = need(c, 'observe'); store.getProject(c.req.param('id')); return c.json(await planRecipeFor(store, c.req.param('id'), c.req.param('recipeId'), (await body(c, RecipeBody)).params, gov, p)); });
   app.post('/api/v1/projects/:id/recipes/:recipeId/apply', async (c) => { const p = need(c, 'observe'); const b = await body(c, RecipeBody); return c.json(await applyRecipe(store, gov, p, c.req.param('id'), c.req.param('recipeId'), b.params, b.expectedRevision)); });

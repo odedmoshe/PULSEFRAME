@@ -17,7 +17,7 @@ import { collectCredits, creditDue, creditsView, type CreditsView } from '@pulse
 import { AUTO_SELF_CHECK_CLEAN_EXPORTS, EXPORT_MODES, INCREMENTAL_NOT_BUILT_REASON, RENDER_CACHE_BLOCKERS, SEGMENTED_ROUTE, SELF_CHECK_MODES, type RenderCacheStatus, type SegmentedExportReport } from '@pulseframe/core';
 import { assembleChecks, flagsOf, pictureExpectation, planSizeFit, SEND_API_REFUSALS, SEND_FIT, SIZE_FIT_BUILT, type ExportFinding, type PictureChecks, type SizeFitFault, type SizeFitManifest, type SizeFitOutput, type SoundChecks } from '@pulseframe/core';
 import { STILL_EXCLUSIVE_OPTIONS, STILL_EXPORT_BUILT, STILLS_REFUSALS, StillExportSchema } from '@pulseframe/core';
-import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
+import { GPU_EFFECT_IDS, GPU_TRANSITION_IDS, timeOriginSeconds, findEffect, lutRef, findFont, FONT_CATALOG, OutputTargetError, OUTPUT_WARNINGS, outputWarnings, projectOutput, sequenceDuration, serializeSrt, serializeVtt, type OutputTarget, type ProjectDocument } from '@pulseframe/core';
 import type { RenderHost } from '@pulseframe/renderer';
 import { AUDIO_FX_ENGINE, audioPlan, captionCues, PictureCheck, soundEnd, type AudioPlan, type FlashCells, type PlannedAudioClip } from '@pulseframe/engine';
 import { mixRoomBytes, renderMix, type MixResult } from './audiomix.ts';
@@ -316,14 +316,17 @@ export class Exporter {
   /**
    * Everything a render depends on, fixed at the moment the job is created (SPEC §9): the document snapshot,
    * the exact asset and font bytes, engine versions and options. Returns blockers instead of starting a render that cannot be faithful.
+   * `resolved`: `doc` is ALREADY the document to render (a job's snapshot: a retry, or a job without a manifest), so the sequence and
+   * the linked format named in the options are not projected again (wave 8 audiences, verifier C1: a version's rules, such as a size
+   * ×4/3, must apply exactly once; no marker in the data says so). The options still describe the output (range, format, scale).
    */
-  plan(doc: ProjectDocument, revision: number, raw: unknown): { manifest: Manifest; blockers: Blocker[]; warnings: Blocker[] } {
+  plan(doc: ProjectDocument, revision: number, raw: unknown, opts: { resolved?: boolean } = {}): { manifest: Manifest; blockers: Blocker[]; warnings: Blocker[] } {
     const parsed = ExportOptionsSchema.safeParse(raw ?? {});
     if (!parsed.success) throw new ApiError(400, 'invalid_request', z.prettifyError(parsed.error), { issues: parsed.error.issues });
     let options = parsed.data;
     const target = { sequenceId: options.sequenceId, variantId: options.variantId };
-    const targetWarnings = outputWarnings(doc, target);
-    doc = outputDoc(doc, target);
+    const targetWarnings = opts.resolved ? [] : outputWarnings(doc, target);
+    if (!opts.resolved) doc = outputDoc(doc, target);
     const { width, height, frameRate, sampleRate } = doc.settings;
     const total = T.frameCount(sequenceDuration(doc), frameRate);
     const blockers: Blocker[] = [];
@@ -489,7 +492,10 @@ export class Exporter {
     // start exports through this function (the MCP tool used to skip the check that only the REST route made).
     if (!opts.roomChecked) assertStorageRoom(this.store, 1, retryOf ? 'retry this export' : 'start an export');
     const p = retryOf ? { doc: retryOf.input.snapshot as ProjectDocument, revision: retryOf.input.revision as number } : this.store.getProject(projectId);
-    const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions);
+    // a retry plans its snapshot as it is (resolved): the snapshot is already the projected document (C1); the target warning the
+    // first plan gave (variant_over_sequence_format) is carried over, since the snapshot no longer shows the sequence's own frame
+    const { manifest, blockers, warnings } = this.plan(p.doc, p.revision, retryOf ? retryOf.input.manifest.options : rawOptions, { resolved: !!retryOf });
+    if (retryOf) for (const w of (retryOf.input.warnings ?? []) as Blocker[]) if ((OUTPUT_WARNINGS as readonly string[]).includes(w.code) && !warnings.some((x) => x.code === w.code)) warnings.unshift(w);
     if (blockers.length) throw new ApiError(422, 'render_blocked', `export cannot start: ${blockers[0]!.message}`, { blockers, warnings }, blockers[0]!.hint ?? GENERIC_BLOCKER_HINT);
     // size-fit (C6): the full-quality intermediate and the fitted file live side by side until the publish; ask room for both now
     if (manifest.fit) assertStorageRoom(this.store, (manifest.estimate.bytes ?? 0) + manifest.fit.targetBytes, retryOf ? 'retry this export' : 'start an export at a target size');
@@ -618,7 +624,7 @@ export class Exporter {
     fs.mkdirSync(work, { recursive: true });
     const doc: ProjectDocument = job.input.snapshot;
     // Jobs created before manifests existed (or recovered ones) get a default plan from their own snapshot.
-    const manifest: Manifest = job.input.manifest ?? this.plan(doc, job.input.revision, {}).manifest;
+    const manifest: Manifest = job.input.manifest ?? this.plan(doc, job.input.revision, {}, { resolved: true }).manifest;
     const { options, output } = manifest;
     let token: string | undefined;
     let flashReport: PhotosensitivityReport | null = null;
