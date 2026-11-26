@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SOURCES_TESTIDS } from './sources.testids.ts';
-import { MediaSourcesTabs, SOURCES_UI_BUILT } from './SourcesTab.tsx';
+import { SOURCES_UI_BUILT } from './SourcesTab.tsx';
 
 const all: unknown[] = Object.values(SOURCES_TESTIDS);
 const fixed = (): string[] => all.filter((v): v is string => typeof v === 'string');
@@ -19,7 +19,11 @@ describe('sources test ids (wave 8 sources)', () => {
     const tables = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? tables(path.join(dir, e.name)) : e.name.endsWith('.testids.ts') && e.name !== 'sources.testids.ts' ? [path.join(dir, e.name)] : []));
     for (const f of tables(editorDir)) { const text = fs.readFileSync(f, 'utf8'); for (const id of fixed()) expect(text.includes(`'${id}'`), `${id} in ${f}`).toBe(false); }
   });
-  it.runIf(!SOURCES_UI_BUILT)('until built, the drawer shows exactly what it showed (no dead tab)', () => {
-    expect(MediaSourcesTabs({ mine: 'mine' })).toBe('mine');
+  it('built: every id of the contract is written on an element of the interface (the proof and the audit find each one)', () => {
+    expect(SOURCES_UI_BUILT).toBe(true);
+    const dir = path.dirname(new URL(import.meta.url).pathname);
+    const text = fs.readdirSync(dir).filter((n) => n.endsWith('.tsx') && !n.includes('.test.')).map((n) => fs.readFileSync(path.join(dir, n), 'utf8')).join('\n');
+    const unused = Object.keys(SOURCES_TESTIDS).filter((k) => !new RegExp(`\\bTID\\.${k}\\b`).test(text));
+    expect(unused).toEqual([]);
   });
 });
