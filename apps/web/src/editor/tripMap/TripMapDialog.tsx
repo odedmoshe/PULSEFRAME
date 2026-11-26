@@ -6,8 +6,8 @@
  * place's coordinates; no route, no tool), the picker (a canvas drawn by drawGraph with one map layer: the one compositor; click or keyboard
  * crosshair; views «ישראל והסביבה» / «כל העולם»), look, camera (one choice), length (frame-exact), «לפי התיבות של המוזיקה» (enabled when
  * musicAt finds music with bars at the clip's start in its own sequence, else the reason) and the honest lines. The logic is in
- * tripMap.logic.ts (pure, tested). Create commits add_trip_map (then time_trip_map when the bars box is ticked: a second step, because a
- * commit has no binding to an earlier step's clip id); Save commits trim_clip / update_trip_map / time_trip_map in ONE transaction.
+ * tripMap.logic.ts (pure, tested). Create commits ONE add_trip_map (with timing 'bars' when the box is ticked: one transaction, one
+ * undo); Save commits trim_clip / update_trip_map / time_trip_map in ONE transaction.
  * Ids: TRIPMAP_TESTIDS. No focus is moved in a later task: focus goes to the picker and back in layout effects (an intent kept in a ref).
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
@@ -129,16 +129,12 @@ export function TripMapDialog({ clip, onClose }: { clip?: DrawnClip; onClose: ()
         if (await run(ops, 'Edit trip map')) onClose();
         return;
       }
-      const plan = createPlan(draft, rate, at, seqId);
+      const plan = createPlan(draft.bars && !bars.ok ? { ...draft, bars: false } : draft, rate, at, seqId);
       if (!plan) return;
-      const r = await run([plan.add], 'Add trip map');
+      const r = await run(plan, 'Add trip map');
       if (!r) return;
       const id = (r.results[0]?.output as { clipId?: string } | undefined)?.clipId;
       if (id) editor.select(id);
-      if (plan.bars && id) {
-        const r2 = await editor.commitExact(retimePlan(id), 'Time trip map', r.revision, `trip:${crypto.randomUUID()}`);
-        if (r2.kind !== 'committed') editor.sayOnStage(r2.kind === 'failed' ? (translateRefusal(lang, r2.message) ?? r2.message) : t('staleRetry'));
-      }
       onClose();
     } finally { setBusy(false); }
   };

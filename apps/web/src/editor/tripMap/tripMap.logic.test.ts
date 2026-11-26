@@ -1,12 +1,12 @@
 /**
- * The trip map dialog's logic (wave 8 tripmap W3). Where W1's functions are not built in this branch (core searchPlaces, cameraAt) the
- * tests use a STAND-IN, labelled as one; the real ones are exercised by W1's tests and the interface proof.
+ * The trip map dialog's logic (wave 8 tripmap W3; integration: the stand-ins for W1's search and camera are gone, the real core
+ * searchPlaces, cameraAt and toScreen run here).
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as T from '@pulseframe/time';
-import { MapPayloadSchema, mapIssues, type DrawnClip, type MapCamera, type MapPayload, type PlaceHit, type PlaceRow } from '@pulseframe/core';
+import { cameraAt, MapPayloadSchema, mapIssues, searchPlaces, toScreen, mercator, type DrawnClip, type MapCamera, type MapPayload, type PlaceRow } from '@pulseframe/core';
 import { dictionaries } from '@pulseframe/i18n';
 import {
   barsState, createPlan, defaultFrames, draftOf, draftProblems, framesOfSeconds, hitLabel, initialPicker, minFrames, moveStop, pickerBox, pickerKey, pickerPayload, pixelToPlace,
@@ -52,15 +52,20 @@ describe('draft checks say before the click what the ops would refuse', () => {
   it('a hidden stop may have an empty name', () => expect(draftProblems(draft({ stops: [A, { ...B, name: '', hidden: true }, { ...A, id: 'c', lon: 35_000_000 }] }), R30)).toEqual([]));
 });
 
-describe('search wrapper (STAND-IN for core searchPlaces, which W1 builds)', () => {
+describe('search wrapper (core searchPlaces, the real one)', () => {
   const rows: PlaceRow[] = Array.from({ length: 30 }, (_, i) => [i + 1, `מקום ${i}`, `Place ${i}`, 3000 + i, 3000 + i] as const);
-  const standIn = (rs: readonly PlaceRow[], q: string, max = 8): PlaceHit[] => rs.filter((r) => r[1].includes(q)).slice(0, max + 3).map((r) => ({ placeId: r[0], nameHe: r[1], nameEn: r[2], lon: r[3] * 10_000, lat: r[4] * 10_000 }));
+  const search = searchPlaces; // the default of suggestionsFor, passed explicitly
+  it('the default search is core searchPlaces over the committed list: «ירושלים» is found, «אילת» is not in the list', async () => {
+    const list = (await import('./places.data.ts')).default;
+    expect(suggestionsFor(list, 'ירושלים')[0]?.nameHe).toBe('ירושלים');
+    expect(suggestionsFor(list, 'אילת')).toEqual([]);
+  });
   it('no query, no hits; never more than eight', () => {
-    expect(suggestionsFor(rows, '  ', standIn)).toEqual([]);
-    expect(suggestionsFor(rows, 'מקום', standIn)).toHaveLength(MAX_SUGGESTIONS);
+    expect(suggestionsFor(rows, '  ', search)).toEqual([]);
+    expect(suggestionsFor(rows, 'מקום', search)).toHaveLength(MAX_SUGGESTIONS);
   });
   it('a hit gives coordinates and placeId, and the typed text stays the name', () => {
-    const hit = suggestionsFor(rows, 'מקום 1', standIn)[0]!;
+    const hit = suggestionsFor(rows, 'מקום 1', search)[0]!;
     const s = stopFromHit(hit, 'ת"א שלנו', 's1');
     expect(s).toMatchObject({ name: 'ת"א שלנו', lon: hit.lon, lat: hit.lat, placeId: hit.placeId, hidden: false });
     expect(hitLabel(hit)).toBe(`${hit.nameHe} (${hit.nameEn})`);
@@ -99,8 +104,21 @@ describe('picker keys', () => {
   });
 });
 
-describe('picker maths (a STAND-IN camera: core cameraAt is W1\'s)', () => {
+describe('picker maths (core cameraAt and toScreen)', () => {
   const cam: MapCamera = { cx: 34.5, cy: project(0, 32).y, spanY: 12 };
+  it('the picker camera is core cameraAt of the picker payload, and its pixels are core toScreen', () => {
+    const c = cameraAt(pickerPayload(initialPicker('near'), 'paper'), -1, PICKER_SIZE);
+    const want = toScreen(c, PICKER_SIZE, mercator(35_000_000, 31_000_000));
+    const got = placeToPixel(c, PICKER_SIZE, 35_000_000, 31_000_000);
+    expect(Math.hypot(got.x - want.x, got.y - want.y)).toBeLessThan(1e-9);
+  });
+  it('«כל העולם» shows the whole world: the picker camera spans at least 300 degrees of longitude (corners at ±180 must not unwrap onto one another)', () => {
+    const c = cameraAt(pickerPayload(initialPicker('world'), 'paper'), -1, PICKER_SIZE);
+    const spanLon = (c.spanY * PICKER_SIZE.width) / PICKER_SIZE.height;
+    expect(spanLon).toBeGreaterThanOrEqual(300);
+    expect(Math.abs(c.cx)).toBeLessThan(1);
+    expect(MapPayloadSchema.safeParse(pickerPayload(initialPicker('world'), 'night')).success).toBe(true);
+  });
   it('mercator and its inverse agree', () => {
     for (const [lon, lat] of [[34.77, 32.08], [-118.2, 34.05], [139.7, 35.7]] as const) {
       const p = unproject(project(lon, lat));
@@ -127,11 +145,13 @@ describe('picker maths (a STAND-IN camera: core cameraAt is W1\'s)', () => {
 
 describe('what Create and Save send', () => {
   const at = T.frameTime(90, R30);
-  it('create: one add_trip_map with the stops in order, no times, via not on the first stop', () => {
-    const p = createPlan(draft({ bars: true }), R30, at, 'seq_x')!;
-    expect(p.bars).toBe(true);
-    expect(p.add.op).toBe('add_trip_map');
-    const a = p.add.args as { start: unknown; duration: unknown; stops: Record<string, unknown>[]; look: string; sequenceId: string };
+  it('create: ONE add_trip_map with the stops in order, no times, via not on the first stop; the bars box rides on it as timing (one undo)', () => {
+    const ops = createPlan(draft({ bars: true }), R30, at, 'seq_x')!;
+    expect(ops).toHaveLength(1);
+    expect(ops[0]!.op).toBe('add_trip_map');
+    expect(ops[0]!.args.timing).toBe('bars');
+    expect(createPlan(draft({ bars: false }), R30, at, 'seq_x')![0]!.args).not.toHaveProperty('timing');
+    const a = ops[0]!.args as { start: unknown; duration: unknown; stops: Record<string, unknown>[]; look: string; sequenceId: string };
     expect(a.sequenceId).toBe('seq_x');
     expect(a.start).toEqual(at);
     expect(T.frameIndexAt(a.duration as T.RationalTime, R30)).toBe(240);

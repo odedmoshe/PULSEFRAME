@@ -4,12 +4,12 @@
  * the operations a Create or a Save sends. Pure and unit tested (tripMap.logic.test.ts); the dialog (TripMapDialog.tsx) only draws it.
  *
  * Contracts used: core mapContract.ts (limits, quantiseMicro, mapFrames), mapOps.ts (add/update/time_trip_map arguments), tripMap.ts
- * (searchPlaces, cameraAt, mercator: W1's, injected where a test needs a stand-in), engine DrawnLayer (the picker's one map layer).
+ * (searchPlaces, cameraAt, mercator, mercY, toScreen: W1's), engine DrawnLayer (the picker's one map layer).
  */
 import * as T from '@pulseframe/time';
 import {
   DEFAULT_TRANSFORM, MAP_COORD_QUANTUM, MAP_INTRO_SECONDS, MAP_KIND, MAP_MIN_LEG_SECONDS, MAP_OUTRO_SECONDS, MAX_LAT_MICRO, MAX_LON_MICRO, MAX_MAP_STOPS,
-  MAX_STOP_NAME, MIN_MAP_STOPS, mapFrames, quantiseMicro, searchPlaces, type DrawnClip, type MapCamera, type MapLook, type MapMode, type MapPayload, type MapSize, type MercPoint,
+  MAX_STOP_NAME, MIN_MAP_STOPS, mapFrames, quantiseMicro, searchPlaces, latOfMercY, mercator, mercY, toScreen, type DrawnClip, type MapCamera, type MapLook, type MapMode, type MapPayload, type MapSize, type MercPoint,
   type PlaceHit, type PlaceRow, type ProjectDocument,
 } from '@pulseframe/core';
 
@@ -127,24 +127,28 @@ export function pickerBox(st: PickerState): [number, number, number, number] {
   const lon = st.lon / 1_000_000, lat = st.lat / 1_000_000;
   return [lon - hw, Math.max(-80, lat - hh), lon + hw, Math.min(80, lat + hh)];
 }
-/** The picker's map clip: two hidden corner stops of the view, drawn before the marker leaves (no route), so the camera is the painter's own fit. */
+/**
+ * The picker's map clip: hidden stops at the view's south-west corner, its middle and its north-east corner, drawn before the marker
+ * leaves (no route), so the camera is the painter's own fit. The middle stop matters: core unwraps each longitude to within 180° of
+ * the previous stop, so two corners at −180° and 180° alone would land on one another (integration defect, 2026-11-26).
+ */
 export function pickerPayload(st: PickerState, look: MapLook): MapPayload {
   const [w, s, e, n] = pickerBox(st);
   return {
     kind: MAP_KIND, v: 1, look, camera: 'whole', timing: 'even',
     stops: [
       { id: 'a', name: '', hidden: true, lon: quantiseMicro(w), lat: quantiseMicro(s), at: 30 },
-      { id: 'b', name: '', hidden: true, lon: quantiseMicro(e), lat: quantiseMicro(n), at: 60, via: 'road' },
+      { id: 'm', name: '', hidden: true, lon: quantiseMicro((w + e) / 2), lat: quantiseMicro((s + n) / 2), at: 60, via: 'road' },
+      { id: 'b', name: '', hidden: true, lon: quantiseMicro(e), lat: quantiseMicro(n), at: 90, via: 'road' },
     ],
   };
 }
 /** Before stop 0 leaves: nothing has travelled. */
 export const PICKER_FRAME = -1;
-const DEG = 180 / Math.PI;
-/** Mercator units (core mercator.ts: x = longitude in degrees, y = (180/pi) ln tan(pi/4 + phi/2)) back to degrees. */
-export const unproject = (p: MercPoint): { lon: number; lat: number } => ({ lon: p.x, lat: (2 * Math.atan(Math.exp(p.y / DEG)) - Math.PI / 2) * DEG });
-export const project = (lon: number, lat: number): MercPoint => ({ x: lon, y: DEG * Math.log(Math.tan(Math.PI / 4 + (Math.max(-80, Math.min(80, lat)) / DEG) / 2)) });
-/** A pixel of the picker canvas as a stored place (quantised, longitude wrapped, latitude held within the map). */
+/** Degrees to Mercator units and back: core's projection (mercY clamps to ±80°). */
+export const unproject = (p: MercPoint): { lon: number; lat: number } => ({ lon: p.x, lat: latOfMercY(p.y) });
+export const project = (lon: number, lat: number): MercPoint => ({ x: lon, y: mercY(lat) });
+/** A pixel of the picker canvas as a stored place (the inverse of core toScreen; quantised, longitude wrapped, latitude held within the map). */
 export function pixelToPlace(cam: MapCamera, size: MapSize, px: number, py: number): { lon: number; lat: number } {
   const per = cam.spanY / size.height;
   const p = unproject({ x: cam.cx + (px - size.width / 2) * per, y: cam.cy - (py - size.height / 2) * per });
@@ -153,10 +157,9 @@ export function pixelToPlace(cam: MapCamera, size: MapSize, px: number, py: numb
   while (lon < -180) lon += 360;
   return clampMicro(quantiseMicro(lon), quantiseMicro(p.lat));
 }
-/** Where a stored place falls on the picker canvas (for the crosshair), in pixels. */
+/** Where a stored place falls on the picker canvas (for the crosshair), in pixels: core toScreen. */
 export function placeToPixel(cam: MapCamera, size: MapSize, lon: number, lat: number): { x: number; y: number } {
-  const per = cam.spanY / size.height, m = project(lon / 1_000_000, lat / 1_000_000);
-  return { x: size.width / 2 + (m.x - cam.cx) / per, y: size.height / 2 - (m.y - cam.cy) / per };
+  return toScreen(cam, size, mercator(lon, lat));
 }
 /** A coordinate for display: degrees with the stored two decimals, sign kept (drawn in <bdi dir="ltr">). */
 export const degText = (micro: number): string => (micro / 1_000_000).toFixed(2);
@@ -177,14 +180,11 @@ export const stopsArg = (stops: readonly DraftStop[]) => stops.map((s, i) => { c
 export function sameStops(a: readonly DraftStop[], b: readonly DraftStop[]): boolean {
   return a.length === b.length && a.every((s, i) => { const t = b[i]!; return s.id === t.id && s.name === t.name && s.hidden === t.hidden && s.lon === t.lon && s.lat === t.lat && (i === 0 || s.via === t.via); });
 }
-/** Create: one add_trip_map. The bars step needs the new clip's id, so it is a second step (see the report: no binding between steps in a commit). */
-export function createPlan(d: Draft, rate: T.Rate, at: T.RationalTime, sequenceId: string | undefined): { add: OpCallLike; bars: boolean } | null {
+/** Create: ONE add_trip_map, with `timing: 'bars'` when the bars box is ticked (core times it in the same transaction: one undo). */
+export function createPlan(d: Draft, rate: T.Rate, at: T.RationalTime, sequenceId: string | undefined): OpCallLike[] | null {
   const f = framesOfSeconds(d.seconds, rate);
   if (f === null || draftProblems(d, rate).length) return null;
-  return {
-    add: { op: 'add_trip_map', args: { ...(sequenceId ? { sequenceId } : {}), start: at, duration: T.frameTime(f, rate), stops: stopsArg(d.stops), look: d.look } },
-    bars: d.bars,
-  };
+  return [{ op: 'add_trip_map', args: { ...(sequenceId ? { sequenceId } : {}), start: at, duration: T.frameTime(f, rate), stops: stopsArg(d.stops), look: d.look, ...(d.bars ? { timing: 'bars' } : {}) } }];
 }
 /**
  * Save: ONE transaction, in this order: trim the end when the length changed (so the timing sees the new length), update_trip_map when the
